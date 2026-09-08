@@ -44,8 +44,8 @@ import { apiError } from '../auth/login';
           <button uiButton type="submit" [disabled]="busy()">
             {{ busy() ? t().perfil.guardando : t().perfil.guardar }}
           </button>
-          @if (saved()) { <span class="text-sm text-success">{{ t().perfil.guardado }}</span> }
-          @if (error()) { <span class="text-sm text-danger">{{ error() }}</span> }
+          @if (saved()) { <span class="text-sm text-success" animate.enter="anim-fade-in">{{ t().perfil.guardado }}</span> }
+          @if (error()) { <span class="text-sm text-danger" animate.enter="anim-fade-in">{{ error() }}</span> }
         </div>
       </form>
     </div>

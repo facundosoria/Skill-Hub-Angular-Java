@@ -4,7 +4,8 @@ import { diffLines } from 'diff';
 import { I18n } from '../../core/i18n/i18n';
 import { SkillService } from '../../core/skills';
 
-type DiffRow = { kind: 'add' | 'del' | 'same'; line: string };
+/** `ci` = índice entre las líneas CAMBIADAS, para el barrido escalonado (decisión 13). */
+type DiffRow = { kind: 'add' | 'del' | 'same'; line: string; ci: number };
 
 /**
  * Puerto de src/app/(app)/skills/[slug]/diff/page.tsx + diff-view.tsx.
@@ -30,6 +31,8 @@ type DiffRow = { kind: 'add' | 'del' | 'same'; line: string };
       <div class="overflow-x-auto rounded-xl border border-border bg-surface">
         <pre class="min-w-full font-mono text-[13px] leading-relaxed">@for (row of rows(); track $index) {<div
           class="flex gap-3 px-3 py-[1px] whitespace-pre"
+          [animate.enter]="row.kind === 'same' ? '' : 'anim-row-in'"
+          [style.animationDelay]="row.kind === 'same' ? null : (row.ci * 18) + 'ms'"
           [class.bg-success-soft]="row.kind === 'add'"
           [class.bg-danger-soft]="row.kind === 'del'"
         ><span
@@ -96,13 +99,14 @@ export class SkillDiff {
   }
 }
 
-/** Puerto del flatMap de la page original. */
+/** Puerto del flatMap de la page original, con el contador de líneas cambiadas (capado a 24). */
 function toRows(from: string, to: string): DiffRow[] {
+  let ci = 0;
   return diffLines(from, to).flatMap((part) => {
     const kind: DiffRow['kind'] = part.added ? 'add' : part.removed ? 'del' : 'same';
     return part.value
       .split('\n')
       .filter((line, i, arr) => !(i === arr.length - 1 && line === ''))
-      .map((line) => ({ kind, line }));
+      .map((line) => ({ kind, line, ci: kind === 'same' ? 0 : Math.min(ci++, 24) }));
   });
 }

@@ -6,11 +6,12 @@ import { I18n } from '../../core/i18n/i18n';
 import { SkillService } from '../../core/skills';
 import type { SkillListItem } from '../../core/models';
 import { UI } from '../../shared/ui';
+import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
 
 /** Puerto de src/app/(app)/skills/page.tsx + skill-browser.tsx. */
 @Component({
   selector: 'app-skills-list',
-  imports: [FormsModule, RouterLink, ...UI],
+  imports: [FormsModule, RouterLink, AnimDelayPipe, ...UI],
   template: `
     <div class="mb-6 flex items-end justify-between gap-4">
       <div>
@@ -42,8 +43,9 @@ import { UI } from '../../shared/ui';
       <ui-empty-state [title]="t().catalogo.sinResultados" [hint]="t().catalogo.sinResultadosHint" />
     } @else {
       <div uiCard class="divide-y divide-border">
-        @for (s of visible(); track s.slug) {
+        @for (s of visible(); track s.slug; let i = $index) {
           <a [routerLink]="['/skills', s.slug]"
+             animate.enter="anim-row-in" [style.animationDelay]="i | animDelay"
              class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2">
             <span class="text-sm font-medium">{{ s.title }}</span>
             <span uiBadge tone="accent">{{ s.stack }}</span>

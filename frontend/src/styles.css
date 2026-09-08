@@ -124,6 +124,52 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/*
+ * Animaciones (decisión 13: 200-300 ms, con propósito, sin rebotes). Todas por
+ * CSS + animate.enter/animate.leave, así el bloque de prefers-reduced-motion de
+ * arriba las neutraliza sin código extra. Puerto de los usos de motion/react.
+ */
+/*
+ * Los keyframes de entrada NO tocan opacity desde 0 a proposito: si la animacion
+ * no corre (prefers-reduced-motion, o el elemento queda congelado en el primer
+ * frame por algun motivo) el contenido igual se ve. Solo se desliza unos px y,
+ * para el "in", un fade suave que arranca en 0.35 — nunca invisible. Es una
+ * mejora, nunca un requisito para leer.
+ */
+@keyframes anim-panel-in {
+  from { opacity: 0.35; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes anim-panel-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes anim-row-in {
+  from { opacity: 0.4; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes anim-fade-in {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+.anim-panel-in { animation: anim-panel-in var(--dur) var(--ease); }
+.anim-panel-out { animation: anim-panel-out var(--dur-fast) var(--ease) forwards; }
+.anim-row-in { animation: anim-row-in var(--dur) var(--ease); }
+.anim-fade-in { animation: anim-fade-in var(--dur) var(--ease); }
+
+/* Cross-fade entre rutas (withViewTransitions). Corto y sin desplazamiento. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur);
+  animation-timing-function: var(--ease);
 }
 
 :focus-visible {

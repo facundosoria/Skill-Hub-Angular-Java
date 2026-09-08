@@ -18,12 +18,14 @@ import { UI } from '../../shared/ui';
 
       <form (ngSubmit)="submit()" class="space-y-4">
         @if (mode() === 'register') {
-          <ui-field [label]="t().login.equipo">
-            <input uiInput name="team" [(ngModel)]="team" placeholder="backoffice" />
-          </ui-field>
-          <ui-field [label]="t().login.legajo" [hint]="t().login.legajoHint">
-            <input uiInput name="legajo" [(ngModel)]="legajo" placeholder="321333" />
-          </ui-field>
+          <div class="space-y-4" animate.enter="anim-panel-in" animate.leave="anim-panel-out">
+            <ui-field [label]="t().login.equipo">
+              <input uiInput name="team" [(ngModel)]="team" placeholder="backoffice" />
+            </ui-field>
+            <ui-field [label]="t().login.legajo" [hint]="t().login.legajoHint">
+              <input uiInput name="legajo" [(ngModel)]="legajo" placeholder="321333" />
+            </ui-field>
+          </div>
         }
 
         <ui-field [label]="t().login.usuario">
@@ -37,9 +39,9 @@ import { UI } from '../../shared/ui';
         </ui-field>
 
         @if (error()) {
-          <p class="text-sm text-danger" role="alert">{{ error() }}</p>
+          <p class="text-sm text-danger" role="alert" animate.enter="anim-panel-in">{{ error() }}</p>
         } @else if (info()) {
-          <p class="text-sm text-success" role="status">{{ info() }}</p>
+          <p class="text-sm text-success" role="status" animate.enter="anim-panel-in">{{ info() }}</p>
         }
 
         <button uiButton type="submit" [disabled]="pending()" class="w-full">

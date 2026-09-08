@@ -5,7 +5,7 @@ import { I18n } from '../../core/i18n/i18n';
 import type { PendingUser } from '../../core/models';
 import { UI } from '../../shared/ui';
 
-/** Puerto de src/app/(app)/admin/users/page.tsx. */
+/** Puerto de src/app/(app)/admin/users/page.tsx (el original no anima). */
 @Component({
   selector: 'app-admin-users',
   imports: [...UI],

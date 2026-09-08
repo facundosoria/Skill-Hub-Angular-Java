@@ -8,12 +8,13 @@ import type { SkillDetail } from '../../core/models';
 import { UI } from '../../shared/ui';
 import { SkillMarkdown } from '../../shared/skill-markdown';
 import { SkillPreview } from '../../shared/skill-preview';
+import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
 import { apiError } from '../auth/login';
 
 /** Puerto de src/app/(app)/skills/[slug]/page.tsx + skill-actions + edit-vote-banner. */
 @Component({
   selector: 'app-skill-detail',
-  imports: [FormsModule, RouterLink, SkillMarkdown, SkillPreview, ...UI],
+  imports: [FormsModule, RouterLink, SkillMarkdown, SkillPreview, AnimDelayPipe, ...UI],
   template: `
     <a routerLink="/skills" class="text-[13px] text-text-muted hover:text-text">{{ t().skill.volver }}</a>
 
@@ -48,7 +49,8 @@ import { apiError } from '../auth/login';
 
       <!-- Banner de votacion de una edicion pendiente -->
       @if (user() && d.voteStatus; as vs) {
-        <div class="mt-4 rounded-[var(--radius)] border border-accent/30 bg-accent-soft p-3">
+        <div class="mt-4 rounded-[var(--radius)] border border-accent/30 bg-accent-soft p-3"
+             animate.enter="anim-panel-in" animate.leave="anim-panel-out">
           <p class="text-sm">{{ t().votos.pendiente }}</p>
           <p class="mt-0.5 text-xs text-text-faint">{{ t().votos.pendienteHint }}</p>
           <div class="mt-3 flex flex-wrap items-center gap-2">
@@ -104,8 +106,9 @@ import { apiError } from '../auth/login';
       <section class="mt-8">
         <h2 class="mb-2 text-[13px] text-text-muted">{{ t().skill.historial }}</h2>
         <ol class="space-y-1">
-          @for (h of d.history; track h.version) {
-            <li class="flex flex-wrap items-baseline gap-x-2 rounded-[var(--radius)] px-2 py-1.5 text-sm hover:bg-surface-2">
+          @for (h of d.history; track h.version; let i = $index) {
+            <li animate.enter="anim-row-in" [style.animationDelay]="i | animDelay:30:6"
+                class="flex flex-wrap items-baseline gap-x-2 rounded-[var(--radius)] px-2 py-1.5 text-sm hover:bg-surface-2">
               <a [routerLink]="['/skills', slug()]" [queryParams]="{ v: h.version }" class="font-mono text-xs text-accent">v{{ h.version }}</a>
               @if (h.version === (d.skill.version?.version ?? 1)) { <span class="text-xs text-text-faint">{{ t().skill.viendo }}</span> }
               <span class="text-text-muted">{{ h.changelog || t().skill.sinNota }}</span>
@@ -137,7 +140,8 @@ import { apiError } from '../auth/login';
           }
 
           @if (deprecating()) {
-            <div class="mt-3 w-full rounded-[var(--radius)] border border-border bg-surface-2 p-3">
+            <div class="mt-3 w-full rounded-[var(--radius)] border border-border bg-surface-2 p-3"
+                 animate.enter="anim-panel-in" animate.leave="anim-panel-out">
               <p class="text-sm text-text-muted">{{ t().skill.deprecarExplicacion }}</p>
               <div class="mt-2 flex flex-wrap gap-2">
                 <input uiInput class="max-w-xs" [(ngModel)]="replacement" [placeholder]="t().skill.slugReemplazo" />

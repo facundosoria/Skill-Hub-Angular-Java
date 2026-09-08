@@ -28,7 +28,8 @@ import { UI } from '../../shared/ui';
       </p>
 
       @if (shownIdioma(); as ai) {
-        <div class="mb-4 rounded-xl border border-danger/35 bg-danger-soft p-4">
+        <div class="mb-4 rounded-xl border border-danger/35 bg-danger-soft p-4"
+             animate.enter="anim-panel-in" animate.leave="anim-panel-out">
           <p class="text-sm font-medium text-danger">{{ t().idioma.titulo }}</p>
           <p class="mt-1.5 text-sm text-danger/90">{{ t().idioma.porQue }}</p>
           <p class="mt-2 text-xs text-danger/80">
@@ -40,6 +41,7 @@ import { UI } from '../../shared/ui';
 
       @if (shownDuplicates().length) {
         <div class="mb-4 rounded-xl p-4"
+             animate.enter="anim-panel-in" animate.leave="anim-panel-out"
              [class]="blocking() ? 'border border-warning/35 bg-warning-soft' : 'border border-warning/25 bg-warning-soft/60'">
           <p class="text-sm font-medium text-warning">{{ t().form.duplicadoTitulo }}</p>
           <div class="mt-3 space-y-2">
@@ -116,7 +118,8 @@ import { UI } from '../../shared/ui';
         </ui-field>
 
         @if (justify()) {
-          <ui-field [label]="t().form.duplicadoJustificacion" [hint]="t().form.duplicadoJustificacionHint">
+          <ui-field [label]="t().form.duplicadoJustificacion" [hint]="t().form.duplicadoJustificacionHint"
+                    animate.enter="anim-panel-in" animate.leave="anim-panel-out">
             <textarea uiTextarea name="dupJust" rows="2" required [(ngModel)]="v.duplicateJustification"></textarea>
           </ui-field>
         }

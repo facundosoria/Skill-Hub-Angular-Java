@@ -26,7 +26,8 @@ import { apiError } from '../auth/login';
       </div>
 
       @if (created()) {
-        <div class="mt-4 rounded-[var(--radius)] border border-accent/30 bg-accent-soft p-3">
+        <div class="mt-4 rounded-[var(--radius)] border border-accent/30 bg-accent-soft p-3"
+             animate.enter="anim-panel-in">
           <p class="text-xs text-accent">{{ t().keys.copiaAhora }}</p>
           <code class="mt-1 block break-all font-mono text-sm">{{ created() }}</code>
           <p class="mt-1 text-xs text-text-faint">{{ t().keys.copiaAhoraHint }}</p>
