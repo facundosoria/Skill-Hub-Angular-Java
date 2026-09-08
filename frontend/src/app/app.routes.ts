@@ -37,8 +37,7 @@ export const routes: Routes = [
       },
       {
         path: 'skills/:slug/diff',
-        loadComponent: () => import('./features/stub').then((m) => m.Stub),
-        data: { title: 'Diff de versiones' },
+        loadComponent: () => import('./features/skills/skill-diff').then((m) => m.SkillDiff),
       },
       {
         path: 'keys',
