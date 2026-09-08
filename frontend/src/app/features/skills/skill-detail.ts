@@ -1,8 +1,6 @@
-import { Component, effect, inject, input, signal, untracked } from '@angular/core';
+import { Component, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, RouterLink } from '@angular/router';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { map } from 'rxjs';
+import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth';
 import { I18n } from '../../core/i18n/i18n';
 import { SkillService } from '../../core/skills';
@@ -164,9 +162,11 @@ import { apiError } from '../auth/login';
 export class SkillDetailPage {
   slug = input.required<string>();
 
+  /** El query param `?v=` llega como input via withComponentInputBinding(). */
+  v = input<string | undefined>(undefined);
+
   skills = inject(SkillService);
   auth = inject(AuthService);
-  private route = inject(ActivatedRoute);
   private i18n = inject(I18n);
   t = this.i18n.t;
   user = this.auth.user;
@@ -177,13 +177,10 @@ export class SkillDetailPage {
   deprecating = signal(false);
   replacement = '';
 
-  private version = toSignal(
-    this.route.queryParamMap.pipe(map((p) => (p.get('v') ? Number(p.get('v')) : undefined))),
-    { initialValue: undefined },
-  );
+  private version = computed(() => (this.v() ? Number(this.v()) : undefined));
 
   constructor() {
-    // slug (input) y version (queryParam) son signals: recargar cuando cambian.
+    // slug (input) y version (?v=) son signals: recargar cuando cambian.
     effect(() => {
       this.slug();
       this.version();
