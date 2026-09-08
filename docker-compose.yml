@@ -1,0 +1,62 @@
+# Stack de produccion de Skill Hub (Angular + Spring Boot).
+# Reemplaza al stack Next.js. El nginx del host sigue apuntando a 127.0.0.1:3000.
+#
+#   db      -> postgres:16-alpine, mismo volumen que el stack viejo (datos intactos)
+#   backend -> Spring Boot :8080 (solo red interna). Flyway con baseline en V12.
+#   web     -> Caddy: sirve el bundle Angular y proxea /api -> backend:8080.
+#              Unico puerto publicado: 127.0.0.1:3000.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skillhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      POSTGRES_DB: ${POSTGRES_DB:-skillhub}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-skillhub} -d ${POSTGRES_DB:-skillhub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-skillhub}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-skillhub}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      SESSION_SECRET: ${SESSION_SECRET:?falta SESSION_SECRET, ver .env.example}
+      APP_TZ: ${APP_TZ:-America/Argentina/Cordoba}
+      COOKIE_SECURE: "false"
+      USAGE_RETENTION_DAYS: ${USAGE_RETENTION_DAYS:-90}
+      # Base de prod: ya tiene el schema de Drizzle (== V1..V12) sin
+      # flyway_schema_history. Se marca la linea base en V12 y no se aplica nada.
+      FLYWAY_BASELINE_ON_MIGRATE: "true"
+      FLYWAY_BASELINE_VERSION: "12"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:80"
+
+volumes:
+  pgdata:

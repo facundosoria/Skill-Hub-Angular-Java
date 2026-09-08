@@ -1,0 +1,17 @@
+# Sirve el SPA Angular y proxea /api al backend Spring Boot.
+# El TLS y el dominio los pone el nginx del host; aca solo HTTP en :80.
+:80 {
+	encode gzip
+
+	# API -> backend. handle {} garantiza exclusion mutua con el bloque del SPA.
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# Resto -> archivos estaticos, con fallback a index.html (rutas del router).
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}
