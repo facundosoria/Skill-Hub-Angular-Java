@@ -49,7 +49,8 @@ El spike valida las dos incógnitas de mayor riesgo del plan:
    `D:\Marketplace\drizzle\*.sql` + los 2 de `drizzle/extra/` se copiaron verbatim a
    `backend/src/main/resources/db/migration/V1..V12`. Flyway los aplica sobre un Postgres 16
    limpio sin tocarlos (los `WARN ... already exists, skipping` de V6/V7 son los `IF NOT EXISTS`
-   que Drizzle ya traía por migraciones solapadas).
+   que Drizzle ya traía por migraciones solapadas). `V13` ya no viene de Drizzle: es una purga
+   propia que borra los skills de ejemplo y las cuentas no-admin antes del uso real del catálogo.
 2. **La búsqueda full-text de Postgres se porta como SQL crudo, sin cambios de comportamiento.**
    `SearchRepository` es el puerto línea por línea de `src/server/skills/search.ts`: las 3 pasadas
    (`websearch_to_tsquery` estricta → OR laxa con piso de `ts_rank` → trigramas), el ranking
@@ -67,7 +68,7 @@ Requisitos: JDK 21, Maven, Docker (para los tests con Testcontainers).
 
 ```bash
 cd backend
-mvn test          # Postgres 16 en Testcontainers, Flyway V1..V12, MCP + API REST por HTTP
+mvn test          # Postgres 16 en Testcontainers, Flyway V1..V13, MCP + API REST por HTTP
 mvn spring-boot:run   # contra un Postgres local (ver application.yml / SPRING_DATASOURCE_*)
 ```
 
@@ -117,9 +118,10 @@ El toolchain de esta máquina: Temurin JDK 21 (`winget`), Maven 3.9.9 en `C:\Too
 - Todo error de la API sale como `{"error": "..."}` (`ApiExceptionHandler`)
 
 **Pendiente para el proyecto real**
-- El espejo de tema/idioma a cookies (anti-parpadeo) pasa a ser trabajo del cliente Angular
 - `skill_related` no se edita desde ningún endpoint todavía (el original tampoco lo expone en la web)
-- El frontend Angular entero
+
+El frontend Angular entero y el espejo de tema/idioma anti-parpadeo (script en `index.html` +
+`ThemeService`) ya están portados — ver la sección *Frontend*.
 
 ## Decisiones del spike que ajustan el plan
 
