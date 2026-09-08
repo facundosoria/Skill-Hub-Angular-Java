@@ -30,6 +30,10 @@ app:
   timezone: ${APP_TZ:America/Argentina/Cordoba}
   usage:
     retention-days: ${USAGE_RETENTION_DAYS:90}
+  # Secreto de la cookie de sesion (jose HS256 en el original). >= 32 chars.
+  session-secret: ${SESSION_SECRET:dev-only-session-secret-change-me-32c}
+  # secure=true en la cookie solo en prod (el original mira NODE_ENV).
+  cookie-secure: ${COOKIE_SECURE:false}
 
 logging:
   level:

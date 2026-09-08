@@ -7,6 +7,8 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 
@@ -26,6 +28,18 @@ public class ApiKeyService {
 
     public ApiKeyService(NamedParameterJdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    private static final SecureRandom RNG = new SecureRandom();
+
+    /** Puerto de generateApiKey(): el valor en claro se devuelve UNA sola vez. */
+    public record GeneratedKey(String raw, String hash, String prefix) {}
+
+    public GeneratedKey generateApiKey() {
+        byte[] rnd = new byte[24];
+        RNG.nextBytes(rnd);
+        String raw = PREFIX + Base64.getUrlEncoder().withoutPadding().encodeToString(rnd);
+        return new GeneratedKey(raw, hashApiKey(raw), raw.substring(0, PREFIX.length() + 6));
     }
 
     public static String hashApiKey(String raw) {

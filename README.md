@@ -3,7 +3,7 @@
 Migración del **Skill Hub** (hoy Next.js 16 en `D:\Marketplace`) a **Angular + Spring Boot**.
 Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-blossom.md`.
 
-## Estado: Paso 1 (spike) + las 6 tools MCP ✅
+## Estado: spike + 6 tools MCP + auth de sesión + API REST ✅
 
 | | |
 |---|---|
@@ -23,7 +23,9 @@ El spike valida las dos incógnitas de mayor riesgo del plan:
    `ts_rank × boost`, el período de gracia. Los 17 tests de integración pasan.
 
 ```
-Tests run: 23, Failures: 0, Errors: 0, Skipped: 0
+McpIntegrationTest   23 tests   (MCP end-to-end)
+RestApiIntegrationTest 15 tests  (auth + API REST)
+-> 38 en verde
 ```
 
 ## Cómo correr
@@ -32,9 +34,12 @@ Requisitos: JDK 21, Maven, Docker (para los tests con Testcontainers).
 
 ```bash
 cd backend
-mvn test          # Postgres 16 en Testcontainers, Flyway V1..V12, /api/mcp por HTTP
+mvn test          # Postgres 16 en Testcontainers, Flyway V1..V12, MCP + API REST por HTTP
 mvn spring-boot:run   # contra un Postgres local (ver application.yml / SPRING_DATASOURCE_*)
 ```
+
+Env del server: `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD`, `SESSION_SECRET` (>= 32 chars),
+`APP_TZ`, `COOKIE_SECURE=true` en prod, `USAGE_RETENTION_DAYS`.
 
 El toolchain de esta máquina: Temurin JDK 21 (`winget`), Maven 3.9.9 en `C:\Tools`
 (no está en winget, se bajó a mano). `JAVA_HOME` y el `PATH` quedaron seteados a nivel usuario.
@@ -55,11 +60,32 @@ El toolchain de esta máquina: Temurin JDK 21 (`winget`), Maven 3.9.9 en `C:\Too
   (contrato "nunca tira" — cada insert va aislado, un skill borrado no tumba el lote)
 - `AuditService` (puerto de `audit.ts`) — snapshot de identidad + metadata JSON en columna text
 
+**Auth de sesión** (puerto de `auth/session.ts` + `auth/index.ts` + `auth/password.ts`)
+- `PasswordHasher` — scrypt vía Bouncy Castle, formato `scrypt$N$r$p$salt$key` **compatible byte a byte**
+  con los hashes que ya generó el proyecto Next (verifica un hash escrito por Node y viceversa)
+- `SessionService` — JWT HS256 (jjwt) en cookie httpOnly `skillhub_session`, 7 días,
+  payload `{userId, username, role}`. El estado de la cuenta se re-chequea en cada request.
+- `@AuthPrincipal CurrentUser` — resolver de argumento que inyecta el usuario de la cookie
+  (401 si falta); los controllers chequean `user.isAdmin()` para lo de admin
+
+**API REST** (puerto de las server actions + las lecturas de las páginas)
+- auth: `POST /api/auth/{login,register,logout}`, `GET /api/auth/me`
+- skills: `GET /api/skills`, `GET /api/skills/{slug}` (+ history, related, voteStatus),
+  `GET /api/skills/{slug}/diff`, `POST /api/skills` (create, con guardas de idioma y duplicados),
+  `PUT /api/skills/{slug}` (update — versión pendiente + votos si un member edita algo publicado),
+  `POST /api/skills/{slug}/{publish,deprecate,vote,apply-edit,discard-edit}`,
+  `GET /api/skills/duplicates`, `POST /api/skills/check-language`
+- `VoteService` — `VOTES_REQUIRED=3`, la 3ª aprobación aplica la edición sola
+- review (admin): `GET /api/review`, `POST /api/review/{slug}/{approve,reject}`
+- keys: `GET/POST /api/keys`, `DELETE /api/keys/{id}`
+- profile: `GET/PUT /api/profile`
+- admin users: `GET /api/admin/users`, `POST /api/admin/users/{id}/{approve,reject,reset-password}`
+- audit (admin): `GET /api/audit`  ·  insights (admin): `GET /api/insights`
+- Todo error de la API sale como `{"error": "..."}` (`ApiExceptionHandler`)
+
 **Pendiente para el proyecto real**
-- Camino de escritura desde la web: create/update/publish/deprecate, votos
-- Auth de sesión (JWT `skillhub_session`) + `PasswordEncoder` compatible con el formato
-  `scrypt$N$r$p$salt$key` del original
-- Toda la API REST que consume el frontend
+- El espejo de tema/idioma a cookies (anti-parpadeo) pasa a ser trabajo del cliente Angular
+- `skill_related` no se edita desde ningún endpoint todavía (el original tampoco lo expone en la web)
 - El frontend Angular entero
 
 ## Decisiones del spike que ajustan el plan
