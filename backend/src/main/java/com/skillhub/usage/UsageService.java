@@ -66,32 +66,41 @@ public class UsageService {
         if (d > 0) log.warn("[usage] {} eventos descartados por cola llena", d);
         if (u.isEmpty() && m.isEmpty()) return;
 
-        try {
-            if (!u.isEmpty()) {
-                for (UsageRow r : u) {
-                    jdbc.update("""
-                        INSERT INTO usage_events (api_key_id, user_id, team, skill_id, tool)
-                        VALUES (:apiKeyId::uuid, :userId::uuid, :team, :skillId::uuid, :tool)
-                        """, new MapSqlParameterSource()
-                            .addValue("apiKeyId", r.apiKeyId())
-                            .addValue("userId", r.userId())
-                            .addValue("team", r.team())
-                            .addValue("skillId", r.skillId())
-                            .addValue("tool", r.tool()));
-                }
+        // Cada insert va aislado: un evento con un skill borrado entre el encolado
+        // y el flush (FK) no puede tumbar el resto del lote, y menos las missed
+        // queries. Un evento perdido es aceptable; romper la telemetria no.
+        int okUsage = 0;
+        for (UsageRow r : u) {
+            try {
+                jdbc.update("""
+                    INSERT INTO usage_events (api_key_id, user_id, team, skill_id, tool)
+                    VALUES (:apiKeyId::uuid, :userId::uuid, :team, :skillId::uuid, :tool)
+                    """, new MapSqlParameterSource()
+                        .addValue("apiKeyId", r.apiKeyId())
+                        .addValue("userId", r.userId())
+                        .addValue("team", r.team())
+                        .addValue("skillId", r.skillId())
+                        .addValue("tool", r.tool()));
+                okUsage++;
+            } catch (RuntimeException err) {
+                log.warn("[usage] evento descartado ({} sobre {}): {}", r.tool(), r.skillId(), err.getMessage());
+            }
+        }
+        if (okUsage > 0) {
+            try {
                 rollupToday();
+            } catch (RuntimeException err) {
+                log.error("[usage] rollup fallo", err);
             }
-            if (!m.isEmpty()) {
-                for (MissedRow r : m) {
-                    jdbc.update(
-                        "INSERT INTO missed_queries (query_text, stack) VALUES (:q, :stack)",
-                        new MapSqlParameterSource().addValue("q", r.queryText()).addValue("stack", r.stack()));
-                }
+        }
+        for (MissedRow r : m) {
+            try {
+                jdbc.update(
+                    "INSERT INTO missed_queries (query_text, stack) VALUES (:q, :stack)",
+                    new MapSqlParameterSource().addValue("q", r.queryText()).addValue("stack", r.stack()));
+            } catch (RuntimeException err) {
+                log.warn("[usage] missed query descartada: {}", err.getMessage());
             }
-        } catch (RuntimeException err) {
-            // Se pierde el lote a proposito: reintentar aca haria crecer la cola
-            // hasta matar el proceso por un problema que no es nuestro.
-            log.error("[usage] flush fallo, lote descartado", err);
         }
     }
 

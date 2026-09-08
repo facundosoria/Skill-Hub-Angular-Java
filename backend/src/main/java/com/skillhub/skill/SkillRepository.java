@@ -100,8 +100,7 @@ public class SkillRepository {
         else conditions.add("s.status <> 'draft'");
 
         String where = String.join(" AND ", conditions);
-        return jdbc.query(
-                """
+        String sql = """
                 WITH usage AS (
                   SELECT skill_id, COALESCE(SUM(hits), 0)::int AS usos
                   FROM usage_daily
@@ -115,11 +114,10 @@ public class SkillRepository {
                 FROM skills s
                 LEFT JOIN usage u ON u.skill_id = s.id
                 LEFT JOIN skill_versions v ON v.id = s.current_version_id
-                WHERE """ + where + """
-
+                WHERE %s
                 ORDER BY COALESCE(u.usos, 0) DESC, s.updated_at DESC
-                """,
-                p,
+                """.formatted(where);
+        return jdbc.query(sql, p,
                 (rs, i) -> new SkillListRow(
                         rs.getString("slug"), rs.getString("title"), rs.getString("when_to_use"),
                         rs.getString("stack"), rs.getString("type"),

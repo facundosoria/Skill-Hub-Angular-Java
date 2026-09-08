@@ -3,7 +3,7 @@
 Migración del **Skill Hub** (hoy Next.js 16 en `D:\Marketplace`) a **Angular + Spring Boot**.
 Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-blossom.md`.
 
-## Estado: Paso 1 — spike del backend + MCP ✅
+## Estado: Paso 1 (spike) + las 6 tools MCP ✅
 
 | | |
 |---|---|
@@ -23,7 +23,7 @@ El spike valida las dos incógnitas de mayor riesgo del plan:
    `ts_rank × boost`, el período de gracia. Los 17 tests de integración pasan.
 
 ```
-Tests run: 17, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 23, Failures: 0, Errors: 0, Skipped: 0
 ```
 
 ## Cómo correr
@@ -45,13 +45,18 @@ El toolchain de esta máquina: Temurin JDK 21 (`winget`), Maven 3.9.9 en `C:\Too
 - `GET /api/health`
 - `POST /api/mcp` — JSON-RPC 2.0 stateless: `initialize`, `tools/list`, `tools/call`, `ping`
 - Auth por API key: `Authorization: Bearer sk_hub_...`, hash SHA-256, revocación inmediata
-- Tools MCP: `search_skills`, `get_skill` (con el `.md` guardable + frontmatter determinista + strip del `preview`)
-- Telemetría de uso: cola acotada + flush `@Scheduled` cada 5 s, rollup `usage_daily` (contrato "nunca tira")
+- **Las 6 tools MCP completas:**
+  - lectura: `search_skills`, `get_skill`, `sync_skills`, `list_skills`, `get_port_registry`
+  - escritura: `propose_skill` — con las 3 guardas del original (idioma inglés vía heurística
+    `LanguageDetector`, duplicado por trigramas + tags vía `DuplicatesRepository.esDuplicadoFuerte`,
+    slug único), inserción transaccional y `audit_events`
+- `get_skill`/`sync_skills` devuelven el `.md` guardable con frontmatter determinista y sin `preview`
+- Telemetría de uso: cola acotada + flush `@Scheduled` cada 5 s, rollup `usage_daily`
+  (contrato "nunca tira" — cada insert va aislado, un skill borrado no tumba el lote)
+- `AuditService` (puerto de `audit.ts`) — snapshot de identidad + metadata JSON en columna text
 
 **Pendiente para el proyecto real**
-- Tools MCP restantes: `list_skills`, `sync_skills`, `get_port_registry`, `propose_skill`
-  (`propose_skill` arrastra detección de duplicados por trigramas + heurística de idioma)
-- Camino de escritura: create/update/publish/deprecate, votos, auditoría
+- Camino de escritura desde la web: create/update/publish/deprecate, votos
 - Auth de sesión (JWT `skillhub_session`) + `PasswordEncoder` compatible con el formato
   `scrypt$N$r$p$salt$key` del original
 - Toda la API REST que consume el frontend

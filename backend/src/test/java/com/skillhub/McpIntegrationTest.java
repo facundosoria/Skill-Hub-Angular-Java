@@ -160,12 +160,18 @@ class McpIntegrationTest {
     }
 
     @Test
-    void toolsListExponeLasToolsDelSpikeComoLectura() {
+    void toolsListExponeLasSeisToolsYSoloProposeEscribe() {
         var tools = rpc("tools/list", null).path("body").path("result").path("tools");
         var nombres = new java.util.ArrayList<String>();
-        tools.forEach(t -> nombres.add(t.path("name").asText()));
-        assertThat(nombres).contains("search_skills", "get_skill");
-        tools.forEach(t -> assertThat(t.path("annotations").path("readOnlyHint").asBoolean()).isTrue());
+        var escriben = new java.util.ArrayList<String>();
+        tools.forEach(t -> {
+            nombres.add(t.path("name").asText());
+            if (!t.path("annotations").path("readOnlyHint").asBoolean()) escriben.add(t.path("name").asText());
+        });
+        assertThat(nombres).containsExactlyInAnyOrder(
+                "get_port_registry", "get_skill", "list_skills",
+                "propose_skill", "search_skills", "sync_skills");
+        assertThat(escriben).containsExactly("propose_skill");
     }
 
     @Test
@@ -285,6 +291,168 @@ class McpIntegrationTest {
             jdbc.update("UPDATE skills SET status='published', superseded_by=NULL WHERE slug=?",
                     PREFIX + "form-fields");
         }
+    }
+
+    // --- list_skills / sync_skills / get_port_registry -----------------
+
+    @Test
+    void listSkillsTraeLaVersionParaDetectarCopiasViejas() {
+        var l = tool("list_skills", java.util.Map.of());
+        assertThat(l.path("skills").size()).isGreaterThan(0);
+        assertThat(l.path("skills").path(0).path("version").isIntegralNumber()).isTrue();
+    }
+
+    @Test
+    void syncSkillsReconciliaCopiasLocalesEnUnLlamado() {
+        var actual = tool("get_skill", java.util.Map.of("slug", PREFIX + "buttons"));
+        int previa = actual.path("version").asInt();
+        int nueva = previa + 1;
+        String skillId = jdbc.queryForObject(
+                "SELECT id::text FROM skills WHERE slug = ?", String.class, PREFIX + "buttons");
+        // Nueva version publicada (current_version_id apunta a ella): la vigente
+        // es la current, nunca "la de numero mas alto".
+        String nuevaId = jdbc.queryForObject(
+                "INSERT INTO skill_versions (skill_id, version, content) VALUES (?::uuid, ?, ?) RETURNING id::text",
+                String.class, skillId, nueva, "## Rule\n\nUpdated body.");
+        jdbc.update("UPDATE skills SET current_version_id = ?::uuid WHERE id = ?::uuid", nuevaId, skillId);
+        try {
+            var r = tool("sync_skills", java.util.Map.of("have", List.of(
+                    java.util.Map.of("slug", PREFIX + "buttons", "version", previa),
+                    java.util.Map.of("slug", PREFIX + "api-error-shape", "version", 999),
+                    java.util.Map.of("slug", "no-existe-en-el-catalogo", "version", 1))));
+            assertThat(r.path("checked").asInt()).isEqualTo(3);
+
+            var vieja = bySlug(r.path("results"), PREFIX + "buttons");
+            assertThat(vieja.path("state").asText()).isEqualTo("stale");
+            assertThat(vieja.path("version").asInt()).isEqualTo(nueva);
+            assertThat(vieja.path("save_as").asText()).isEqualTo(".skill-hub/" + PREFIX + "buttons.md");
+            assertThat(slugList(r.path("to_overwrite"))).contains(PREFIX + "buttons");
+
+            assertThat(bySlug(r.path("results"), PREFIX + "api-error-shape").path("state").asText())
+                    .isEqualTo("current");
+            var ida = bySlug(r.path("results"), "no-existe-en-el-catalogo");
+            assertThat(ida.path("state").asText()).isEqualTo("gone");
+            assertThat(slugList(r.path("to_delete"))).contains("no-existe-en-el-catalogo");
+        } finally {
+            String v1Id = jdbc.queryForObject(
+                    "SELECT id::text FROM skill_versions WHERE skill_id = ?::uuid AND version = ?",
+                    String.class, skillId, previa);
+            jdbc.update("UPDATE skills SET current_version_id = ?::uuid WHERE id = ?::uuid", v1Id, skillId);
+            jdbc.update("DELETE FROM skill_versions WHERE skill_id = ?::uuid AND version = ?", skillId, nueva);
+        }
+    }
+
+    @Test
+    void syncSkillsMarcaDeprecadoYApuntaAlReemplazo() {
+        String reemplazo = jdbc.queryForObject(
+                "SELECT id::text FROM skills WHERE slug = ?", String.class, PREFIX + "buttons");
+        jdbc.update("UPDATE skills SET status='deprecated', superseded_by=?::uuid WHERE slug=?",
+                reemplazo, PREFIX + "loading-states");
+        try {
+            var r = tool("sync_skills", java.util.Map.of("have",
+                    List.of(java.util.Map.of("slug", PREFIX + "loading-states", "version", 1))));
+            var res = r.path("results").path(0);
+            assertThat(res.path("state").asText()).isEqualTo("deprecated");
+            assertThat(res.path("superseded_by").asText()).isEqualTo(PREFIX + "buttons");
+            assertThat(slugList(r.path("to_delete"))).contains(PREFIX + "loading-states");
+        } finally {
+            jdbc.update("UPDATE skills SET status='published', superseded_by=NULL WHERE slug=?",
+                    PREFIX + "loading-states");
+        }
+    }
+
+    @Test
+    void getPortRegistryFiltraPorEquipo() {
+        var r = tool("get_port_registry", java.util.Map.of("service", "payments"));
+        var joined = new StringBuilder();
+        r.path("matches").forEach(n -> joined.append(n.asText()).append(" "));
+        assertThat(joined.toString()).contains("4500");
+    }
+
+    // --- propose_skill (revision de la decision 12) --------------------
+
+    static final java.util.Map<String, Object> PROPUESTO = java.util.Map.of(
+            "title", "Zz Test Feature Flags",
+            "description", "How a feature flag is named, read and retired, for testing purposes.",
+            "when_to_use", "Use when adding, reading or removing a feature flag or toggle in a test scenario.",
+            "stack", "angular",
+            "content", "## Rule\n\nA flag carries an owner and a removal date from the day it is created.",
+            "from_query", "zz test naming and retiring a feature flag toggle",
+            "rationale", "General practice: there was nothing in the catalogue to infer a flag convention from.");
+
+    @Test
+    void proposeFlujoCompleto() {
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-test-feature-flags'");
+
+        // busqueda vacia empuja a proponer
+        var vacia = tool("search_skills", java.util.Map.of("query", PROPUESTO.get("from_query")));
+        assertThat(vacia.path("results").size()).isZero();
+        assertThat(vacia.path("next_step").asText()).isEqualTo("propose_skill");
+        assertThat(vacia.path("note").asText()).contains("gap is not neutral");
+
+        // propone y entra como provisional
+        var creada = tool("propose_skill", PROPUESTO);
+        assertThat(creada.path("status").asText()).isEqualTo("proposed");
+        assertThat(creada.path("slug").asText()).isEqualTo("zz-test-feature-flags");
+        var fila = jdbc.queryForMap(
+                "SELECT status::text, origin::text, proposed_from_query FROM skills WHERE slug='zz-test-feature-flags'");
+        assertThat(fila.get("status")).isEqualTo("proposed");
+        assertThat(fila.get("origin")).isEqualTo("agent");
+        assertThat(fila.get("proposed_from_query")).isEqualTo(PROPUESTO.get("from_query"));
+
+        // el siguiente agente ya lo encuentra, marcado provisional
+        var hit = bySlug(tool("search_skills",
+                java.util.Map.of("query", "naming and retiring a feature flag toggle")).path("results"),
+                "zz-test-feature-flags");
+        assertThat(hit.path("provisional").asBoolean()).isTrue();
+        assertThat(hit.path("caveat").asText()).containsIgnoringCase("not reviewed");
+
+        // get_skill lo sirve con la advertencia
+        var lectura = tool("get_skill", java.util.Map.of("slug", "zz-test-feature-flags"));
+        assertThat(lectura.path("provisional").asBoolean()).isTrue();
+        assertThat(lectura.path("content").asText()).contains("## Rule");
+
+        // un segundo agente no puede duplicarlo
+        var dup = tool("propose_skill", withOverrides(PROPUESTO,
+                "title", "Zz Test Feature Flag", "from_query", "zz test how do I name a toggle"));
+        assertThat(dup.path("status").asText()).isEqualTo("rejected");
+        assertThat(slugList2(dup.path("existing"))).contains("zz-test-feature-flags");
+
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-test-feature-flags'");
+    }
+
+    @Test
+    void proposeRechazaViolacionDeTopesDeLongitud() {
+        var r = tool("propose_skill", withOverrides(PROPUESTO,
+                "title", "Zz Test Something Completely Unrelated To Anything",
+                "when_to_use", "Use when ".repeat(40),
+                "from_query", "zz test unrelated topic"));
+        assertThat(r.toString().toLowerCase()).containsAnyOf("rejected", "too big", "200");
+    }
+
+    // --- helpers de los tests de tools -------------------------------
+
+    private static JsonNode bySlug(JsonNode array, String slug) {
+        for (JsonNode n : array) if (slug.equals(n.path("slug").asText())) return n;
+        return com.fasterxml.jackson.databind.node.MissingNode.getInstance();
+    }
+
+    private static List<String> slugList(JsonNode stringArray) {
+        var out = new java.util.ArrayList<String>();
+        stringArray.forEach(n -> out.add(n.asText()));
+        return out;
+    }
+
+    private static List<String> slugList2(JsonNode objArray) {
+        var out = new java.util.ArrayList<String>();
+        objArray.forEach(n -> out.add(n.path("slug").asText()));
+        return out;
+    }
+
+    private static java.util.Map<String, Object> withOverrides(java.util.Map<String, Object> base, String... kv) {
+        var m = new java.util.HashMap<String, Object>(base);
+        for (int i = 0; i < kv.length; i += 2) m.put(kv[i], kv[i + 1]);
+        return m;
     }
 
     // --- estabilidad del prefijo cacheable ------------------------------
