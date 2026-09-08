@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: skill-hub-backend
+  datasource:
+    # Equivalente a DATABASE_URL del proyecto Next. En Docker/prod se pasa por env:
+    #   SPRING_DATASOURCE_URL / _USERNAME / _PASSWORD
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/skillhub}
+    username: ${SPRING_DATASOURCE_USERNAME:skillhub}
+    password: ${SPRING_DATASOURCE_PASSWORD:skillhub}
+    hikari:
+      # Cada conexion del pool arranca en la zona de la organizacion, para que
+      # CURRENT_DATE en las lecturas de telemetria sea el dia local y no el del
+      # servidor. Equivale a connection.TimeZone del pool postgres-js del original.
+      connection-init-sql: SET TIME ZONE 'America/Argentina/Cordoba'
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # En la base de prod (ya con el schema de Drizzle) se arranca con:
+    #   baseline-on-migrate: true  /  baseline-version: 12
+    # para que Flyway no reaplique V1..V12. En una base limpia se aplican todas.
+    baseline-on-migrate: false
+
+server:
+  port: ${PORT:8080}
+
+# Zona de la organizacion: las lecturas de telemetria usan CURRENT_DATE y tienen
+# que dar el dia local, no el del servidor. Equivale a connection.TimeZone del
+# pool de postgres-js en src/server/db/index.ts (APP_TZ).
+app:
+  timezone: ${APP_TZ:America/Argentina/Cordoba}
+  usage:
+    retention-days: ${USAGE_RETENTION_DAYS:90}
+
+logging:
+  level:
+    org.flywaydb: info
