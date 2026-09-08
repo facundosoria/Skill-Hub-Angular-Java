@@ -159,3 +159,34 @@ body {
 .prose-skill blockquote {
   border-left: 3px solid var(--border-strong); padding-left: 1rem; color: var(--text-muted); margin: 1rem 0;
 }
+
+/*
+ * Bloques resaltados con Shiki (doble tema). Shiki emite `color:X;--shiki-dark:Y`
+ * en el <pre> y cada <span>; abajo se cambia al color oscuro cuando corresponde.
+ * El marco (borde/radio/padding) lo pone el diseno, no Shiki.
+ */
+.prose-skill .shiki {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.875rem 1rem; overflow-x: auto; margin: 1rem 0;
+  font-size: 0.8125rem; line-height: 1.6; font-family: var(--font-app-mono);
+}
+.prose-skill .shiki code { background: none; border: none; padding: 0; font-size: inherit; }
+
+:root[data-theme="dark"] .prose-skill .shiki,
+:root[data-theme="dark"] .prose-skill .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .prose-skill .shiki,
+  :root:not([data-theme="light"]) .prose-skill .shiki span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+    font-style: var(--shiki-dark-font-style) !important;
+    font-weight: var(--shiki-dark-font-weight) !important;
+    text-decoration: var(--shiki-dark-text-decoration) !important;
+  }
+}
