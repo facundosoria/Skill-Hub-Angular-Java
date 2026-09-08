@@ -49,8 +49,7 @@ export const routes: Routes = [
       },
       {
         path: 'docs',
-        loadComponent: () => import('./features/stub').then((m) => m.Stub),
-        data: { title: 'Cómo funciona' },
+        loadComponent: () => import('./features/docs/docs').then((m) => m.Docs),
       },
       {
         path: 'review',
