@@ -8,7 +8,7 @@ Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-b
 | | |
 |---|---|
 | `backend/` | Spring Boot 3.4 (Java 21, Maven). MCP + API REST completos, 38 tests en verde. |
-| `frontend/` | Angular 22 (standalone, signals, zoneless) + Tailwind 4. Scaffold + login/catálogo funcionando e2e. |
+| `frontend/` | Angular 22 (standalone, signals, zoneless) + Tailwind 4. **Todas las pantallas portadas y verificadas e2e.** |
 
 ## Frontend (`frontend/`)
 
@@ -33,9 +33,11 @@ npm run build
 - **markdown**: `marked` + `DOMPurify` (puerto de `skill-markdown.tsx`) + **Shiki** para los bloques
   de código (doble tema, mejora sobre el original); preview en `<iframe sandbox="allow-scripts">` sin `allow-same-origin`
 - **diff de versiones**: `jsdiff` (`diffLines`) — `/skills/:slug/diff?a=&b=`, puerto de `diff-view.tsx`
-- **Stub**: docs
+- **docs** (`/docs`): el contenido son dos `.md` (`public/content/docs.{es,en}.md`) renderizados con el
+  mismo pipeline (marked + Shiki); índice lateral con scroll-spy generado de los `##`
 
-Pendiente del frontend: la pantalla `docs` (`/docs`).
+**El frontend Angular está portado.** Falta pulido (animaciones de Motion, algún detalle de UX
+del original) pero todas las pantallas funcionan contra el backend.
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
