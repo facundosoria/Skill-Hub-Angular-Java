@@ -2,6 +2,8 @@ package com.skillhub;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.skillhub.skill.SkillInput;
+import com.skillhub.skill.SkillWriteService;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,6 +51,7 @@ class RestApiIntegrationTest {
     @Autowired TestRestTemplate rest;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
+    @Autowired SkillWriteService write;
 
     static String adminCookie;
     static String memberCookie;
@@ -311,6 +314,77 @@ class RestApiIntegrationTest {
         assertThat(post("/api/review/feature-flags/approve", null, adminCookie).status).isEqualTo(200);
         assertThat(jdbc.queryForObject("SELECT status::text FROM skills WHERE slug = 'feature-flags'", String.class))
                 .isEqualTo("published");
+    }
+
+    @Test @Order(34)
+    void reviewListaYAceptaUnaRevisionDeAgente() {
+        // 'feature-flags' quedo publicada v1 en el test anterior. Un agente propone
+        // una revision (como haria propose_revision del MCP).
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'facu'", String.class);
+        var merged = new SkillInput("feature-flags", "Feature flags",
+                "How a flag is named, retired and audited.",
+                "Use when adding, reading or removing a feature flag or toggle.",
+                "angular", "convention", null, java.util.List.of(),
+                "## Rule\n\nFlags carry an owner, a removal date, and a CI check that fails when the date passes.",
+                null, null);
+        var rr = write.proposeRevision("feature-flags", 1, merged, adminId,
+                "The published rule has no enforcement, so stale flags pile up.");
+        assertThat(rr.ok()).isTrue();
+
+        // aparece en /review como revision, con los dos lados para el diff
+        var list = get("/api/review", adminCookie);
+        var rev = list.body.path("revisions");
+        assertThat(rev.size()).isGreaterThanOrEqualTo(1);
+        JsonNode ff = null;
+        for (JsonNode n : rev) if ("feature-flags".equals(n.path("slug").asText())) ff = n;
+        assertThat(ff).isNotNull();
+        assertThat(ff.path("currentContent").asText()).doesNotContain("CI check");
+        assertThat(ff.path("proposedContent").asText()).contains("CI check");
+        assertThat(ff.path("proposedVersion").asInt()).isEqualTo(2);
+
+        // la fila viva sigue en v1 hasta que el admin acepta
+        var before = get("/api/skills/feature-flags", adminCookie);
+        assertThat(before.body.path("skill").path("description").asText()).doesNotContain("audited");
+
+        assertThat(post("/api/review/feature-flags/approve", null, adminCookie).status).isEqualTo(200);
+
+        var after = get("/api/skills/feature-flags", adminCookie);
+        assertThat(after.body.path("skill").path("description").asText()).contains("audited");
+        assertThat(after.body.path("history").get(0).path("version").asInt()).isEqualTo(2);
+        assertThat(jdbc.queryForObject(
+                "SELECT pending_version_id FROM skills WHERE slug = 'feature-flags'", String.class)).isNull();
+    }
+
+    @Test @Order(35)
+    void rechazarUnaRevisionDeAgenteSoloDescartaElCambio() {
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'facu'", String.class);
+        var merged = new SkillInput("feature-flags", "Feature flags",
+                "How a flag is named, retired and audited.",
+                "Use when adding, reading or removing a feature flag or toggle.",
+                "angular", "convention", null, java.util.List.of(),
+                "## Rule\n\nThrowaway change that an admin will discard.", null, null);
+        // base_version ahora es 2 (se aplico la revision anterior)
+        var rr = write.proposeRevision("feature-flags", 2, merged, adminId,
+                "Deliberately weak change to test the reject path.");
+        assertThat(rr.ok()).isTrue();
+
+        assertThat(post("/api/review/feature-flags/reject",
+                java.util.Map.of("motivo", "no aporta"), adminCookie).status).isEqualTo(200);
+
+        // sigue publicada v2, sin pendiente, contenido intacto
+        assertThat(jdbc.queryForObject(
+                "SELECT pending_version_id FROM skills WHERE slug = 'feature-flags'", String.class)).isNull();
+        var after = get("/api/skills/feature-flags", adminCookie);
+        assertThat(after.body.path("skill").path("status").asText()).isEqualTo("published");
+        assertThat(after.body.path("skill").path("version").path("version").asInt()).isEqualTo(2);
+        assertThat(after.body.path("skill").path("version").path("content").asText())
+                .contains("CI check").doesNotContain("Throwaway");
+        // y ya no figura como revision pendiente
+        var list = get("/api/review", adminCookie);
+        list.body.path("revisions").forEach(n ->
+                assertThat(n.path("slug").asText()).isNotEqualTo("feature-flags"));
     }
 
     @Test @Order(32)

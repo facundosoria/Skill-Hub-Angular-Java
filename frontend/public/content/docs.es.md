@@ -48,7 +48,7 @@ when_to_use: Use when rendering any clickable action - button,
   CTA, primary or secondary action, submit, confirm, cancel.
 stack: angular
 type: skill
-owner_team: platform
+owning_team: platform
 tags: [buttons, actions, forms, ui]
 related: [form-fields]
 ---
@@ -199,7 +199,7 @@ El modelo no "sabe" que existe este catálogo. Lo que ocurre es más mecánico y
 
 Al conectarse, el cliente mete en el contexto del modelo dos cosas: el texto de `instructions` y la **definición de cada tool** — su nombre, su descripción y el esquema de sus parámetros. Eso queda ahí durante toda la sesión, ocupando lugar. Cuando le pedís algo, el modelo compara tu pedido contra esas descripciones y decide si alguna aplica.
 
-> **Por qué seis tools y no cien.** Si el servidor publicara un tool por skill, las cien definiciones estarían permanentemente en el contexto de todos los agentes, y el modelo tendría que elegir entre cien opciones parecidas en cada turno. Con un puñado de tools genéricas, el catálogo puede crecer a mil skills sin que el costo en contexto cambie: lo que crece es lo que devuelve la búsqueda, no lo que el modelo carga de entrada.
+> **Por qué un puñado de tools y no cien.** Si el servidor publicara un tool por skill, las cien definiciones estarían permanentemente en el contexto de todos los agentes, y el modelo tendría que elegir entre cien opciones parecidas en cada turno. Con un puñado de tools genéricas, el catálogo puede crecer a mil skills sin que el costo en contexto cambie: lo que crece es lo que devuelve la búsqueda, no lo que el modelo carga de entrada.
 
 Por eso también `search_skills` devuelve como máximo 5 resultados y sin contenido, por eso `description` y `when_to_use` tienen un tope de 200 caracteres validado al publicar, y por eso `get_skill` saca el HTML del preview — medido sobre el skill de botones, ese bloque solo era el 44% del payload, mandado a un lector que no puede usarlo.
 
@@ -209,7 +209,7 @@ Consecuencia práctica: si un skill está mal escrito o es ambiguo, el agente lo
 
 ## Las tools
 
-El servidor expone **seis**. Cinco son de sólo lectura; la sexta sólo puede crear propuestas provisionales. El patrón es divulgación progresiva: primero se busca barato, después se trae sólo lo que hace falta.
+El servidor expone **siete**. Cinco son de sólo lectura; dos escriben, y siempre como propuestas pendientes que revisa una persona — `propose_skill` para una convención nueva, `propose_revision` para un cambio a una existente. El patrón es divulgación progresiva: primero se busca barato, después se trae sólo lo que hace falta.
 
 ### search_skills
 
@@ -253,7 +253,7 @@ Ver el índice completo de lo que existe. Para orientarse, no para resolver una 
 | `stack` | angular · java · shared · infra | opcional | Acota a un stack |
 | `type` | skill · convention · reference | opcional | Acota a un tipo |
 
-**Devuelve:** slug, título, `when_to_use` y `version` de todos los publicados. Sin contenido.
+**Devuelve:** slug, título, `when_to_use` y `version` de todos los skills. Sin contenido. Las provisionales (propuestas por un agente, sin revisar) van incluidas y llevan `provisional: true`.
 
 ### get_port_registry
 
@@ -263,11 +263,11 @@ Saber qué puerto le corresponde a un servicio sin pisar el rango de otro equipo
 | --- | --- | --- | --- |
 | `service` | string | opcional | Filtra por servicio o equipo. Sin filtro devuelve el registro entero |
 
-**Devuelve:** las líneas del registro que coinciden con el filtro, o la tabla completa.
+**Devuelve:** las líneas del registro que coinciden con el filtro, o la tabla completa. Si todavía no se cargó ningún registro, una lista `teams` vacía con una nota — no un error.
 
 ### propose_skill
 
-Llenar un hueco cuando no existe ninguna convención para la tarea. Sólo cuando `search_skills` no devolvió nada. La propuesta se sirve a los demás agentes enseguida, marcada como provisional, y se rechaza de plano si ya existe algo parecido.
+Llenar un hueco cuando no existe ninguna convención para la tarea. Sólo cuando `search_skills` no devolvió nada. La propuesta se sirve a los demás agentes enseguida, marcada como provisional. Si ya existe algo muy parecido, se rechaza y devuelve ese skill con un score de similitud; si el solapamiento es de borde, entra igual como provisional y el admin decide en la revisión.
 
 | Parámetro | Tipo | | Detalle |
 | --- | --- | --- | --- |
@@ -280,9 +280,23 @@ Llenar un hueco cuando no existe ninguna convención para la tarea. Sólo cuando
 | `rationale` | string | requerido | En qué se basó la regla. Esto lo lee un admin |
 | `type` / `tags` / `slug` | opcionales | | El slug se deriva del título si se omite |
 
-**Devuelve:** el slug que creó, o un rechazo con el skill existente cuando ya hay algo equivalente.
+**Devuelve:** el slug que creó, o un rechazo con el skill parecido y su `similarity`.
 
-No hay ninguna tool que edite ni publique, a propósito. Si un agente pudiera publicar, cien agentes generarían casi-duplicados más rápido de lo que un admin puede revisar. Todo lo que se vuelve una decisión real pasa por esta web, por una persona.
+### propose_revision
+
+Proponer un cambio a una convención que está mal, incompleta o desactualizada. No toca la versión publicada: crea una **revisión pendiente** que aparece en la cola de revisión, con un diff contra lo publicado, para que un admin la acepte (sube de versión) o la descarte. Hasta entonces `get_skill` sigue devolviendo la publicada, ahora marcada `pending_revision: true` para que otros agentes no propongan lo mismo.
+
+| Parámetro | Tipo | | Detalle |
+| --- | --- | --- | --- |
+| `slug` | string | requerido | La convención a cambiar |
+| `base_version` | integer | requerido | El `version` que devolvió `get_skill`. Se rechaza si quedó vieja |
+| `content` | string | requerido | El cuerpo nuevo completo, Markdown que arranca con `## Rule`. No un diff |
+| `rationale` | string | requerido | Por qué hace falta el cambio. Esto lo lee un admin |
+| `description` / `when_to_use` / `tags` / `stack` / `type` | opcionales | | Sólo los que cambian |
+
+**Devuelve:** el número de versión pendiente, o un rechazo (`base_version` vieja, ya hay una revisión pendiente, slug inexistente, no está publicada).
+
+Ninguna de las dos tools edita ni publica directo, a propósito. Si un agente pudiera publicar, cien agentes generarían casi-duplicados y ediciones a medio hornear más rápido de lo que un admin puede revisar. Todo lo que se vuelve una decisión real pasa por esta web, por una persona.
 
 ## Las reglas
 

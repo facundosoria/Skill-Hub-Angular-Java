@@ -270,6 +270,16 @@ export const es = {
       "Vuelve a borrador, no se borra: que un agente haya escrito una regla que no sirve igual dice que ahí falta una convención.",
     porQueNoSirve: "Por qué no sirve",
     confirmar: "Confirmar",
+    revisionesTitulo: "Cambios propuestos a convenciones publicadas",
+    revisionesSubtitulo:
+      "Un agente encontró una convención incompleta o desactualizada y propuso un cambio. La versión publicada no se tocó: aceptar sube de versión, descartar la deja como está.",
+    revisionesVacio: "No hay cambios propuestos.",
+    reviseAgente: "propuesto por un agente",
+    baseVersion: "sobre v",
+    verDiff: "Ver el diff",
+    aceptarRevision: "Aceptar el cambio",
+    descartarRevision: "Descartar",
+    porQueDescartar: "Por qué se descarta",
   },
   diff: {
     titulo: "Diff",

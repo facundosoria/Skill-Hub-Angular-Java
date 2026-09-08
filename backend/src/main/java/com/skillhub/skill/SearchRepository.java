@@ -17,6 +17,11 @@ import java.util.List;
  *  2. laxa      - se reescribe el AND a OR sobre la tsquery ya parseada (sin inyeccion),
  *                 con piso de ts_rank para que una palabra suelta no matchee todo.
  *  3. trigramas - un typo no deberia devolver vacio.
+ *
+ * Las tres pasadas tienen piso de relevancia (MIN_RANK): por debajo de eso el
+ * match es demasiado debil para sugerirlo como convencion, y searchSkills
+ * devuelve vacio para que el MCP empuje a propose_skill en vez de ofrecer algo
+ * que no aplica. El `score` de cada hit viaja en la respuesta para calibrar.
  */
 @Repository
 public class SearchRepository {
@@ -26,7 +31,17 @@ public class SearchRepository {
     private static final double GRACE_MULTIPLIER = 1.35; // ~5 usos
     private static final int GRACE_DAYS = 30;
     private static final int USAGE_WINDOW_DAYS = 90;
-    private static final double MIN_RANK_LOOSE = 0.02;
+
+    /**
+     * Piso de relevancia textual (ts_rank, sin el boost de uso). Por debajo de
+     * esto el match no se sugiere: searchSkills devuelve vacio. Calibrable con el
+     * `score` que sale en cada hit. La pasada estricta ya exige todos los
+     * terminos, asi que le alcanza un piso bajo; la laxa (OR) necesita mas.
+     */
+    private static final double MIN_RANK_STRICT = 0.03;
+    private static final double MIN_RANK_LOOSE = 0.06;
+    /** Piso de la pasada por trigramas: similarity() del titulo, no ts_rank. */
+    private static final double MIN_TITLE_SIMILARITY = 0.25;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -40,7 +55,7 @@ public class SearchRepository {
         if (q.isEmpty()) return List.of();
 
         var strict = runQuery(
-                "websearch_to_tsquery('english', :q::text)", q, stack, type, limit, null);
+                "websearch_to_tsquery('english', :q::text)", q, stack, type, limit, MIN_RANK_STRICT);
         if (!strict.isEmpty()) return strict;
 
         var loose = runQuery(
@@ -99,7 +114,7 @@ public class SearchRepository {
                 AND to_tsvector('english', s.search_text) @@ %s
             )
             SELECT slug, title, description, when_to_use, stack, type, owner_team, status,
-                   version, usos_90d, personas
+                   version, usos_90d, personas, rank AS score
             FROM matched
             WHERE (:minRank::float IS NULL OR rank >= :minRank::float)
             ORDER BY rank * boost DESC, updated_at DESC
@@ -124,17 +139,18 @@ public class SearchRepository {
                        s.owner_team  AS owner_team,
                        s.status::text AS status,
                        COALESCE(v.version, 1) AS version,
-                       0 AS usos_90d, 0 AS personas
+                       0 AS usos_90d, 0 AS personas,
+                       similarity(s.title, :q::text)::float AS score
                 FROM skills s
                 LEFT JOIN skill_versions v ON v.id = s.current_version_id
                 WHERE s.status IN ('published', 'proposed')
                   AND (:stack::text IS NULL OR s.stack::text = :stack)
                   AND (:type::text  IS NULL OR s.type::text  = :type)
-                  AND similarity(s.title, :q::text) > 0.25
+                  AND similarity(s.title, :q::text) > :minTitleSim::float
                 ORDER BY similarity(s.title, :q::text) DESC
                 LIMIT :limit::int
                 """,
-                p, SearchRepository::mapHit);
+                p.addValue("minTitleSim", MIN_TITLE_SIMILARITY), SearchRepository::mapHit);
     }
 
     private static SearchHit mapHit(java.sql.ResultSet rs, int i) throws java.sql.SQLException {
@@ -142,6 +158,7 @@ public class SearchRepository {
                 rs.getString("slug"), rs.getString("title"), rs.getString("description"),
                 rs.getString("when_to_use"), rs.getString("stack"), rs.getString("type"),
                 rs.getString("owner_team"), rs.getString("status"),
-                rs.getInt("version"), rs.getInt("usos_90d"), rs.getInt("personas"));
+                rs.getInt("version"), rs.getInt("usos_90d"), rs.getInt("personas"),
+                rs.getDouble("score"));
     }
 }

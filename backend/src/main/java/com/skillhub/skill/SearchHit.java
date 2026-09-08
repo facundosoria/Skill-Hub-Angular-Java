@@ -12,5 +12,6 @@ public record SearchHit(
         String status,
         int version,
         int usos90d,
-        int personas
+        int personas,
+        double score
 ) {}

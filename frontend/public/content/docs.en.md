@@ -48,7 +48,7 @@ when_to_use: Use when rendering any clickable action - button,
   CTA, primary or secondary action, submit, confirm, cancel.
 stack: angular
 type: skill
-owner_team: platform
+owning_team: platform
 tags: [buttons, actions, forms, ui]
 related: [form-fields]
 ---
@@ -199,7 +199,7 @@ The model does not "know" this catalogue exists. What happens is more mechanical
 
 On connecting, the client puts two things into the model's context: the `instructions` text and the **definition of each tool** — its name, description and parameter schema. That stays there for the whole session, taking up room. When you ask for something, the model compares your request against those descriptions and decides whether any applies.
 
-> **Why six tools and not a hundred.** If the server published one tool per skill, all hundred definitions would sit permanently in every agent's context, and the model would have to choose between a hundred similar options on every turn. With a handful of generic tools, the catalogue can grow to a thousand skills without the context cost changing: what grows is what search returns, not what the model loads up front.
+> **Why a handful of tools and not a hundred.** If the server published one tool per skill, all hundred definitions would sit permanently in every agent's context, and the model would have to choose between a hundred similar options on every turn. With a handful of generic tools, the catalogue can grow to a thousand skills without the context cost changing: what grows is what search returns, not what the model loads up front.
 
 That is also why `search_skills` returns at most 5 results and no contents, why `description` and `when_to_use` are capped at 200 characters enforced at publish time, and why `get_skill` strips the preview HTML — measured on the buttons skill, that block alone was 44% of the payload, sent to a reader that cannot use it.
 
@@ -209,7 +209,7 @@ Practical consequence: if a skill is badly written or ambiguous, the agent will 
 
 ## The tools
 
-The server exposes **six**. Five are read-only; the sixth can only create provisional proposals. The pattern is progressive disclosure: search cheaply first, then fetch only what is needed.
+The server exposes **seven**. Five are read-only; two write, and only ever as pending proposals a person reviews — `propose_skill` for a new convention, `propose_revision` for a change to an existing one. The pattern is progressive disclosure: search cheaply first, then fetch only what is needed.
 
 ### search_skills
 
@@ -253,7 +253,7 @@ See the full index of what exists. To get your bearings, not to solve a concrete
 | `stack` | angular · java · shared · infra | optional | Restrict to one stack |
 | `type` | skill · convention · reference | optional | Restrict to one type |
 
-**Returns:** slug, title, `when_to_use` and `version` of every published skill. No contents.
+**Returns:** slug, title, `when_to_use` and `version` of every skill. No contents. Provisional entries (proposed by an agent, not yet reviewed) are included and carry `provisional: true`.
 
 ### get_port_registry
 
@@ -263,11 +263,11 @@ Find which port a service should use without taking another team's range. Before
 | --- | --- | --- | --- |
 | `service` | string | optional | Filter by service or team. Without a filter it returns the whole registry |
 
-**Returns:** the registry lines matching the filter, or the full table.
+**Returns:** the registry lines matching the filter, or the full table. If no registry has been loaded yet, an empty `teams` list with a note — not an error.
 
 ### propose_skill
 
-Fill a gap when no convention exists for the task at hand. Only when `search_skills` returned nothing. The proposal is served to other agents immediately, marked as provisional, and refused outright if anything similar already exists.
+Fill a gap when no convention exists for the task at hand. Only when `search_skills` returned nothing. The proposal is served to other agents immediately, marked as provisional. If a close match already exists the call is refused and returns it with a similarity score; a borderline overlap is accepted as provisional and the admin decides at review time.
 
 | Parameter | Type | | Detail |
 | --- | --- | --- | --- |
@@ -280,9 +280,23 @@ Fill a gap when no convention exists for the task at hand. Only when `search_ski
 | `rationale` | string | required | What the rule was based on. An admin reads this |
 | `type` / `tags` / `slug` | optional | | The slug is derived from the title if omitted |
 
-**Returns:** the slug it created, or a rejection with the existing skill when something equivalent is already in the catalogue.
+**Returns:** the slug it created, or a rejection carrying the close match and its `similarity`.
 
-There is no tool that edits or publishes, on purpose. If an agent could publish, a hundred agents would generate near-duplicates faster than any admin could review them. Everything that becomes a real decision goes through this web app, through a person.
+### propose_revision
+
+Propose a change to an existing convention that is wrong, incomplete or outdated. It does not touch the published version: it creates a **pending revision** that shows up in the review queue, with a diff against what is published, for an admin to accept (which bumps the version) or discard. Until then `get_skill` keeps returning the published version, now flagged `pending_revision: true` so other agents do not propose the same thing again.
+
+| Parameter | Type | | Detail |
+| --- | --- | --- | --- |
+| `slug` | string | required | The convention to change |
+| `base_version` | integer | required | The `version` `get_skill` returned. Rejected as stale if it moved since |
+| `content` | string | required | The full new body, Markdown starting with `## Rule`. Not a diff |
+| `rationale` | string | required | Why the change is needed. An admin reads this |
+| `description` / `when_to_use` / `tags` / `stack` / `type` | optional | | Only the ones that change |
+
+**Returns:** the pending version number, or a rejection (stale `base_version`, a revision already pending, unknown slug, not published).
+
+Neither tool edits or publishes directly, on purpose. If an agent could publish, a hundred agents would generate near-duplicates and half-baked edits faster than any admin could review them. Everything that becomes a real decision goes through this web app, through a person.
 
 ## The rules
 

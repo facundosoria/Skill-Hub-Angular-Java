@@ -104,14 +104,39 @@ public class UsageService {
         }
     }
 
+    /**
+     * Rollup del dia a usage_daily. La senal es "que tan canonica es la
+     * convencion", asi que se filtra el ruido (decision 14 + revision):
+     *
+     *  - Solo get_skill / get_port_registry. Una busqueda que la roza no es
+     *    "consultarla"; contar search_skills inflaba el numero.
+     *  - Deduplicado por actor + dia: el mismo agente pidiendo la misma skill
+     *    diez veces en un dia cuenta como 1, no como 10.
+     *  - Sin las llamadas del equipo dueno sobre su propia skill: el owner
+     *    corroborando su propia convencion no es senal de adopcion.
+     *
+     * Recalcula el dia entero en cada flush (idempotente por el ON CONFLICT).
+     */
     private void rollupToday() {
         jdbc.getJdbcTemplate().execute("""
             INSERT INTO usage_daily (day, skill_id, team, hits, distinct_users)
-            SELECT CURRENT_DATE, skill_id, COALESCE(team, ''),
-                   COUNT(*)::int, COUNT(DISTINCT user_id)::int
-            FROM usage_events
-            WHERE skill_id IS NOT NULL AND created_at >= CURRENT_DATE
-            GROUP BY skill_id, COALESCE(team, '')
+            SELECT CURRENT_DATE, d.skill_id, d.team,
+                   COUNT(*)::int,                     -- 1 fila por actor/skill/team, ya deduplicado
+                   COUNT(DISTINCT d.actor)::int
+            FROM (
+              SELECT e.skill_id,
+                     COALESCE(e.team, '') AS team,
+                     COALESCE(e.user_id::text, e.api_key_id::text, 'anon') AS actor
+              FROM usage_events e
+              JOIN skills s ON s.id = e.skill_id
+              WHERE e.skill_id IS NOT NULL
+                AND e.created_at >= CURRENT_DATE
+                AND e.tool IN ('get_skill', 'get_port_registry')
+                AND (e.team IS NULL OR s.owner_team IS NULL OR e.team <> s.owner_team)
+              GROUP BY e.skill_id, COALESCE(e.team, ''),
+                       COALESCE(e.user_id::text, e.api_key_id::text, 'anon')
+            ) d
+            GROUP BY d.skill_id, d.team
             ON CONFLICT (day, skill_id, team) DO UPDATE
               SET hits = EXCLUDED.hits, distinct_users = EXCLUDED.distinct_users
             """);

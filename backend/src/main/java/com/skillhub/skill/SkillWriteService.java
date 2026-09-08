@@ -146,6 +146,81 @@ public class SkillWriteService {
         return new UpdateResult(version, !applyDirectly);
     }
 
+    // --- revision propuesta por un agente (MCP propose_revision) ------
+
+    /** motivo: null (ok) | no_existe | no_publicada | deprecada | stale | ya_pendiente */
+    public record RevisionResult(boolean ok, String motivo, int newVersion, int currentVersion) {
+        static RevisionResult ok(int nueva, int actual) { return new RevisionResult(true, null, nueva, actual); }
+        static RevisionResult no(String motivo, int actual) { return new RevisionResult(false, motivo, 0, actual); }
+    }
+
+    /**
+     * Crea una revision PENDIENTE sobre una convencion publicada, sin tocar la
+     * version viva. Queda en skills.pending_version_id con el SkillInput completo
+     * en meta_snapshot y proposed_by_agent = true, para que un admin la acepte
+     * (applyPendingEdit -> bump) o la descarte desde /review.
+     *
+     * `proposed` ya viene con los campos vigentes mezclados con lo que cambia.
+     * `baseVersion` es la version publicada sobre la que el agente trabajo: si
+     * quedo vieja, se rechaza para que vuelva a partir de get_skill.
+     */
+    @Transactional
+    public RevisionResult proposeRevision(String slug, int baseVersion, SkillInput proposed,
+                                          String actorId, String rationale) {
+        Map<String, Object> skill;
+        try {
+            skill = skillRow(slug);
+        } catch (DomainException e) {
+            return RevisionResult.no("no_existe", 0);
+        }
+        String skillId = (String) skill.get("id");
+        String status = (String) skill.get("status");
+        String currentVersionId = (String) skill.get("current_version_id");
+
+        if ("deprecated".equals(status)) return RevisionResult.no("deprecada", 0);
+        if (!"published".equals(status)) return RevisionResult.no("no_publicada", 0);
+
+        int currentVersion = currentVersionId == null ? 1 : jdbc.queryForObject(
+                "SELECT version FROM skill_versions WHERE id = :id::uuid",
+                new MapSqlParameterSource("id", currentVersionId), Integer.class);
+
+        Integer yaPendiente = jdbc.query(
+                "SELECT 1 FROM skills WHERE id = :id::uuid AND pending_version_id IS NOT NULL",
+                new MapSqlParameterSource("id", skillId), rs -> rs.next() ? 1 : null);
+        if (yaPendiente != null) return RevisionResult.no("ya_pendiente", currentVersion);
+        if (baseVersion != currentVersion) return RevisionResult.no("stale", currentVersion);
+
+        int version = nextVersion(skillId);
+        String changelog = "Revision propuesta por un agente. Base declarada: "
+                + (rationale == null ? "" : rationale.length() > 400 ? rationale.substring(0, 400) : rationale);
+
+        String versionId = jdbc.queryForObject("""
+                INSERT INTO skill_versions (skill_id, version, content, preview, changelog, author_id,
+                                            meta_snapshot, proposed_by_agent)
+                VALUES (:skillId::uuid, :version, :content, :preview, :changelog, :actorId::uuid, :meta, true)
+                RETURNING id::text
+                """, new MapSqlParameterSource()
+                .addValue("skillId", skillId)
+                .addValue("version", version)
+                .addValue("content", proposed.content())
+                .addValue("preview", Frontmatter.extractPreview(proposed.content()))
+                .addValue("changelog", changelog)
+                .addValue("actorId", actorId)
+                .addValue("meta", writeJson(proposed)), String.class);
+
+        jdbc.update("UPDATE skills SET pending_version_id = :vid::uuid WHERE id = :id::uuid",
+                new MapSqlParameterSource().addValue("vid", versionId).addValue("id", skillId));
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("slug", slug);
+        meta.put("version", version);
+        meta.put("origen", "agente");
+        meta.put("baseDeclarada", rationale);
+        audit.logAudit(actorId, "skill.revision_proposed", "skill", skillId, meta);
+
+        return RevisionResult.ok(version, currentVersion);
+    }
+
     // --- publish / deprecate ----------------------------------------
 
     @Transactional

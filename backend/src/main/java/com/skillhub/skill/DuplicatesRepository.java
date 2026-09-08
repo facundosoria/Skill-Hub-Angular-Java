@@ -18,7 +18,17 @@ import java.util.List;
 public class DuplicatesRepository {
 
     private static final double MIN_SIMILARITY = 0.3;
-    private static final double TITULO_CASI_IDENTICO = 0.55;
+
+    /**
+     * Umbrales del rechazo EN CALIENTE de propose_skill. Deliberadamente altos:
+     * por debajo de esto no se rechaza, entra como provisional y el admin decide
+     * en la revision. La senal se mide sobre title + when_to_use + arranque del
+     * cuerpo (la sustancia), nunca sobre el pool de tags: dos convenciones
+     * distintas del mismo dominio comparten vocabulario de tags.
+     */
+    public static final double PROPOSAL_REJECT_SCORE = 0.52;
+    public static final double PROPOSAL_REJECT_TITLE = 0.75;
+    private static final int PROPOSAL_BODY_CHARS = 240;
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -104,10 +114,66 @@ public class DuplicatesRepository {
     }
 
     /**
-     * Umbral para BLOQUEAR una propuesta de un agente (mas estricto que el aviso
-     * del formulario): exige corroboracion. Dos senales, o titulo casi identico.
+     * Match candidato para el rechazo de propose_skill. `score` es la similitud
+     * trigram sobre title + when_to_use + arranque del cuerpo; `titleScore` la
+     * similitud solo del titulo (una convencion con titulo casi identico es
+     * sospechosa aunque el resto difiera).
      */
-    public static boolean esDuplicadoFuerte(DuplicateCandidate c) {
-        return c.porTexto() || c.porTags() > 0 || c.porTitulo() >= TITULO_CASI_IDENTICO;
+    public record ProposalMatch(String slug, String title, String status,
+                                double score, double titleScore) {
+        public boolean bloqueaEnCaliente() {
+            return score >= PROPOSAL_REJECT_SCORE || titleScore >= PROPOSAL_REJECT_TITLE;
+        }
+    }
+
+    /**
+     * Los skills mas parecidos a una propuesta, medido sobre la sustancia
+     * (title + when_to_use + primeras lineas del cuerpo), no sobre los tags.
+     * Devuelve todo con su score para que el que llama decida el corte y lo
+     * pueda mostrar; NO filtra por umbral.
+     */
+    public List<ProposalMatch> closestForProposal(String title, String whenToUse,
+                                                  String content, int limit) {
+        String t = title == null ? "" : title.trim();
+        if (t.length() < 3) return List.of();
+
+        String bodyStart = content == null ? "" : content
+                .replaceAll("\\s+", " ").trim();
+        if (bodyStart.length() > PROPOSAL_BODY_CHARS) {
+            bodyStart = bodyStart.substring(0, PROPOSAL_BODY_CHARS);
+        }
+        String profile = (t + " . " + (whenToUse == null ? "" : whenToUse.trim())
+                + " . " + bodyStart).toLowerCase();
+
+        MapSqlParameterSource p = new MapSqlParameterSource()
+                .addValue("profile", profile)
+                .addValue("title", t.toLowerCase())
+                .addValue("bodyChars", PROPOSAL_BODY_CHARS)
+                .addValue("limit", limit);
+
+        String sql = """
+            WITH candidato AS (
+              SELECT s.slug, s.title, s.status::text AS status,
+                     lower(concat_ws(' . ',
+                       s.title,
+                       s.when_to_use,
+                       left(regexp_replace(COALESCE(v.content, ''), '\\s+', ' ', 'g'), :bodyChars::int)
+                     )) AS perfil
+              FROM skills s
+              LEFT JOIN skill_versions v ON v.id = s.current_version_id
+              WHERE s.status IN ('published', 'proposed')
+            )
+            SELECT slug, title, status,
+                   similarity(perfil, :profile::text)      AS score,
+                   similarity(title, :title::text)         AS title_score
+            FROM candidato
+            ORDER BY GREATEST(similarity(perfil, :profile::text),
+                              similarity(title, :title::text)) DESC
+            LIMIT :limit::int
+            """;
+
+        return jdbc.query(sql, p, (rs, i) -> new ProposalMatch(
+                rs.getString("slug"), rs.getString("title"), rs.getString("status"),
+                rs.getDouble("score"), rs.getDouble("title_score")));
     }
 }

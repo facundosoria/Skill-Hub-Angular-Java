@@ -47,7 +47,9 @@ So when a search comes back empty and you are going to solve the problem anyway:
 3. Call `propose_skill` with the rule you actually followed. Be honest in `rationale` about what you based it on: the surrounding codebase, a related skill, or general practice because there was nothing to infer from. An admin reads that to decide how much to trust it.
 4. Tell the user you added a provisional convention and that nobody has reviewed it yet.
 
-The proposal is served to other agents immediately, so the organisation converges from day one, but it travels clearly marked as provisional until a person reviews it. If something similar already exists, the call is refused and returns the existing skill — follow that one instead of creating a near-duplicate.
+The proposal is served to other agents immediately, so the organisation converges from day one, but it travels clearly marked as provisional until a person reviews it. If a close match already exists, the call is refused and returns it with a similarity score — follow that one instead of creating a near-duplicate.
 
-Editing or publishing a skill is not possible from here. That still goes through a person in the web app.""";
+If an existing convention is wrong, incomplete or outdated, do not just tell the user: call `propose_revision` with its slug and the `version` you got from `get_skill`. That creates a pending revision an admin accepts or discards — the published version does not change in the meantime, and `get_skill` will report `pending_revision: true` so other agents do not propose the same thing again.
+
+Publishing a skill, and accepting a revision, still goes through a person in the web app.""";
 }

@@ -160,7 +160,7 @@ class McpIntegrationTest {
     }
 
     @Test
-    void toolsListExponeLasSeisToolsYSoloProposeEscribe() {
+    void toolsListExponeLasSieteToolsYSoloLasDosDeEscrituraEscriben() {
         var tools = rpc("tools/list", null).path("body").path("result").path("tools");
         var nombres = new java.util.ArrayList<String>();
         var escriben = new java.util.ArrayList<String>();
@@ -170,8 +170,8 @@ class McpIntegrationTest {
         });
         assertThat(nombres).containsExactlyInAnyOrder(
                 "get_port_registry", "get_skill", "list_skills",
-                "propose_skill", "search_skills", "sync_skills");
-        assertThat(escriben).containsExactly("propose_skill");
+                "propose_skill", "propose_revision", "search_skills", "sync_skills");
+        assertThat(escriben).containsExactlyInAnyOrder("propose_skill", "propose_revision");
     }
 
     @Test
@@ -303,6 +303,33 @@ class McpIntegrationTest {
     }
 
     @Test
+    void writingSkillsSeSirveYDocumentaLosCampos() {
+        var r = tool("get_skill", java.util.Map.of("slug", "writing-skills"));
+        assertThat(r.has("error")).isFalse();
+        assertThat(r.path("type").asText()).isEqualTo("reference");
+        assertThat(r.path("content").asText()).contains("## Rule").contains("when_to_use");
+    }
+
+    @Test
+    void listSkillsIncluyeLasProvisionalesMarcadas() {
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-test-feature-flags'");
+        tool("propose_skill", PROPUESTO);
+        try {
+            var l = tool("list_skills", java.util.Map.of());
+            var prov = bySlug(l.path("skills"), "zz-test-feature-flags");
+            assertThat(prov.path("provisional").asBoolean()).isTrue();
+            assertThat(l.path("provisional_count").asInt()).isGreaterThanOrEqualTo(1);
+            // cuenta en el total: un agente que se orienta con list_skills la ve
+            assertThat(l.path("total").asInt()).isEqualTo(l.path("skills").size());
+            // las publicadas no quedan marcadas
+            assertThat(bySlug(l.path("skills"), PREFIX + "buttons").path("provisional").asBoolean())
+                    .isFalse();
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-test-feature-flags'");
+        }
+    }
+
+    @Test
     void syncSkillsReconciliaCopiasLocalesEnUnLlamado() {
         var actual = tool("get_skill", java.util.Map.of("slug", PREFIX + "buttons"));
         int previa = actual.path("version").asInt();
@@ -428,6 +455,181 @@ class McpIntegrationTest {
                 "when_to_use", "Use when ".repeat(40),
                 "from_query", "zz test unrelated topic"));
         assertThat(r.toString().toLowerCase()).containsAnyOf("rejected", "too big", "200");
+    }
+
+    // --- dedup: no rechazar por vocabulario compartido (bug A) --------
+
+    static final java.util.Map<String, Object> STORIES = java.util.Map.of(
+            "title", "Zz User Stories In Plain Language",
+            "description", "How a user story is worded and split, for the Taiga backlog.",
+            "when_to_use", "Use when writing a user story, splitting an epic into stories, or wording acceptance criteria for Taiga.",
+            "stack", "shared",
+            "content", "## Rule\n\nA user story is one sentence of user value in plain language. No Como/Quiero/Para template, but every story needs testable acceptance criteria.",
+            "tags", java.util.List.of("agile", "taiga", "planning", "backlog", "documentation", "stories"),
+            "from_query", "zz how to write user stories in plain language for taiga",
+            "rationale", "Based on how the team already writes stories in Taiga.");
+
+    static final java.util.Map<String, Object> EPICS = java.util.Map.of(
+            "title", "Zz Product Epics In Taiga",
+            "description", "How a product epic is scoped and described, distinct from a user story.",
+            "when_to_use", "Use when writing a product epic, its description, its non-goals, or grouping stories under an epic in Taiga.",
+            "stack", "shared",
+            "content", "## Rule\n\nAn epic is a short outcome statement with explicit scope and non-goals. No user-story template, no BDD, no story points at the epic level.",
+            "tags", java.util.List.of("agile", "taiga", "planning", "backlog", "documentation", "epics"),
+            "from_query", "zz how to write a product epic in taiga format",
+            "rationale", "The stories convention does not cover epic-level scoping; this is the opposite shape.");
+
+    @Test
+    void dosConvencionesDelMismoDominioPuedenCoexistir() {
+        jdbc.update("DELETE FROM skills WHERE slug IN ('zz-user-stories-in-plain-language','zz-product-epics-in-taiga')");
+        try {
+            var s1 = tool("propose_skill", STORIES);
+            assertThat(s1.path("status").asText()).isEqualTo("proposed");
+
+            // comparten 5 tags y todo el vocabulario de dominio, pero son reglas
+            // distintas: NO debe rechazarse en caliente.
+            var s2 = tool("propose_skill", EPICS);
+            assertThat(s2.path("status").asText())
+                    .withFailMessage("epics fue rechazada como duplicada de stories: %s", s2)
+                    .isEqualTo("proposed");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug IN ('zz-user-stories-in-plain-language','zz-product-epics-in-taiga')");
+        }
+    }
+
+    @Test
+    void proposeRechazaCasiIdenticoYDevuelveElScore() {
+        jdbc.update("DELETE FROM skills WHERE slug IN ('zz-user-stories-in-plain-language','zz-user-stories-in-plain-language-again')");
+        try {
+            tool("propose_skill", STORIES);
+            var casiIgual = tool("propose_skill", withOverrides(STORIES,
+                    "title", "Zz User Stories In Plain Language Again",
+                    "from_query", "zz writing user stories plainly"));
+            assertThat(casiIgual.path("status").asText()).isEqualTo("rejected");
+            var hit = casiIgual.path("existing").path(0);
+            assertThat(hit.path("slug").asText()).isEqualTo("zz-user-stories-in-plain-language");
+            assertThat(hit.path("similarity").isNumber()).isTrue();
+            assertThat(hit.path("similarity").asDouble()).isGreaterThan(0.0);
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug IN ('zz-user-stories-in-plain-language','zz-user-stories-in-plain-language-again')");
+        }
+    }
+
+    // --- search: piso de relevancia (bug B) --------------------------
+
+    @Test
+    void searchPorDebajoDelPisoDevuelveVacioYEmpujaAProponer() {
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-user-stories-in-plain-language'");
+        try {
+            tool("propose_skill", STORIES); // su when_to_use dice "splitting an epic into stories"
+
+            // tarea sobre ESCRIBIR una epica: la skill de historias la roza por
+            // "epic" pero no aplica. Debe caer por debajo del piso.
+            var r = tool("search_skills", java.util.Map.of(
+                    "query", "write a product epic with an epic description and epic non-goals"));
+            assertThat(r.path("results").size())
+                    .withFailMessage("devolvio un match debil en vez de vacio: %s", r)
+                    .isZero();
+            assertThat(r.path("next_step").asText()).isEqualTo("propose_skill");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-user-stories-in-plain-language'");
+        }
+    }
+
+    @Test
+    void searchDevuelveElScoreDeCadaHit() {
+        var r = tool("search_skills", java.util.Map.of("query", "save button in a form"));
+        assertThat(r.path("results").size()).isGreaterThan(0);
+        assertThat(r.path("results").path(0).path("score").isNumber()).isTrue();
+    }
+
+    // --- conteo de uso (bug G) -------------------------------------
+
+    @Test
+    void usageSoloCuentaGetSkillYNoAlEquipoDueno() throws Exception {
+        // search no cuenta; get_skill del equipo dueno (platform) sobre skill
+        // propio tampoco; get_skill sobre skill de otro equipo si.
+        tool("search_skills", java.util.Map.of("query", "package structure of a java service module"));
+        tool("get_skill", java.util.Map.of("slug", PREFIX + "api-error-shape")); // owner platform == identidad
+        tool("get_skill", java.util.Map.of("slug", PREFIX + "buttons"));         // owner design-system
+        Thread.sleep(6500); // flush + rollup
+
+        assertThat(sumHits(PREFIX + "package-structure")).isZero();
+        assertThat(sumHits(PREFIX + "api-error-shape")).isZero();
+        assertThat(sumHits(PREFIX + "buttons")).isGreaterThan(0);
+    }
+
+    private int sumHits(String slug) {
+        Integer n = jdbc.queryForObject("""
+                SELECT COALESCE(SUM(ud.hits), 0)::int
+                FROM usage_daily ud JOIN skills s ON s.id = ud.skill_id
+                WHERE s.slug = ?
+                """, Integer.class, slug);
+        return n == null ? 0 : n;
+    }
+
+    // --- propose_revision (bug H) ---------------------------------
+
+    @Test
+    void proposeRevisionCreaPendienteSinTocarLaPublicada() {
+        var g = tool("get_skill", java.util.Map.of("slug", PREFIX + "package-structure"));
+        int base = g.path("version").asInt();
+        String nuevoCuerpo = "## Rule\n\nOne package per bounded context. No catch-all `util` package. "
+                + "New: the web adapter lives in its own package, not mixed with domain.";
+
+        var rev = tool("propose_revision", java.util.Map.of(
+                "slug", PREFIX + "package-structure",
+                "base_version", base,
+                "content", nuevoCuerpo,
+                "rationale", "The rule is silent on where HTTP adapters go and teams put them in the domain package."));
+        assertThat(rev.path("status").asText()).isEqualTo("revision_proposed");
+        assertThat(rev.path("pending_version").asInt()).isEqualTo(base + 1);
+
+        try {
+            // get_skill sigue sirviendo la publicada, marcada
+            var g2 = tool("get_skill", java.util.Map.of("slug", PREFIX + "package-structure"));
+            assertThat(g2.path("version").asInt()).isEqualTo(base);
+            assertThat(g2.path("pending_revision").asBoolean()).isTrue();
+            assertThat(g2.path("content").asText()).doesNotContain("web adapter lives in its own package");
+
+            // no se puede apilar otra
+            var otra = tool("propose_revision", java.util.Map.of(
+                    "slug", PREFIX + "package-structure", "base_version", base,
+                    "content", nuevoCuerpo, "rationale", "otra vez lo mismo, deberia frenar"));
+            assertThat(otra.path("status").asText()).isEqualTo("rejected");
+            assertThat(otra.path("reason").asText().toLowerCase()).contains("pending");
+        } finally {
+            jdbc.update("""
+                    UPDATE skills SET pending_version_id = NULL WHERE slug = ?
+                    """, PREFIX + "package-structure");
+            jdbc.update("""
+                    DELETE FROM skill_versions WHERE proposed_by_agent
+                      AND skill_id = (SELECT id FROM skills WHERE slug = ?)
+                    """, PREFIX + "package-structure");
+        }
+    }
+
+    @Test
+    void proposeRevisionConBaseViejaRechazaPorStale() {
+        var rev = tool("propose_revision", java.util.Map.of(
+                "slug", PREFIX + "loading-states",
+                "base_version", 999,
+                "content", "## Rule\n\nShow a skeleton, not a spinner. Also: never block the whole page.",
+                "rationale", "Testing the stale guard with a base_version from the future."));
+        assertThat(rev.path("status").asText()).isEqualTo("rejected");
+        assertThat(rev.path("reason").asText().toLowerCase()).contains("does not match the published version");
+        assertThat(rev.path("current_version").asInt()).isGreaterThan(0);
+    }
+
+    @Test
+    void proposeRevisionSobreSlugInexistenteRechaza() {
+        var rev = tool("propose_revision", java.util.Map.of(
+                "slug", "no-existe-esta-convencion",
+                "base_version", 1,
+                "content", "## Rule\n\nSomething about a thing that does not exist in the catalogue.",
+                "rationale", "Should be rejected because the slug is unknown."));
+        assertThat(rev.path("status").asText()).isEqualTo("rejected");
+        assertThat(rev.path("reason").asText()).contains("No skill exists");
     }
 
     // --- helpers de los tests de tools -------------------------------

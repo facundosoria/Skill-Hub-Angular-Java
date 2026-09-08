@@ -154,6 +154,22 @@ export interface Proposal {
   personas: number;
 }
 
+/** Revisión que un agente propuso a una convención ya publicada (propose_revision). */
+export interface RevisionProposal {
+  slug: string;
+  title: string;
+  stack: string;
+  ownerTeam: string | null;
+  currentVersion: number | null;
+  currentContent: string | null;
+  proposedVersion: number;
+  proposedContent: string | null;
+  changelog: string | null;
+  createdAt: string;
+  authorName: string | null;
+  usos: number;
+}
+
 export interface PendingUser {
   id: string;
   name: string;

@@ -3,7 +3,7 @@ import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../../core/api';
 import { I18n } from '../../core/i18n/i18n';
-import type { Proposal } from '../../core/models';
+import type { Proposal, RevisionProposal } from '../../core/models';
 import { UI } from '../../shared/ui';
 
 /** Puerto de src/app/(app)/review/page.tsx + review-actions.tsx. */
@@ -45,6 +45,39 @@ import { UI } from '../../shared/ui';
           }
         </div>
       }
+
+      @if (revisions().length > 0) {
+        <h2 class="mt-10 text-lg font-semibold tracking-tight">{{ t().review.revisionesTitulo }}</h2>
+        <p class="mt-1 mb-4 text-sm text-text-muted">{{ t().review.revisionesSubtitulo }}</p>
+        <div class="space-y-3">
+          @for (r of revisions(); track r.slug) {
+            <div uiCard class="p-4">
+              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <a [routerLink]="['/skills', r.slug]" class="text-[15px] font-medium hover:underline">{{ r.title }}</a>
+                <span uiBadge tone="accent">{{ r.stack }}</span>
+                <span uiBadge tone="warning">{{ t().review.reviseAgente }}</span>
+                <span class="text-xs text-text-faint">{{ t().review.baseVersion }}{{ r.currentVersion }} → v{{ r.proposedVersion }}</span>
+                @if (r.usos > 0) {
+                  <span class="ml-auto text-xs text-text-faint">{{ t().review.yaSeguida }} {{ r.usos }}×</span>
+                }
+              </div>
+              @if (r.changelog) { <p class="mt-1.5 text-xs text-warning">{{ r.changelog }}</p> }
+              <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                <a
+                  [routerLink]="['/skills', r.slug, 'diff']"
+                  [queryParams]="{ a: r.currentVersion, b: r.proposedVersion }"
+                >
+                  <button uiButton size="sm" variant="secondary">{{ t().review.verDiff }}</button>
+                </a>
+                <button uiButton size="sm" (click)="approve(r.slug)">{{ t().review.aceptarRevision }}</button>
+                <button uiButton size="sm" variant="ghost" (click)="rejectRevision(r.slug)">
+                  {{ t().review.descartarRevision }}
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
     </div>
   `,
 })
@@ -53,15 +86,19 @@ export class Review {
   private i18n = inject(I18n);
   t = this.i18n.t;
   proposals = signal<Proposal[]>([]);
+  revisions = signal<RevisionProposal[]>([]);
 
   constructor() {
     this.load();
   }
 
   private load(): void {
-    firstValueFrom(this.api.get<{ proposals: Proposal[] }>('/review')).then((r) =>
-      this.proposals.set(r.proposals),
-    );
+    firstValueFrom(
+      this.api.get<{ proposals: Proposal[]; revisions: RevisionProposal[] }>('/review'),
+    ).then((r) => {
+      this.proposals.set(r.proposals);
+      this.revisions.set(r.revisions ?? []);
+    });
   }
 
   async approve(slug: string): Promise<void> {
@@ -71,6 +108,13 @@ export class Review {
 
   async reject(slug: string): Promise<void> {
     const motivo = prompt(this.t().review.porQueNoSirve) ?? '';
+    if (motivo.trim().length < 3) return;
+    await firstValueFrom(this.api.post(`/review/${slug}/reject`, { motivo: motivo.trim() }));
+    this.load();
+  }
+
+  async rejectRevision(slug: string): Promise<void> {
+    const motivo = prompt(this.t().review.porQueDescartar) ?? '';
     if (motivo.trim().length < 3) return;
     await firstValueFrom(this.api.post(`/review/${slug}/reject`, { motivo: motivo.trim() }));
     this.load();

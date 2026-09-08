@@ -33,8 +33,12 @@ public final class Frontmatter {
     /**
      * Reconstruye el frontmatter DETERMINISTICAMENTE desde las columnas
      * canonicas. Orden de claves fijo: un test snapshotea el string resultante.
-     * slug/title/description/when_to_use/stack/type siempre; owner_team y tags
+     * slug/title/description/when_to_use/stack/type siempre; owning_team y tags
      * solo si tienen valor; version despues de type.
+     *
+     * La clave es `owning_team`, el MISMO nombre que usan get_skill y
+     * search_skills en el JSON. El agente ve el equipo con un solo nombre,
+     * venga del campo JSON o del frontmatter del .md que guarda.
      */
     public static Map<String, Object> buildSkillFrontmatter(
             String slug, String title, String description, String whenToUse,
@@ -46,7 +50,7 @@ public final class Frontmatter {
         fm.put("when_to_use", whenToUse);
         fm.put("stack", stack);
         fm.put("type", type);
-        if (ownerTeam != null && !ownerTeam.isBlank()) fm.put("owner_team", ownerTeam);
+        if (ownerTeam != null && !ownerTeam.isBlank()) fm.put("owning_team", ownerTeam);
         fm.put("version", version);
         if (tags != null && !tags.isEmpty()) fm.put("tags", tags);
         return fm;

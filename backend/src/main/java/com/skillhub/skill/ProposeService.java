@@ -42,12 +42,12 @@ public class ProposeService {
             boolean ok, String slug, String motivo,
             List<String> errores,
             String campo, List<String> senales,
-            List<Map<String, String>> existentes) {
+            List<Map<String, Object>> existentes) {
 
         static Result ok(String slug) { return new Result(true, slug, null, null, null, null, null); }
         static Result invalido(List<String> e) { return new Result(false, null, "invalido", e, null, null, null); }
         static Result idioma(String campo, List<String> s) { return new Result(false, null, "idioma", null, campo, s, null); }
-        static Result duplicado(List<Map<String, String>> ex) { return new Result(false, null, "duplicado", null, null, null, ex); }
+        static Result duplicado(List<Map<String, Object>> ex) { return new Result(false, null, "duplicado", null, null, null, ex); }
     }
 
     @Transactional
@@ -69,13 +69,21 @@ public class ProposeService {
                 withSlug.title(), withSlug.description(), withSlug.whenToUse(), withSlug.content());
         if (idioma != null) return Result.idioma(idioma.campo(), idioma.senales());
 
-        // Guarda 1: lo que ya existe gana. Solo los que tienen corroboracion.
-        var similares = duplicates.findSimilarSkills(withSlug.title(), withSlug.tags(), 3).stream()
-                .filter(DuplicatesRepository::esDuplicadoFuerte)
+        // Guarda 1: solapamiento con algo que ya existe. Se mide sobre la
+        // sustancia (title + when_to_use + arranque del cuerpo), no sobre tags.
+        // Solo se rechaza en caliente si el parecido es alto; si no, entra como
+        // provisional y el admin decide. El score viaja en la respuesta.
+        var matches = duplicates.closestForProposal(
+                withSlug.title(), withSlug.whenToUse(), withSlug.content(), 3);
+        var bloqueantes = matches.stream()
+                .filter(DuplicatesRepository.ProposalMatch::bloqueaEnCaliente)
                 .toList();
-        if (!similares.isEmpty()) {
-            return Result.duplicado(similares.stream()
-                    .map(s -> Map.of("slug", s.slug(), "title", s.title(), "status", s.status()))
+        if (!bloqueantes.isEmpty()) {
+            return Result.duplicado(bloqueantes.stream()
+                    .map(m -> Map.<String, Object>of(
+                            "slug", m.slug(), "title", m.title(), "status", m.status(),
+                            "similarity", round(m.score()),
+                            "title_similarity", round(m.titleScore())))
                     .toList());
         }
 
@@ -83,7 +91,8 @@ public class ProposeService {
                 new MapSqlParameterSource("slug", slug), rs -> rs.next() ? 1 : null);
         if (exists != null) {
             return Result.duplicado(List.of(
-                    Map.of("slug", slug, "title", withSlug.title(), "status", "existente")));
+                    Map.<String, Object>of("slug", slug, "title", withSlug.title(),
+                            "status", "existente")));
         }
 
         String searchText = Frontmatter.buildSearchText(withSlug.title(), withSlug.description(),
@@ -136,5 +145,9 @@ public class ProposeService {
     private static String cut(String s, int max) {
         if (s == null) return null;
         return s.length() > max ? s.substring(0, max) : s;
+    }
+
+    private static double round(double v) {
+        return Math.round(v * 1000.0) / 1000.0;
     }
 }

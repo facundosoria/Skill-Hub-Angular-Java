@@ -274,6 +274,16 @@ export const en: Dict = {
       "It goes back to draft, it is not deleted: an agent writing a rule that does not work still tells you a convention is missing there.",
     porQueNoSirve: "Why it does not work",
     confirmar: "Confirm",
+    revisionesTitulo: "Proposed changes to published conventions",
+    revisionesSubtitulo:
+      "An agent found a convention incomplete or outdated and proposed a change. The published version is untouched: accepting bumps the version, discarding leaves it as is.",
+    revisionesVacio: "No proposed changes.",
+    reviseAgente: "proposed by an agent",
+    baseVersion: "on v",
+    verDiff: "See the diff",
+    aceptarRevision: "Accept the change",
+    descartarRevision: "Discard",
+    porQueDescartar: "Why discard it",
   },
   diff: {
     titulo: "Diff",

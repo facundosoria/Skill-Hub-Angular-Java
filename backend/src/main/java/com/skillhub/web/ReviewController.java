@@ -29,29 +29,52 @@ public class ReviewController {
     @GetMapping
     public Map<String, Object> list(@AuthPrincipal CurrentUser user) {
         requireAdmin(user);
-        return Map.of("proposals", repo.listProposals());
+        return Map.of(
+                "proposals", repo.listProposals(),
+                "revisions", repo.listRevisionProposals());
     }
 
+    /**
+     * Aceptar: si el slug tiene una revision de agente pendiente, se aplica sobre
+     * la version viva (bump). Si no, es una propuesta nueva `proposed` y se
+     * publica.
+     */
     @PostMapping("/{slug}/approve")
     public Map<String, Object> approve(@AuthPrincipal CurrentUser user, @PathVariable String slug) {
         requireAdmin(user);
-        write.publishSkill(slug, user.id());
-        audit.logAudit(user.id(), "skill.approved", "skill", null, Map.of("slug", slug));
+        String id = repo.skillId(slug);
+        if (id == null) throw new DomainException("No existe el skill \"" + slug + "\"");
+        if (repo.hasPendingAgentRevision(id)) {
+            write.applyPendingEdit(id);
+            audit.logAudit(user.id(), "skill.revision_approved", "skill", id, Map.of("slug", slug));
+        } else {
+            write.publishSkill(slug, user.id());
+            audit.logAudit(user.id(), "skill.approved", "skill", id, Map.of("slug", slug));
+        }
         return Map.of("ok", true);
     }
 
     /**
-     * Rechazar deja la propuesta como draft, no la borra: que un agente haya
-     * inventado una regla que no sirve sigue siendo informacion (dice que ahi
-     * falta una convencion y que entendio mal).
+     * Rechazar una propuesta nueva la deja como draft, no la borra: que un agente
+     * haya inventado una regla que no sirve sigue siendo informacion (dice que
+     * ahi falta una convencion y que entendio mal). Rechazar una revision solo
+     * descarta el cambio pendiente; la version publicada no se toca.
      */
     @PostMapping("/{slug}/reject")
     public Map<String, Object> reject(@AuthPrincipal CurrentUser user, @PathVariable String slug,
                                       @RequestBody Map<String, String> body) {
         requireAdmin(user);
         String motivo = body.getOrDefault("motivo", "").trim();
-        repo.setStatusDraft(slug);
-        audit.logAudit(user.id(), "skill.rejected", "skill", null, Map.of("slug", slug, "motivo", motivo));
+        String id = repo.skillId(slug);
+        if (id == null) throw new DomainException("No existe el skill \"" + slug + "\"");
+        if (repo.hasPendingAgentRevision(id)) {
+            write.discardPendingEdit(id);
+            audit.logAudit(user.id(), "skill.revision_rejected", "skill", id,
+                    Map.of("slug", slug, "motivo", motivo));
+        } else {
+            repo.setStatusDraft(slug);
+            audit.logAudit(user.id(), "skill.rejected", "skill", id, Map.of("slug", slug, "motivo", motivo));
+        }
         return Map.of("ok", true);
     }
 

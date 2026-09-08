@@ -92,13 +92,16 @@ public class SkillRepository {
      * campos que consume list_skills del MCP (slug, title, when_to_use, stack,
      * type, version, usos_90d).
      */
-    public List<SkillListRow> listSkills(String stack, String type, String status) {
+    public List<SkillListRow> listSkills(String stack, String type) {
         var conditions = new ArrayList<String>();
         MapSqlParameterSource p = new MapSqlParameterSource();
         if (stack != null) { conditions.add("s.stack::text = :stack"); p.addValue("stack", stack); }
         if (type != null) { conditions.add("s.type::text = :type"); p.addValue("type", type); }
-        if (status != null) { conditions.add("s.status::text = :status"); p.addValue("status", status); }
-        else conditions.add("s.status <> 'draft'");
+        // Incluye las provisionales (`proposed`): una propuesta se sirve a los
+        // agentes ni bien entra, asi que el indice tiene que mostrarla — marcada —
+        // o un agente que hace list_skills para orientarse no la ve y improvisa
+        // distinto. Se dejan afuera draft y deprecated.
+        conditions.add("s.status IN ('published', 'proposed')");
 
         String where = String.join(" AND ", conditions);
         String sql = """
@@ -109,24 +112,24 @@ public class SkillRepository {
                   GROUP BY skill_id
                 )
                 SELECT s.slug, s.title, s.when_to_use,
-                       s.stack::text AS stack, s.type::text AS type,
+                       s.stack::text AS stack, s.type::text AS type, s.status::text AS status,
                        COALESCE(v.version, 1) AS version,
                        COALESCE(u.usos, 0) AS usos90d
                 FROM skills s
                 LEFT JOIN usage u ON u.skill_id = s.id
                 LEFT JOIN skill_versions v ON v.id = s.current_version_id
                 WHERE %s
-                ORDER BY COALESCE(u.usos, 0) DESC, s.updated_at DESC
+                ORDER BY (s.status = 'proposed'), COALESCE(u.usos, 0) DESC, s.updated_at DESC
                 """.formatted(where);
         return jdbc.query(sql, p,
                 (rs, i) -> new SkillListRow(
                         rs.getString("slug"), rs.getString("title"), rs.getString("when_to_use"),
-                        rs.getString("stack"), rs.getString("type"),
+                        rs.getString("stack"), rs.getString("type"), rs.getString("status"),
                         rs.getInt("version"), rs.getInt("usos90d")));
     }
 
     public record SkillListRow(String slug, String title, String whenToUse,
-                               String stack, String type, int version, int usos90d) {}
+                               String stack, String type, String status, int version, int usos90d) {}
 
     // --- lecturas para la web (puerto de service.ts) ------------------
 
@@ -290,6 +293,58 @@ public class SkillRepository {
     public String skillId(String slug) {
         return jdbc.query("SELECT id::text FROM skills WHERE slug = :slug",
                 new MapSqlParameterSource("slug", slug), rs -> rs.next() ? rs.getString(1) : null);
+    }
+
+    /** true si el skill tiene una revision de agente esperando revision de admin. */
+    public boolean hasPendingAgentRevision(String skillId) {
+        Integer n = jdbc.query("""
+                SELECT 1 FROM skills s
+                JOIN skill_versions v ON v.id = s.pending_version_id
+                WHERE s.id = :id::uuid AND v.proposed_by_agent
+                """, new MapSqlParameterSource("id", skillId), rs -> rs.next() ? 1 : null);
+        return n != null;
+    }
+
+    /**
+     * Revisiones propuestas por agentes que esperan que un admin las acepte o
+     * descarte (skills.pending_version_id -> version con proposed_by_agent). Trae
+     * el contenido de ambos lados para el diff en /review.
+     */
+    public List<Map<String, Object>> listRevisionProposals() {
+        return jdbc.query("""
+            WITH uso AS (
+              SELECT skill_id, COALESCE(SUM(hits),0)::int AS usos
+              FROM usage_daily WHERE day >= CURRENT_DATE - 90 * INTERVAL '1 day'
+              GROUP BY skill_id
+            )
+            SELECT s.slug, s.title, s.stack::text AS stack, s.owner_team AS "ownerTeam",
+                   cur.version AS "currentVersion", cur.content AS "currentContent",
+                   pend.version AS "proposedVersion", pend.content AS "proposedContent",
+                   pend.changelog, pend.created_at AS "createdAt",
+                   a.name AS "authorName", COALESCE(u.usos, 0) AS usos
+            FROM skills s
+            JOIN skill_versions pend ON pend.id = s.pending_version_id AND pend.proposed_by_agent
+            LEFT JOIN skill_versions cur ON cur.id = s.current_version_id
+            LEFT JOIN users a ON a.id = pend.author_id
+            LEFT JOIN uso u ON u.skill_id = s.id
+            WHERE s.status = 'published'
+            ORDER BY COALESCE(u.usos, 0) DESC, pend.created_at ASC
+            """, (rs, i) -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("slug", rs.getString("slug"));
+            m.put("title", rs.getString("title"));
+            m.put("stack", rs.getString("stack"));
+            m.put("ownerTeam", rs.getString("ownerTeam"));
+            m.put("currentVersion", rs.getObject("currentVersion"));
+            m.put("currentContent", rs.getString("currentContent"));
+            m.put("proposedVersion", rs.getInt("proposedVersion"));
+            m.put("proposedContent", rs.getString("proposedContent"));
+            m.put("changelog", rs.getString("changelog"));
+            m.put("createdAt", String.valueOf(rs.getObject("createdAt")));
+            m.put("authorName", rs.getString("authorName"));
+            m.put("usos", rs.getInt("usos"));
+            return m;
+        });
     }
 
     public void setStatusDraft(String slug) {

@@ -47,7 +47,7 @@ public class SkillCatalog {
     }
 
     public List<SkillRepository.SkillListRow> listSkills(String stack, String type) {
-        return skills.listSkills(stack, type, "published");
+        return skills.listSkills(stack, type);
     }
 
     /** Telemetria fuera del camino critico: resuelve el id del slug sin bloquear. */
