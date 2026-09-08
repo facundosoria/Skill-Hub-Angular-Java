@@ -11,7 +11,7 @@ import { UI } from '../../shared/ui';
   imports: [...UI],
   template: `
     <div class="max-w-2xl">
-      <h1 class="text-xl font-medium">{{ t().usuarios.titulo }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t().usuarios.titulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">{{ t().usuarios.subtitulo }}</p>
 
       @if (pending().length === 0) {
@@ -35,7 +35,7 @@ import { UI } from '../../shared/ui';
         </div>
       }
 
-      <h2 class="mt-10 mb-3 text-lg font-medium">{{ t().usuarios.activasTitulo }}</h2>
+      <h2 class="mt-10 mb-3 text-lg font-semibold">{{ t().usuarios.activasTitulo }}</h2>
       <div uiCard class="divide-y divide-border">
         @for (u of active(); track u.id) {
           <div class="flex flex-wrap items-baseline gap-2 px-4 py-3">

@@ -12,7 +12,7 @@ import { UI } from '../../shared/ui';
   imports: [RouterLink, ...UI],
   template: `
     <div class="max-w-3xl">
-      <h1 class="text-xl font-medium">{{ t().review.titulo }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t().review.titulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">{{ t().review.subtitulo }}</p>
 
       @if (proposals().length === 0) {

@@ -21,7 +21,7 @@ type DiffRow = { kind: 'add' | 'del' | 'same'; line: string; ci: number };
     <a [routerLink]="['/skills', slug()]" class="text-[13px] text-text-muted hover:text-text">← {{ slug() }}</a>
 
     @if (data(); as d) {
-      <h1 class="mt-4 text-xl font-medium">v{{ d.fromVersion }} → v{{ d.toVersion }}</h1>
+      <h1 class="mt-4 text-2xl font-semibold tracking-tight">v{{ d.fromVersion }} → v{{ d.toVersion }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">
         <span class="text-success">+{{ added() }}</span>
         <span class="text-danger">−{{ removed() }}</span>

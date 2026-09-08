@@ -22,7 +22,7 @@ import { UI } from '../../shared/ui';
   imports: [FormsModule, RouterLink, ...UI],
   template: `
     <div class="max-w-2xl">
-      <h1 class="text-xl font-medium">{{ mode() === 'create' ? t().form.nuevoTitulo : t().form.editarTitulo }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ mode() === 'create' ? t().form.nuevoTitulo : t().form.editarTitulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">
         {{ mode() === 'create' ? t().form.nuevoSubtitulo : t().form.editarSubtitulo }}
       </p>

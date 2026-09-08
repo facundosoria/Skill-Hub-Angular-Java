@@ -12,7 +12,7 @@ import { UI } from '../../shared/ui';
   template: `
     <main class="mx-auto flex min-h-dvh max-w-sm flex-col justify-center px-6 py-12">
       <div class="mb-8">
-        <h1 class="text-xl font-medium">Skill Hub</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">Skill Hub</h1>
         <p class="mt-1.5 text-sm text-text-muted">{{ t().login.subtitulo }}</p>
       </div>
 

@@ -16,7 +16,7 @@ type Miss = { query_text: string; veces: number };
   template: `
     <div class="space-y-10">
       <div>
-        <h1 class="text-xl font-medium">{{ t().insights.titulo }}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ t().insights.titulo }}</h1>
         <p class="mt-1 text-sm text-text-muted">{{ t().insights.subtitulo }}</p>
       </div>
 

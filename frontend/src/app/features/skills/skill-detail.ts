@@ -20,7 +20,7 @@ import { apiError } from '../auth/login';
 
     @if (data(); as d) {
       <div class="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-        <h1 class="text-xl font-medium">{{ d.skill.title }}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ d.skill.title }}</h1>
         <span uiBadge tone="accent">{{ d.skill.stack }}</span>
         <span uiBadge>{{ d.skill.type }}</span>
         <ui-status-badge [status]="d.skill.status" />

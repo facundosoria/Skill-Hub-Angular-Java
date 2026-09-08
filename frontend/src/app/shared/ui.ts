@@ -1,4 +1,4 @@
-import { Component, computed, input } from '@angular/core';
+import { booleanAttribute, Component, computed, input } from '@angular/core';
 
 /*
  * Puerto de src/components/ui/primitives.tsx. Selectores de atributo para que el
@@ -6,19 +6,22 @@ import { Component, computed, input } from '@angular/core';
  */
 
 const BTN_BASE =
-  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] text-sm font-medium ' +
-  'transition-[background-color,border-color,color,transform] duration-[var(--dur-fast)] ' +
-  'disabled:pointer-events-none disabled:opacity-50 active:scale-[0.985] cursor-pointer';
+  'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-[var(--radius)] font-medium ' +
+  'shadow-[var(--shadow-sm)] ' +
+  'transition-[background-color,border-color,color,transform,box-shadow,filter] duration-[var(--dur)] ease-[var(--ease)] ' +
+  'hover:-translate-y-px active:translate-y-0 active:scale-[0.98] ' +
+  'disabled:pointer-events-none disabled:opacity-50 disabled:shadow-none cursor-pointer ' +
+  'focus-visible:outline-none focus-visible:shadow-[var(--ring)]';
 const BTN_VARIANT: Record<string, string> = {
-  primary: 'bg-text text-bg border border-text hover:opacity-90',
-  secondary: 'bg-surface text-text border border-border-strong hover:bg-surface-2',
+  primary: 'bg-accent text-accent-fg border border-accent hover:brightness-110 hover:shadow-[var(--shadow)]',
+  secondary: 'bg-surface text-text border border-border-strong hover:bg-surface-2 hover:border-text-faint',
   danger: 'bg-danger-soft text-danger border border-danger/40 hover:bg-danger-soft/70',
-  ghost: 'text-text-muted hover:text-text hover:bg-surface-2 border border-transparent',
+  ghost: 'text-text-muted hover:text-text hover:bg-surface-2 border border-transparent shadow-none',
 };
 const BTN_SIZE: Record<string, string> = {
-  sm: 'h-8 px-3 text-[13px]',
-  md: 'h-9 px-4',
-  lg: 'h-10 px-5',
+  sm: 'h-9 px-3.5 text-[13px]',
+  md: 'h-10 px-5 text-sm',
+  lg: 'h-12 px-7 text-[15px]',
 };
 
 @Component({
@@ -33,7 +36,7 @@ export class UiButton {
 }
 
 const BADGE_BASE =
-  'inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium whitespace-nowrap';
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium tracking-tight whitespace-nowrap';
 const BADGE_TONE: Record<string, string> = {
   neutral: 'bg-surface-2 text-text-muted border border-border',
   accent: 'bg-accent-soft text-accent border border-accent/25',
@@ -73,17 +76,27 @@ export class UiStatusBadge {
 @Component({
   selector: 'div[uiCard]',
   template: `<ng-content />`,
-  host: { class: 'rounded-xl border border-border bg-surface overflow-hidden block' },
+  host: {
+    '[class]': 'cls()',
+  },
 })
-export class UiCard {}
+export class UiCard {
+  /** Realza la tarjeta al pasar el mouse (sube 2px + sombra). */
+  interactive = input(false, { transform: booleanAttribute });
+  cls = computed(
+    () =>
+      'rounded-[var(--radius-lg)] border border-border bg-surface overflow-hidden block shadow-[var(--shadow-sm)]' +
+      (this.interactive() ? ' card-lift' : ''),
+  );
+}
 
 @Component({
   selector: 'ui-empty-state',
   template: `
-    <div class="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-      <p class="text-sm text-text-muted">{{ title() }}</p>
+    <div class="rounded-[var(--radius-lg)] border border-dashed border-border-strong bg-surface/40 px-6 py-16 text-center anim-pop-in">
+      <p class="text-sm font-medium text-text-muted">{{ title() }}</p>
       @if (hint()) {
-        <p class="mt-1 text-xs text-text-faint">{{ hint() }}</p>
+        <p class="mt-1.5 text-xs text-text-faint">{{ hint() }}</p>
       }
     </div>
   `,
@@ -97,7 +110,7 @@ export class UiEmptyState {
   selector: 'ui-field',
   template: `
     <label class="block">
-      <span class="mb-1.5 block text-[13px] text-text-muted">{{ label() }}</span>
+      <span class="mb-1.5 block text-[13px] font-medium text-text-muted">{{ label() }}</span>
       <ng-content />
       @if (error()) {
         <span class="mt-1.5 block text-xs text-danger">{{ error() }}</span>
@@ -114,9 +127,9 @@ export class UiField {
 }
 
 const INPUT_CLS =
-  'h-9 w-full rounded-[var(--radius)] border border-border-strong bg-surface px-3 text-sm ' +
-  'placeholder:text-text-faint transition-colors duration-[var(--dur-fast)] ' +
-  'focus:border-accent focus:outline-none';
+  'h-10 w-full rounded-[var(--radius)] border border-border-strong bg-surface px-3.5 text-sm ' +
+  'placeholder:text-text-faint transition-[border-color,box-shadow] duration-[var(--dur-fast)] ' +
+  'focus:border-accent focus:outline-none focus:shadow-[var(--ring)]';
 
 @Component({
   selector: 'input[uiInput]',
@@ -132,7 +145,7 @@ export class UiInput {
   template: '',
   host: {
     '[class]':
-      "'w-full rounded-[var(--radius)] border border-border-strong bg-surface px-3 py-2 text-sm placeholder:text-text-faint focus:border-accent focus:outline-none'",
+      "'w-full rounded-[var(--radius)] border border-border-strong bg-surface px-3.5 py-2.5 text-sm placeholder:text-text-faint transition-[border-color,box-shadow] duration-[var(--dur-fast)] focus:border-accent focus:outline-none focus:shadow-[var(--ring)]'",
   },
 })
 export class UiTextarea {}
@@ -142,7 +155,7 @@ export class UiTextarea {}
   template: `<ng-content />`,
   host: {
     '[class]':
-      "'h-9 rounded-[var(--radius)] border border-border-strong bg-surface px-2.5 text-sm focus:border-accent focus:outline-none cursor-pointer'",
+      "'h-10 rounded-[var(--radius)] border border-border-strong bg-surface px-3 text-sm transition-[border-color,box-shadow] duration-[var(--dur-fast)] focus:border-accent focus:outline-none focus:shadow-[var(--ring)] cursor-pointer'",
   },
 })
 export class UiSelect {}

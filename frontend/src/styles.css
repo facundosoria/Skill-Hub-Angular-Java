@@ -27,10 +27,18 @@
   --warning: #854f0b;
   --warning-soft: #fbf0da;
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
+  --radius-lg: 1.1rem;
   --dur-fast: 140ms;
-  --dur: 220ms;
+  --dur: 240ms;
+  --dur-slow: 420ms;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.62, 1);
+
+  --shadow-sm: 0 1px 2px rgba(24, 22, 15, 0.05), 0 1px 1px rgba(24, 22, 15, 0.03);
+  --shadow: 0 2px 8px -2px rgba(24, 22, 15, 0.08), 0 8px 24px -6px rgba(24, 22, 15, 0.07);
+  --shadow-lg: 0 12px 36px -10px rgba(24, 22, 15, 0.16), 0 4px 12px -4px rgba(24, 22, 15, 0.08);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 
   --font-app-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-app-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
@@ -55,6 +63,9 @@
     --success-soft: #123329;
     --warning: #e8b667;
     --warning-soft: #35260f;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.5), 0 10px 30px -8px rgba(0, 0, 0, 0.45);
+    --shadow-lg: 0 16px 44px -12px rgba(0, 0, 0, 0.62), 0 6px 16px -6px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -76,6 +87,9 @@
   --success-soft: #123329;
   --warning: #e8b667;
   --warning-soft: #35260f;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 2px 10px -2px rgba(0, 0, 0, 0.5), 0 10px 30px -8px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 16px 44px -12px rgba(0, 0, 0, 0.62), 0 6px 16px -6px rgba(0, 0, 0, 0.5);
 }
 
 @theme inline {
@@ -97,6 +111,7 @@
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
   --radius-token: var(--radius);
+  --radius-token-lg: var(--radius-lg);
   --font-sans: var(--font-app-sans);
   --font-mono: var(--font-app-mono);
 }
@@ -105,13 +120,39 @@
   border-color: var(--border);
 }
 
+html {
+  font-size: 17px;
+}
+@media (max-width: 640px) {
+  html { font-size: 16px; }
+}
+
 body {
   margin: 0;
+  min-height: 100dvh;
   background: var(--bg);
+  background-image:
+    radial-gradient(48rem 30rem at 12% -8rem, color-mix(in srgb, var(--accent) 10%, transparent), transparent),
+    radial-gradient(52rem 34rem at 100% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-app-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
+
+/* Scrollbars al tono del tema, finas y redondeadas. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 99px;
+  border: 2px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 
 ::selection {
   background: var(--accent-soft);
@@ -159,11 +200,37 @@ body {
   from { opacity: 0.4; }
   to { opacity: 1; }
 }
+@keyframes anim-pop-in {
+  from { opacity: 0.35; transform: translateY(8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes anim-rise-in {
+  from { opacity: 0.3; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
 
 .anim-panel-in { animation: anim-panel-in var(--dur) var(--ease); }
 .anim-panel-out { animation: anim-panel-out var(--dur-fast) var(--ease) forwards; }
 .anim-row-in { animation: anim-row-in var(--dur) var(--ease); }
 .anim-fade-in { animation: anim-fade-in var(--dur) var(--ease); }
+.anim-pop-in { animation: anim-pop-in var(--dur) var(--ease-spring); }
+.anim-rise-in { animation: anim-rise-in var(--dur-slow) var(--ease); }
+
+/*
+ * Tarjeta con realce al pasar el mouse: sube 2px y gana sombra. Se neutraliza
+ * sola con el bloque de prefers-reduced-motion (transition-duration ~0).
+ */
+.card-lift {
+  transition:
+    transform var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.card-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+}
 
 /* Cross-fade entre rutas (withViewTransitions). Corto y sin desplazamiento. */
 ::view-transition-old(root),

@@ -74,7 +74,7 @@ export class CopyRow {
   template: `
     <div class="max-w-2xl space-y-8">
       <div>
-        <h1 class="text-xl font-medium">{{ t().keys.titulo }}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ t().keys.titulo }}</h1>
         <p class="mt-1 text-sm text-text-muted">{{ t().keys.subtitulo }}</p>
       </div>
 

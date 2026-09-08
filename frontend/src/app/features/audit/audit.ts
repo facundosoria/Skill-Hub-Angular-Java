@@ -13,7 +13,7 @@ import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
   selector: 'app-audit',
   imports: [RouterLink, SlicePipe, AnimDelayPipe, ...UI],
   template: `
-    <h1 class="text-xl font-medium">{{ t().audit.titulo }}</h1>
+    <h1 class="text-2xl font-semibold tracking-tight">{{ t().audit.titulo }}</h1>
     <p class="mt-1 mb-5 text-sm text-text-muted">{{ t().audit.subtitulo }}</p>
 
     @if (events().length === 0) {

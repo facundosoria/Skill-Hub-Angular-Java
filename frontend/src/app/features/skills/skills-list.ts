@@ -13,12 +13,12 @@ import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
   selector: 'app-skills-list',
   imports: [FormsModule, RouterLink, AnimDelayPipe, ...UI],
   template: `
-    <div class="mb-6 flex items-end justify-between gap-4">
+    <div class="mb-7 flex items-end justify-between gap-4 anim-pop-in">
       <div>
-        <h1 class="text-xl font-medium">{{ t().catalogo.titulo }}</h1>
-        <p class="mt-1 text-sm text-text-muted">{{ t().catalogo.subtitulo }}</p>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ t().catalogo.titulo }}</h1>
+        <p class="mt-1.5 text-sm text-text-muted">{{ t().catalogo.subtitulo }}</p>
       </div>
-      <a routerLink="/skills/new"><button uiButton size="sm">{{ t().catalogo.nuevoSkill }}</button></a>
+      <a routerLink="/skills/new"><button uiButton>{{ t().catalogo.nuevoSkill }}</button></a>
     </div>
 
     <div class="mb-4 flex flex-wrap items-center gap-2">
@@ -34,9 +34,9 @@ import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
     </div>
 
     @if (loading()) {
-      <div class="space-y-2">
+      <div class="space-y-2.5">
         @for (i of [1,2,3,4,5]; track i) {
-          <div class="h-14 animate-pulse rounded-md bg-surface-2"></div>
+          <div class="h-16 animate-pulse rounded-[var(--radius)] bg-surface-2"></div>
         }
       </div>
     } @else if (visible().length === 0) {
@@ -46,8 +46,8 @@ import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
         @for (s of visible(); track s.slug; let i = $index) {
           <a [routerLink]="['/skills', s.slug]"
              animate.enter="anim-row-in" [style.animationDelay]="i | animDelay"
-             class="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2">
-            <span class="text-sm font-medium">{{ s.title }}</span>
+             class="group flex flex-wrap items-baseline gap-x-3 gap-y-1 px-4 py-3.5 transition-colors duration-[var(--dur-fast)] hover:bg-surface-2">
+            <span class="text-sm font-medium transition-transform duration-[var(--dur-fast)] group-hover:translate-x-0.5">{{ s.title }}</span>
             <span uiBadge tone="accent">{{ s.stack }}</span>
             @if (s.status !== 'published') { <ui-status-badge [status]="s.status" /> }
             <span class="font-mono text-xs text-text-faint">v{{ s.version }}</span>

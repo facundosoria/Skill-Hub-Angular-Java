@@ -15,7 +15,7 @@ import { apiError } from '../auth/login';
   imports: [FormsModule, ...UI],
   template: `
     <div class="max-w-lg">
-      <h1 class="text-xl font-medium">{{ t().perfil.titulo }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ t().perfil.titulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">{{ t().perfil.subtitulo }}</p>
 
       <form (ngSubmit)="save()" class="space-y-4">
