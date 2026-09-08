@@ -36,8 +36,12 @@ npm run build
 - **docs** (`/docs`): el contenido son dos `.md` (`public/content/docs.{es,en}.md`) renderizados con el
   mismo pipeline (marked + Shiki); índice lateral con scroll-spy generado de los `##`
 
-**El frontend Angular está portado.** Falta pulido (animaciones de Motion, algún detalle de UX
-del original) pero todas las pantallas funcionan contra el backend.
+- **animaciones** (puerto de `motion/react`): `animate.enter`/`animate.leave` nativos de Angular 22
+  (sin `@angular/animations`) + keyframes CSS + `withViewTransitions()` para el cross-fade entre rutas.
+  Colapso de paneles condicionales, stagger de listas, fade del "guardado". Los keyframes arrancan
+  en opacity 0.35 (no 0) para que nada quede invisible si la animación no corre; `prefers-reduced-motion` las apaga.
+
+**El frontend Angular está portado.** Todas las pantallas funcionan contra el backend.
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
