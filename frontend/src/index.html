@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Skill Hub</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <script>
+    // Anti-parpadeo: fija el tema desde la cookie antes del primer paint.
+    // Puerto de src/components/theme-script.tsx.
+    (function () {
+      try {
+        var m = document.cookie.match(/(?:^|; )skillhub_theme=(light|dark)/);
+        if (m) document.documentElement.setAttribute('data-theme', m[1]);
+        var l = document.cookie.match(/(?:^|; )skillhub_locale=(es|en)/);
+        if (l) document.documentElement.lang = l[1];
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>

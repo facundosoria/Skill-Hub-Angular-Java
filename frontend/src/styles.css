@@ -1,0 +1,161 @@
+@import "tailwindcss";
+
+/*
+ * Sistema de tokens portado de src/app/globals.css del proyecto Next. Todo color
+ * se define aca y se consume por variable: nada de hex sueltos en los
+ * componentes, para que el modo oscuro no se rompa.
+ */
+:root {
+  --bg: #fbfaf7;
+  --surface: #ffffff;
+  --surface-2: #f4f2ec;
+  --border: #e6e3da;
+  --border-strong: #cfcabb;
+
+  --text: #1a1a19;
+  --text-muted: #6b6960;
+  --text-faint: #94918a;
+
+  --accent: #4b45a8;
+  --accent-fg: #ffffff;
+  --accent-soft: #eeedfb;
+
+  --danger: #a32d2d;
+  --danger-soft: #fceaea;
+  --success: #0f6e56;
+  --success-soft: #e3f4ee;
+  --warning: #854f0b;
+  --warning-soft: #fbf0da;
+
+  --radius: 0.625rem;
+  --dur-fast: 140ms;
+  --dur: 220ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  --font-app-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-app-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #131311;
+    --surface: #1c1c1a;
+    --surface-2: #242422;
+    --border: #33322e;
+    --border-strong: #4a4844;
+    --text: #f2f0ea;
+    --text-muted: #a3a099;
+    --text-faint: #78756e;
+    --accent: #a9a2f0;
+    --accent-fg: #1a1a19;
+    --accent-soft: #262346;
+    --danger: #f09595;
+    --danger-soft: #3a1f1f;
+    --success: #7fd3b6;
+    --success-soft: #123329;
+    --warning: #e8b667;
+    --warning-soft: #35260f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #131311;
+  --surface: #1c1c1a;
+  --surface-2: #242422;
+  --border: #33322e;
+  --border-strong: #4a4844;
+  --text: #f2f0ea;
+  --text-muted: #a3a099;
+  --text-faint: #78756e;
+  --accent: #a9a2f0;
+  --accent-fg: #1a1a19;
+  --accent-soft: #262346;
+  --danger: #f09595;
+  --danger-soft: #3a1f1f;
+  --success: #7fd3b6;
+  --success-soft: #123329;
+  --warning: #e8b667;
+  --warning-soft: #35260f;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --radius-token: var(--radius);
+  --font-sans: var(--font-app-sans);
+  --font-mono: var(--font-app-mono);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-app-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tipografia del markdown de los skills (portada tal cual). */
+.prose-skill { line-height: 1.7; }
+.prose-skill h2 { font-size: 1.125rem; font-weight: 500; margin: 2rem 0 0.75rem; }
+.prose-skill h3 { font-size: 1rem; font-weight: 500; margin: 1.5rem 0 0.5rem; }
+.prose-skill p, .prose-skill ul, .prose-skill ol { margin: 0.75rem 0; }
+.prose-skill ul, .prose-skill ol { padding-left: 1.25rem; }
+.prose-skill ul { list-style: disc; }
+.prose-skill ol { list-style: decimal; }
+.prose-skill li { margin: 0.25rem 0; }
+.prose-skill a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.prose-skill code {
+  font-family: var(--font-app-mono); font-size: 0.85em; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 0.3rem; padding: 0.1em 0.35em;
+}
+.prose-skill pre {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 0.875rem 1rem; overflow-x: auto; margin: 1rem 0; font-size: 0.8125rem; line-height: 1.6;
+}
+.prose-skill pre code { background: none; border: none; padding: 0; font-size: inherit; }
+.prose-skill table {
+  width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.875rem;
+  display: block; overflow-x: auto;
+}
+.prose-skill th, .prose-skill td { border: 1px solid var(--border); padding: 0.5rem 0.75rem; text-align: left; }
+.prose-skill th { background: var(--surface-2); font-weight: 500; }
+.prose-skill blockquote {
+  border-left: 3px solid var(--border-strong); padding-left: 1rem; color: var(--text-muted); margin: 1rem 0;
+}
