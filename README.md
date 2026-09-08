@@ -7,8 +7,32 @@ Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-b
 
 | | |
 |---|---|
-| `backend/` | Proyecto Spring Boot 3.4 (Java 21, Maven). Spike funcionando. |
-| `frontend/` | Angular — todavía no. |
+| `backend/` | Spring Boot 3.4 (Java 21, Maven). MCP + API REST completos, 38 tests en verde. |
+| `frontend/` | Angular 22 (standalone, signals, zoneless) + Tailwind 4. Scaffold + login/catálogo funcionando e2e. |
+
+## Frontend (`frontend/`)
+
+```bash
+cd frontend
+npm install
+npm start          # ng serve :4200, proxy /api -> :8080 (necesita el backend levantado)
+npm run build
+```
+
+- **core/**: `Api` (HttpClient `withCredentials`), `AuthService` + guards (`authGuard`/`adminGuard`/`guestGuard`),
+  `ThemeService`, `I18n` (los dicts `es.ts`/`en.ts` del proyecto Next portados verbatim, ahora como signal),
+  `SkillService`
+- **Ruteo**: las 14 rutas con lazy loading; `Shell` (nav + `<router-outlet>`, links de admin condicionales);
+  `provideAppInitializer` resuelve la sesión antes del primer render (equivale a `getCurrentUser` en el layout)
+- **shared/ui.ts**: primitivas portadas de `primitives.tsx` (Button, Badge, Card, Field, Input, Textarea, Select, EmptyState, StatusBadge)
+- **Tokens de diseño**: `globals.css` → `styles.css`, con el script anti-parpadeo de tema en `index.html`
+- **Páginas reales**: login (+ registro), catálogo, detalle de skill (lectura), `skill-form` (crear/editar),
+  keys, profile, review, insights, audit, admin/users
+- **Stubs**: diff de versiones, docs
+
+Pendiente del frontend: chequeo de duplicados/idioma en vivo (debounce mientras se escribe),
+las acciones del detalle (publicar/deprecar/votar/aplicar-descartar propuesta), render de markdown
+enriquecido (`ngx-markdown` + Shiki), la pantalla de diff, y `docs`.
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
