@@ -30,11 +30,12 @@ npm run build
   sandboxeado + banner de votación + acciones de admin), `skill-form` (crear/editar
   **con live-checks de duplicados a 350 ms e idioma a 600 ms**), keys, profile, review,
   insights, audit, admin/users
-- **markdown**: `marked` + `DOMPurify` (puerto de `skill-markdown.tsx`); preview en `<iframe sandbox="allow-scripts">` sin `allow-same-origin`
+- **markdown**: `marked` + `DOMPurify` (puerto de `skill-markdown.tsx`) + **Shiki** para los bloques
+  de código (doble tema, mejora sobre el original); preview en `<iframe sandbox="allow-scripts">` sin `allow-same-origin`
 - **diff de versiones**: `jsdiff` (`diffLines`) — `/skills/:slug/diff?a=&b=`, puerto de `diff-view.tsx`
 - **Stub**: docs
 
-Pendiente del frontend: resaltado de sintaxis en los bloques de código (Shiki) y `docs`.
+Pendiente del frontend: la pantalla `docs` (`/docs`).
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
