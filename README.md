@@ -27,13 +27,14 @@ npm run build
 - **shared/ui.ts**: primitivas portadas de `primitives.tsx` (Button, Badge, Card, Field, Input, Textarea, Select, EmptyState, StatusBadge)
 - **Tokens de diseño**: `globals.css` → `styles.css`, con el script anti-parpadeo de tema en `index.html`
 - **Páginas reales**: login (+ registro), catálogo, detalle de skill (markdown GFM + preview
-  sandboxeado + banner de votación + acciones de admin), `skill-form` (crear/editar),
-  keys, profile, review, insights, audit, admin/users
+  sandboxeado + banner de votación + acciones de admin), `skill-form` (crear/editar
+  **con live-checks de duplicados a 350 ms e idioma a 600 ms**), keys, profile, review,
+  insights, audit, admin/users
 - **markdown**: `marked` + `DOMPurify` (puerto de `skill-markdown.tsx`); preview en `<iframe sandbox="allow-scripts">` sin `allow-same-origin`
 - **Stubs**: diff de versiones, docs
 
-Pendiente del frontend: chequeo de duplicados/idioma en vivo (debounce mientras se escribe),
-resaltado de sintaxis en los bloques de código (Shiki), la pantalla de diff, y `docs`.
+Pendiente del frontend: resaltado de sintaxis en los bloques de código (Shiki),
+la pantalla de diff de versiones, y `docs`.
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
