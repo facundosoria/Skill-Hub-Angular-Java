@@ -31,10 +31,10 @@ npm run build
   **con live-checks de duplicados a 350 ms e idioma a 600 ms**), keys, profile, review,
   insights, audit, admin/users
 - **markdown**: `marked` + `DOMPurify` (puerto de `skill-markdown.tsx`); preview en `<iframe sandbox="allow-scripts">` sin `allow-same-origin`
-- **Stubs**: diff de versiones, docs
+- **diff de versiones**: `jsdiff` (`diffLines`) — `/skills/:slug/diff?a=&b=`, puerto de `diff-view.tsx`
+- **Stub**: docs
 
-Pendiente del frontend: resaltado de sintaxis en los bloques de código (Shiki),
-la pantalla de diff de versiones, y `docs`.
+Pendiente del frontend: resaltado de sintaxis en los bloques de código (Shiki) y `docs`.
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
