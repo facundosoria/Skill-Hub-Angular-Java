@@ -26,13 +26,14 @@ npm run build
   `provideAppInitializer` resuelve la sesión antes del primer render (equivale a `getCurrentUser` en el layout)
 - **shared/ui.ts**: primitivas portadas de `primitives.tsx` (Button, Badge, Card, Field, Input, Textarea, Select, EmptyState, StatusBadge)
 - **Tokens de diseño**: `globals.css` → `styles.css`, con el script anti-parpadeo de tema en `index.html`
-- **Páginas reales**: login (+ registro), catálogo, detalle de skill (lectura), `skill-form` (crear/editar),
+- **Páginas reales**: login (+ registro), catálogo, detalle de skill (markdown GFM + preview
+  sandboxeado + banner de votación + acciones de admin), `skill-form` (crear/editar),
   keys, profile, review, insights, audit, admin/users
+- **markdown**: `marked` + `DOMPurify` (puerto de `skill-markdown.tsx`); preview en `<iframe sandbox="allow-scripts">` sin `allow-same-origin`
 - **Stubs**: diff de versiones, docs
 
 Pendiente del frontend: chequeo de duplicados/idioma en vivo (debounce mientras se escribe),
-las acciones del detalle (publicar/deprecar/votar/aplicar-descartar propuesta), render de markdown
-enriquecido (`ngx-markdown` + Shiki), la pantalla de diff, y `docs`.
+resaltado de sintaxis en los bloques de código (Shiki), la pantalla de diff, y `docs`.
 
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
