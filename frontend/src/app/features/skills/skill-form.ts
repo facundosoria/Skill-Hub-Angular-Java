@@ -1,4 +1,14 @@
-import { Component, computed, DestroyRef, inject, input, signal } from '@angular/core';
+import {
+  ChangeDetectorRef,
+  Component,
+  computed,
+  DestroyRef,
+  effect,
+  inject,
+  input,
+  signal,
+  untracked,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { I18n } from '../../core/i18n/i18n';
@@ -148,6 +158,7 @@ export class SkillForm {
   private router = inject(Router);
   private i18n = inject(I18n);
   private destroyRef = inject(DestroyRef);
+  private cdr = inject(ChangeDetectorRef);
   t = this.i18n.t;
 
   v: SkillFormValues = {
@@ -192,26 +203,35 @@ export class SkillForm {
       clearTimeout(this.langTimer);
     });
 
-    queueMicrotask(async () => {
-      if (this.mode() === 'edit' && this.slug()) {
-        const d = await this.skills.get(this.slug()!);
-        this.v = {
-          slug: d.skill.slug,
-          title: d.skill.title,
-          description: d.skill.description,
-          whenToUse: d.skill.whenToUse,
-          stack: d.skill.stack,
-          type: d.skill.type,
-          ownerTeam: d.skill.ownerTeam,
-          tags: d.skill.tags,
-          content: d.skill.version?.content ?? '## Rule\n\n',
-          changelog: null,
-          duplicateJustification: null,
-        };
-        this.tagsCsv = d.skill.tags.join(', ');
-        this.slugTouched = true;
-      }
+    // Igual que skill-detail / skill-diff: el slug (input) dispara la carga. En
+    // modo edit trae la version vigente para precargar el form.
+    effect(() => {
+      const slug = this.slug();
+      if (this.mode() !== 'edit' || !slug) return;
+      untracked(() => this.loadForEdit(slug));
     });
+  }
+
+  private async loadForEdit(slug: string): Promise<void> {
+    const d = await this.skills.get(slug);
+    this.v = {
+      slug: d.skill.slug,
+      title: d.skill.title,
+      description: d.skill.description,
+      whenToUse: d.skill.whenToUse,
+      stack: d.skill.stack,
+      type: d.skill.type,
+      ownerTeam: d.skill.ownerTeam,
+      tags: d.skill.tags,
+      content: d.skill.version?.content ?? '## Rule\n\n',
+      changelog: null,
+      duplicateJustification: null,
+    };
+    this.tagsCsv = d.skill.tags.join(', ');
+    this.slugTouched = true;
+    // App zoneless (sin zone.js): reasignar this.v tras el await no agenda
+    // detección de cambios por sí solo, hay que empujarla o el form queda vacío.
+    this.cdr.markForCheck();
   }
 
   // --- live checks ------------------------------------------------
