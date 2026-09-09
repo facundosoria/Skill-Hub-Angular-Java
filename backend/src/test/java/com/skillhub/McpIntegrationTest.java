@@ -452,11 +452,14 @@ class McpIntegrationTest {
 
     @Test
     void proposeRechazaViolacionDeTopesDeLongitud() {
+        String largo = "Use when ".repeat(40); // 360 chars
         var r = tool("propose_skill", withOverrides(PROPUESTO,
                 "title", "Zz Test Something Completely Unrelated To Anything",
-                "when_to_use", "Use when ".repeat(40),
+                "when_to_use", largo,
                 "from_query", "zz test unrelated topic"));
-        assertThat(r.toString().toLowerCase()).containsAnyOf("rejected", "too big", "200");
+        assertThat(r.path("status").asText()).isEqualTo("rejected");
+        // el error dice la longitud REAL, no un literal "(200)"
+        assertThat(r.toString()).contains(String.valueOf(largo.length())).contains("200");
     }
 
     // --- dedup: no rechazar por vocabulario compartido (bug A) --------
@@ -594,12 +597,30 @@ class McpIntegrationTest {
             assertThat(g2.path("pending_revision").asBoolean()).isTrue();
             assertThat(g2.path("content").asText()).doesNotContain("web adapter lives in its own package");
 
-            // no se puede apilar otra
+            // la revision propia sin revisar se puede reemplazar (misma base_version):
+            // no deja bloqueado a su autor hasta que un admin la resuelva
+            String cuerpoV2 = "## Rule\n\nOne package per bounded context. No catch-all `util` package. "
+                    + "V2: the web adapter and the persistence adapter each live in their own package.";
             var otra = tool("propose_revision", java.util.Map.of(
                     "slug", PREFIX + "package-structure", "base_version", base,
-                    "content", nuevoCuerpo, "rationale", "otra vez lo mismo, deberia frenar"));
-            assertThat(otra.path("status").asText()).isEqualTo("rejected");
-            assertThat(otra.path("reason").asText().toLowerCase()).contains("pending");
+                    "content", cuerpoV2,
+                    "rationale", "Segunda pasada: aclaro tambien donde va el adapter de persistencia."));
+            assertThat(otra.path("status").asText()).isEqualTo("revision_proposed");
+            assertThat(otra.path("replaced_pending").asBoolean()).isTrue();
+
+            // sigue habiendo UNA sola pendiente y es la v2; la publicada no se toca
+            Integer pendientes = jdbc.queryForObject("""
+                    SELECT count(*) FROM skill_versions v JOIN skills s ON s.id = v.skill_id
+                    WHERE s.slug = ? AND v.proposed_by_agent
+                    """, Integer.class, PREFIX + "package-structure");
+            assertThat(pendientes).isEqualTo(1);
+            String pendBody = jdbc.queryForObject("""
+                    SELECT v.content FROM skill_versions v JOIN skills s ON s.id = v.skill_id
+                    WHERE s.slug = ? AND v.id = s.pending_version_id
+                    """, String.class, PREFIX + "package-structure");
+            assertThat(pendBody).contains("persistence adapter");
+            assertThat(tool("get_skill", java.util.Map.of("slug", PREFIX + "package-structure"))
+                    .path("version").asInt()).isEqualTo(base);
         } finally {
             jdbc.update("""
                     UPDATE skills SET pending_version_id = NULL WHERE slug = ?
@@ -739,6 +760,98 @@ class McpIntegrationTest {
             assertThat(rev.path("reason").asText().toLowerCase()).contains("already in use");
         } finally {
             jdbc.update("DELETE FROM skills WHERE slug = 'zz-rename-src'");
+        }
+    }
+
+    // --- propose_revision: una edicion web pendiente si frena (no es propia) ---
+
+    @Test
+    void proposeRevisionNoPisaUnaEdicionWebPendiente() {
+        seedPublished("zz-web-pending", "Zz Web Pending");
+        String memberId = jdbc.queryForObject("""
+                INSERT INTO users (username, name, team, role, password_hash, status)
+                VALUES ('zz-web-member', 'Web Member', 'design-system', 'member', 'x', 'active')
+                RETURNING id::text
+                """, String.class);
+        try {
+            int base = tool("get_skill", java.util.Map.of("slug", "zz-web-pending")).path("version").asInt();
+            // un no-admin edita por la web -> queda pendiente por votos de pares
+            var webEdit = new com.skillhub.skill.SkillInput("zz-web-pending", "Zz Web Pending",
+                    "Seed skill for a rename test, at least ten chars.",
+                    "Use when testing the rename flow end to end in the catalogue.",
+                    "shared", "convention", "platform", java.util.List.of(),
+                    "## Rule\n\nWeb edit body, pending peer votes. Forty characters is easily reached here.",
+                    "ajuste menor", null);
+            write.updateSkill("zz-web-pending", webEdit, memberId, false);
+
+            var rev = tool("propose_revision", java.util.Map.of(
+                    "slug", "zz-web-pending", "base_version", base,
+                    "content", "## Rule\n\nAgent revision that must be blocked by the pending web edit here.",
+                    "rationale", "Debe frenar: ya hay una edicion web pendiente por votos de pares."));
+            assertThat(rev.path("status").asText()).isEqualTo("rejected");
+            assertThat(rev.path("reason").asText().toLowerCase()).contains("someone else");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-web-pending'");
+            jdbc.update("DELETE FROM users WHERE username = 'zz-web-member'");
+        }
+    }
+
+    // --- owning_team explicito (propose_skill / propose_revision) -----
+
+    static final java.util.Map<String, Object> CACHE_KEYS = java.util.Map.of(
+            "title", "Zz Cache Key Naming Across Services",
+            "description", "How a Redis cache key is namespaced, versioned and expired across services.",
+            "when_to_use", "Use when naming a Redis cache key, choosing a TTL, or versioning a cached payload shape.",
+            "stack", "shared",
+            "content", "## Rule\n\nA cache key is `svc:entity:v<n>:<id>` and always carries an explicit TTL.",
+            "from_query", "zz how do we name and expire redis cache keys between services",
+            "rationale", "There was no convention for cache-key naming; based on what payments already does.");
+
+    @Test
+    void proposeSkillAceptaOwningTeamExplicito() {
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-cache-key-naming-across-services'");
+        try {
+            var creada = tool("propose_skill", withOverrides(CACHE_KEYS,
+                    "owning_team", "architecture-guild"));
+            assertThat(creada.path("status").asText()).isEqualTo("proposed");
+            String owner = jdbc.queryForObject(
+                    "SELECT owner_team FROM skills WHERE slug = 'zz-cache-key-naming-across-services'", String.class);
+            assertThat(owner).isEqualTo("architecture-guild");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-cache-key-naming-across-services'");
+        }
+    }
+
+    @Test
+    void proposeSkillSinOwningTeamUsaElEquipoDeLaKey() {
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-cache-key-naming-across-services'");
+        try {
+            var creada = tool("propose_skill", CACHE_KEYS);
+            assertThat(creada.path("status").asText()).isEqualTo("proposed");
+            String owner = jdbc.queryForObject(
+                    "SELECT owner_team FROM skills WHERE slug = 'zz-cache-key-naming-across-services'", String.class);
+            assertThat(owner).isEqualTo("platform"); // el equipo de zz-mcp-admin
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-cache-key-naming-across-services'");
+        }
+    }
+
+    @Test
+    void proposeRevisionPuedeReasignarOwningTeam() {
+        seedPublished("zz-owner-move", "Zz Owner Move"); // seedPublished deja owner_team = 'platform'
+        try {
+            int base = tool("get_skill", java.util.Map.of("slug", "zz-owner-move")).path("version").asInt();
+            var rev = tool("propose_revision", java.util.Map.of(
+                    "slug", "zz-owner-move", "base_version", base,
+                    "content", "## Rule\n\nBody stays, but this shared convention moves to another owner. Forty chars ok.",
+                    "rationale", "Se auto-asigno a platform al proponerla; es transversal y la cuida el guild.",
+                    "owning_team", "architecture-guild"));
+            assertThat(rev.path("status").asText()).isEqualTo("revision_proposed");
+            write.applyPendingEdit(repo.skillId("zz-owner-move"));
+            var g2 = tool("get_skill", java.util.Map.of("slug", "zz-owner-move"));
+            assertThat(g2.path("owning_team").asText()).isEqualTo("architecture-guild");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-owner-move'");
         }
     }
 

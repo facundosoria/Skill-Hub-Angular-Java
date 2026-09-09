@@ -62,13 +62,13 @@ public record SkillInput(
         if (description == null || description.length() < 10)
             errs.add("description: minimo 10 caracteres");
         else if (description.length() > MAX_DESCRIPTION)
-            errs.add("description: Maximo " + MAX_DESCRIPTION
-                    + " caracteres: viaja al contexto del agente en cada busqueda");
+            errs.add("description: " + description.length() + " caracteres, el maximo es "
+                    + MAX_DESCRIPTION + ": viaja al contexto del agente en cada busqueda");
         if (whenToUse == null || whenToUse.length() < 10)
             errs.add("whenToUse: minimo 10 caracteres");
         else if (whenToUse.length() > MAX_WHEN_TO_USE)
-            errs.add("whenToUse: Maximo " + MAX_WHEN_TO_USE
-                    + " caracteres: viaja al contexto del agente en cada busqueda");
+            errs.add("whenToUse: " + whenToUse.length() + " caracteres, el maximo es "
+                    + MAX_WHEN_TO_USE + ": viaja al contexto del agente en cada busqueda");
         if (stack == null || !STACKS.contains(stack))
             errs.add("stack: uno de " + STACKS);
         if (type != null && !TYPES.contains(type))

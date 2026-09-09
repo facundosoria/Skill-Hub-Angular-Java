@@ -149,9 +149,14 @@ public class SkillWriteService {
     // --- revision propuesta por un agente (MCP propose_revision) ------
 
     /** motivo: null (ok) | no_existe | no_publicada | deprecada | stale | ya_pendiente */
-    public record RevisionResult(boolean ok, String motivo, int newVersion, int currentVersion) {
-        static RevisionResult ok(int nueva, int actual) { return new RevisionResult(true, null, nueva, actual); }
-        static RevisionResult no(String motivo, int actual) { return new RevisionResult(false, motivo, 0, actual); }
+    public record RevisionResult(boolean ok, String motivo, int newVersion, int currentVersion,
+                                 boolean replaced) {
+        static RevisionResult ok(int nueva, int actual, boolean replaced) {
+            return new RevisionResult(true, null, nueva, actual, replaced);
+        }
+        static RevisionResult no(String motivo, int actual) {
+            return new RevisionResult(false, motivo, 0, actual, false);
+        }
     }
 
     /**
@@ -184,11 +189,38 @@ public class SkillWriteService {
                 "SELECT version FROM skill_versions WHERE id = :id::uuid",
                 new MapSqlParameterSource("id", currentVersionId), Integer.class);
 
-        Integer yaPendiente = jdbc.query(
-                "SELECT 1 FROM skills WHERE id = :id::uuid AND pending_version_id IS NOT NULL",
-                new MapSqlParameterSource("id", skillId), rs -> rs.next() ? 1 : null);
-        if (yaPendiente != null) return RevisionResult.no("ya_pendiente", currentVersion);
+        // Si ya hay algo pendiente: solo se puede seguir si es una revision de
+        // agente propuesta por EL MISMO actor y todavia sin resolver -> se
+        // descarta y esta la reemplaza. Una revision propia sin revisar no debe
+        // dejar bloqueado a su autor. Cualquier otra (de otro autor, o una
+        // edicion web pendiente por votos de pares) sigue frenando.
+        Map<String, Object> pendiente = jdbc.query("""
+                SELECT v.id::text AS vid, v.author_id::text AS author, v.proposed_by_agent AS agent
+                FROM skills s JOIN skill_versions v ON v.id = s.pending_version_id
+                WHERE s.id = :id::uuid
+                """, new MapSqlParameterSource("id", skillId), rs -> {
+            if (!rs.next()) return null;
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("vid", rs.getString("vid"));
+            m.put("author", rs.getString("author"));
+            m.put("agent", rs.getBoolean("agent"));
+            return m;
+        });
+        boolean replacing = false;
+        if (pendiente != null) {
+            boolean propiaDeAgente = Boolean.TRUE.equals(pendiente.get("agent"))
+                    && actorId != null && actorId.equals(pendiente.get("author"));
+            if (!propiaDeAgente) return RevisionResult.no("ya_pendiente", currentVersion);
+            replacing = true;
+        }
         if (baseVersion != currentVersion) return RevisionResult.no("stale", currentVersion);
+
+        if (replacing) {
+            jdbc.update("UPDATE skills SET pending_version_id = NULL WHERE id = :id::uuid",
+                    new MapSqlParameterSource("id", skillId));
+            jdbc.update("DELETE FROM skill_versions WHERE id = :vid::uuid",
+                    new MapSqlParameterSource("vid", pendiente.get("vid")));
+        }
 
         int version = nextVersion(skillId);
         String changelog = "Revision propuesta por un agente. Base declarada: "
@@ -216,9 +248,10 @@ public class SkillWriteService {
         meta.put("version", version);
         meta.put("origen", "agente");
         meta.put("baseDeclarada", rationale);
+        if (replacing) meta.put("reemplazoPendientePropia", true);
         audit.logAudit(actorId, "skill.revision_proposed", "skill", skillId, meta);
 
-        return RevisionResult.ok(version, currentVersion);
+        return RevisionResult.ok(version, currentVersion, replacing);
     }
 
     // --- publish / deprecate ----------------------------------------

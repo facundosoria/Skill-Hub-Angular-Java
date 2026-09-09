@@ -139,6 +139,7 @@ public class McpTools {
         "type":{"type":"string","enum":%s},\
         "tags":{"type":"array","maxItems":12,"items":{"type":"string"}},\
         "slug":{"type":"string","description":"Derived from the title if omitted"},\
+        "owning_team":{"type":"string","maxLength":80,"description":"Team that owns this convention. Defaults to your team; set it explicitly for a shared convention that is not really yours"},\
         "from_query":{"type":"string","description":"The search that returned nothing"},\
         "rationale":{"type":"string","minLength":10,"description":"What you based the rule on. Be honest; an admin reads this"}},\
         "required":["title","description","when_to_use","stack","content","from_query","rationale"],\
@@ -155,6 +156,7 @@ public class McpTools {
         "description":{"type":"string","minLength":10,"maxLength":200,"description":"Only if it changes"},\
         "when_to_use":{"type":"string","minLength":10,"maxLength":200,"description":"Only if it changes"},\
         "tags":{"type":"array","maxItems":12,"items":{"type":"string"},"description":"Only if they change; replaces the whole set"},\
+        "owning_team":{"type":"string","maxLength":80,"description":"Only if it changes; e.g. hand a shared convention that was auto-assigned to your team over to another team"},\
         "stack":{"type":"string","enum":%s,"description":"Only if it changes"},\
         "type":{"type":"string","enum":%s,"description":"Only if it changes"}},\
         "required":["slug","base_version","content","rationale"],\
@@ -246,9 +248,10 @@ public class McpTools {
             r.put("score", Math.round(h.score() * 1000.0) / 1000.0);
             if ("proposed".equals(h.status())) {
                 r.put("provisional", true);
-                r.put("caveat", "Drafted automatically because no convention existed. Not reviewed "
-                        + "by a human yet. Follow it so the team stays consistent, but tell the user "
-                        + "it is provisional.");
+                r.put("caveat", "One agent's draft, written because no convention existed here. Not "
+                        + "reviewed by a human, and it may be incomplete, wrong, or rejected later. "
+                        + "Sanity-check it against the surrounding code before following it, and tell "
+                        + "the user it is unreviewed before you rely on it.");
             }
             results.add(r);
         }
@@ -291,9 +294,11 @@ public class McpTools {
         out.put("title", skill.title());
         if ("proposed".equals(skill.status())) {
             out.put("provisional", true);
-            out.put("caveat", "Provisional: drafted automatically because no convention existed, and "
-                    + "not reviewed by a human yet. Follow it for consistency, and tell the user it "
-                    + "is provisional.");
+            out.put("caveat", "Provisional: one agent proposed this because no convention existed, and "
+                    + "no human has reviewed it - it may be incomplete, wrong, or rejected later. Treat "
+                    + "it as a starting point, not settled convention: follow it for consistency but "
+                    + "check it against the surrounding code, and tell the user explicitly that it is "
+                    + "unreviewed before acting on it.");
         }
         if ("published".equals(skill.status()) && skill.pendingVersionId() != null) {
             out.put("pending_revision", true);
@@ -404,9 +409,10 @@ public class McpTools {
         out.put("total", rows.size());
         if (provisional > 0) {
             out.put("provisional_count", provisional);
-            out.put("note", "Entries with provisional:true were proposed by an agent and not reviewed "
-                    + "by a human yet. Follow them so the team stays consistent, but tell the user they "
-                    + "are provisional. Use get_skill for the full contents of any entry.");
+            out.put("note", "Entries with provisional:true are one agent's proposal, written because no "
+                    + "convention existed. No human has reviewed them and they may change or be rejected. "
+                    + "Use them as a starting point, tell the user they are unreviewed, and check them "
+                    + "against the surrounding code. get_skill returns the full body and the same caveat.");
         }
         out.set("skills", arr);
         return out;
@@ -462,6 +468,9 @@ public class McpTools {
         String content = args.path("content").asText("");
         String type = args.hasNonNull("type") ? args.get("type").asText() : "convention";
         String slug = args.hasNonNull("slug") ? args.get("slug").asText() : null;
+        String owningTeam = identity.team();
+        if (args.hasNonNull("owning_team") && !args.get("owning_team").asText().isBlank())
+            owningTeam = args.get("owning_team").asText().trim();
         String fromQuery = args.path("from_query").asText("");
         String rationale = args.path("rationale").asText("");
         List<String> tags = new ArrayList<>();
@@ -474,9 +483,11 @@ public class McpTools {
         if (fromQuery.isBlank()) argErrs.add("from_query: required");
         if (rationale.length() < 10) argErrs.add("rationale: min 10 chars");
         if (whenToUse.length() > SkillInput.MAX_WHEN_TO_USE)
-            argErrs.add("when_to_use: max " + SkillInput.MAX_WHEN_TO_USE + " chars (200)");
+            argErrs.add("when_to_use: " + whenToUse.length() + " chars, limit is "
+                    + SkillInput.MAX_WHEN_TO_USE);
         if (description.length() > SkillInput.MAX_DESCRIPTION)
-            argErrs.add("description: max " + SkillInput.MAX_DESCRIPTION + " chars (200)");
+            argErrs.add("description: " + description.length() + " chars, limit is "
+                    + SkillInput.MAX_DESCRIPTION);
         if (!argErrs.isEmpty()) {
             ObjectNode out = json.createObjectNode();
             out.put("status", "rejected");
@@ -487,7 +498,7 @@ public class McpTools {
         }
 
         SkillInput input = new SkillInput(slug, title, description, whenToUse, stack, type,
-                identity.team(), tags, content, null, null);
+                owningTeam, tags, content, null, null);
         ProposeService.Result res = propose.proposeSkill(input, identity.userId(), fromQuery, rationale);
 
         ObjectNode out = json.createObjectNode();
@@ -591,6 +602,9 @@ public class McpTools {
         String whenToUse = args.hasNonNull("when_to_use") ? args.get("when_to_use").asText() : current.whenToUse();
         String stack = args.hasNonNull("stack") ? args.get("stack").asText() : current.stack();
         String type = args.hasNonNull("type") ? args.get("type").asText() : current.type();
+        String ownerTeam = current.ownerTeam();
+        if (args.hasNonNull("owning_team") && !args.get("owning_team").asText().isBlank())
+            ownerTeam = args.get("owning_team").asText().trim();
         List<String> tags = current.tags();
         if (args.has("tags")) {
             List<String> newTags = new ArrayList<>();
@@ -620,7 +634,7 @@ public class McpTools {
         }
 
         SkillInput merged = new SkillInput(targetSlug, title, description, whenToUse, stack, type,
-                current.ownerTeam(), tags, content, null, null);
+                ownerTeam, tags, content, null, null);
         List<String> errs = merged.validate();
         if (!errs.isEmpty()) {
             out.put("status", "rejected");
@@ -648,7 +662,11 @@ public class McpTools {
             out.put("base_version", baseVersion);
             out.put("pending_version", res.newVersion());
             if (renaming) out.put("renamed_to", targetSlug);
-            out.put("note", "Pending revision created against version " + res.currentVersion() + ". The "
+            if (res.replaced()) out.put("replaced_pending", true);
+            out.put("note", (res.replaced()
+                        ? "Replaced your earlier pending revision (it had not been reviewed yet) with this one. "
+                        : "Pending revision created ")
+                    + "against version " + res.currentVersion() + ". The "
                     + "published version is unchanged; an admin accepts it (which bumps the version) or "
                     + "discards it. get_skill still returns the published one, now flagged "
                     + "pending_revision:true."
@@ -668,9 +686,12 @@ public class McpTools {
             }
             case "ya_pendiente" -> {
                 out.put("status", "rejected");
-                out.put("reason", "\"" + slug + "\" already has a pending revision waiting for review.");
+                out.put("reason", "\"" + slug + "\" already has a pending revision from someone else "
+                        + "(or a pending web edit) waiting for review.");
                 out.put("instruction", "Do not stack another. Wait for the admin to resolve it; get_skill "
-                        + "shows pending_revision:true while it is open.");
+                        + "shows pending_revision:true while it is open. (A pending revision you proposed "
+                        + "yourself you can overwrite by calling propose_revision again with the same "
+                        + "base_version.)");
             }
             default -> {
                 out.put("status", "rejected");

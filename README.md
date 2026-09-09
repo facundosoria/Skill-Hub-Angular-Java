@@ -93,7 +93,11 @@ El toolchain de esta máquina: Temurin JDK 21 (`winget`), Maven 3.9.9 en `C:\Too
     slug único), inserción transaccional y `audit_events`
   - escritura: `propose_revision` — cambio a una convención publicada como revisión pendiente
     (`proposed_by_agent`, sin tocar la versión viva); acepta `title` y `new_slug` (renombre con
-    redirección `deprecated` / `superseded_by` sobre el slug viejo)
+    redirección `deprecated` / `superseded_by` sobre el slug viejo). El autor puede reemplazar su
+    propia revisión pendiente sin revisar (misma `base_version`); una pendiente de otro autor o
+    una edición web por votos sigue frenando
+  - `propose_skill` y `propose_revision` aceptan `owning_team` opcional (por defecto el equipo de
+    la API key) — para no dejar una convención `shared` con dueño del equipo que la propuso
 - `get_skill`/`sync_skills` devuelven el `.md` guardable con frontmatter determinista y sin `preview`
 - Telemetría de uso: cola acotada + flush `@Scheduled` cada 5 s, rollup `usage_daily`
   (contrato "nunca tira" — cada insert va aislado, un skill borrado no tumba el lote)
