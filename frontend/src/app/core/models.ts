@@ -164,6 +164,8 @@ export interface RevisionProposal {
   currentContent: string | null;
   proposedVersion: number;
   proposedContent: string | null;
+  proposedSlug: string | null;
+  proposedTitle: string | null;
   changelog: string | null;
   createdAt: string;
   authorName: string | null;

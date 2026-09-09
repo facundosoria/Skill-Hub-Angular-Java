@@ -292,9 +292,11 @@ Propose a change to an existing convention that is wrong, incomplete or outdated
 | `base_version` | integer | required | The `version` `get_skill` returned. Rejected as stale if it moved since |
 | `content` | string | required | The full new body, Markdown starting with `## Rule`. Not a diff |
 | `rationale` | string | required | Why the change is needed. An admin reads this |
+| `title` | string | optional | Only if the display name changes |
+| `new_slug` | string | optional | Rename. On approval the old slug becomes a `deprecated` redirect (`superseded_by` the new one), so local `.skill-hub/` copies reconcile on the next `sync_skills` |
 | `description` / `when_to_use` / `tags` / `stack` / `type` | optional | | Only the ones that change |
 
-**Returns:** the pending version number, or a rejection (stale `base_version`, a revision already pending, unknown slug, not published).
+**Returns:** the pending version number (plus `renamed_to` when `new_slug` was given), or a rejection (stale `base_version`, a revision already pending, unknown slug, not published, `new_slug` already in use).
 
 Neither tool edits or publishes directly, on purpose. If an agent could publish, a hundred agents would generate near-duplicates and half-baked edits faster than any admin could review them. Everything that becomes a real decision goes through this web app, through a person.
 

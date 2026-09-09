@@ -292,9 +292,11 @@ Proponer un cambio a una convención que está mal, incompleta o desactualizada.
 | `base_version` | integer | requerido | El `version` que devolvió `get_skill`. Se rechaza si quedó vieja |
 | `content` | string | requerido | El cuerpo nuevo completo, Markdown que arranca con `## Rule`. No un diff |
 | `rationale` | string | requerido | Por qué hace falta el cambio. Esto lo lee un admin |
+| `title` | string | opcional | Sólo si cambia el nombre visible |
+| `new_slug` | string | opcional | Renombre. Al aceptarse, el slug viejo queda como redirección `deprecated` (`superseded_by` el nuevo), así las copias locales en `.skill-hub/` se reconcilian en el próximo `sync_skills` |
 | `description` / `when_to_use` / `tags` / `stack` / `type` | opcionales | | Sólo los que cambian |
 
-**Devuelve:** el número de versión pendiente, o un rechazo (`base_version` vieja, ya hay una revisión pendiente, slug inexistente, no está publicada).
+**Devuelve:** el número de versión pendiente (más `renamed_to` si se pasó `new_slug`), o un rechazo (`base_version` vieja, ya hay una revisión pendiente, slug inexistente, no está publicada, `new_slug` ya en uso).
 
 Ninguna de las dos tools edita ni publica directo, a propósito. Si un agente pudiera publicar, cien agentes generarían casi-duplicados y ediciones a medio hornear más rápido de lo que un admin puede revisar. Todo lo que se vuelve una decisión real pasa por esta web, por una persona.
 

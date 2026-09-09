@@ -280,6 +280,8 @@ export const en: Dict = {
     revisionesVacio: "No proposed changes.",
     reviseAgente: "proposed by an agent",
     baseVersion: "on v",
+    renombra: "renames to",
+    renombraTitulo: "title",
     verDiff: "See the diff",
     aceptarRevision: "Accept the change",
     descartarRevision: "Discard",

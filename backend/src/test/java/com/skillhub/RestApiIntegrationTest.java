@@ -387,6 +387,50 @@ class RestApiIntegrationTest {
                 assertThat(n.path("slug").asText()).isNotEqualTo("feature-flags"));
     }
 
+    @Test @Order(36)
+    void reviewAceptaUnRenombreYDejaRedirect() {
+        // 'feature-flags' esta publicada v2. Un agente propone renombrarla a la
+        // convencion generate-* (new_slug viaja en SkillInput.slug, como arma el
+        // handler de propose_revision del MCP).
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'facu'", String.class);
+        var merged = new SkillInput("generate-feature-flag", "Generate feature flag",
+                "How a flag is named, retired and audited.",
+                "Use when adding, reading or removing a feature flag or toggle.",
+                "angular", "convention", null, java.util.List.of(),
+                "## Rule\n\nFlags carry an owner, a removal date, and a CI check that fails when the date passes.",
+                null, null);
+        var rr = write.proposeRevision("feature-flags", 2, merged, adminId,
+                "Renaming to the generate-* convention as the team agreed.");
+        assertThat(rr.ok()).isTrue();
+
+        // /review muestra el slug/title propuestos
+        var list = get("/api/review", adminCookie);
+        JsonNode ff = null;
+        for (JsonNode n : list.body.path("revisions")) {
+            if ("feature-flags".equals(n.path("slug").asText())) ff = n;
+        }
+        assertThat(ff).isNotNull();
+        assertThat(ff.path("proposedSlug").asText()).isEqualTo("generate-feature-flag");
+        assertThat(ff.path("proposedTitle").asText()).isEqualTo("Generate feature flag");
+
+        assertThat(post("/api/review/feature-flags/approve", null, adminCookie).status).isEqualTo(200);
+
+        // la fila viva es el slug nuevo, con historial
+        var after = get("/api/skills/generate-feature-flag", adminCookie);
+        assertThat(after.status).isEqualTo(200);
+        assertThat(after.body.path("skill").path("slug").asText()).isEqualTo("generate-feature-flag");
+
+        // el slug viejo quedo como redirect deprecated -> superseded_by el nuevo
+        assertThat(jdbc.queryForObject(
+                "SELECT status::text FROM skills WHERE slug = 'feature-flags'", String.class))
+                .isEqualTo("deprecated");
+        assertThat(jdbc.queryForObject("""
+                SELECT sup.slug FROM skills s JOIN skills sup ON sup.id = s.superseded_by
+                WHERE s.slug = 'feature-flags'
+                """, String.class)).isEqualTo("generate-feature-flag");
+    }
+
     @Test @Order(32)
     void profileGetYUpdate() {
         var before = get("/api/profile", memberCookie);

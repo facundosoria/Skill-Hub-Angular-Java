@@ -276,6 +276,8 @@ export const es = {
     revisionesVacio: "No hay cambios propuestos.",
     reviseAgente: "propuesto por un agente",
     baseVersion: "sobre v",
+    renombra: "renombra",
+    renombraTitulo: "título",
     verDiff: "Ver el diff",
     aceptarRevision: "Aceptar el cambio",
     descartarRevision: "Descartar",

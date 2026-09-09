@@ -280,6 +280,28 @@ public class SkillWriteService {
     // --- helpers ---------------------------------------------------
 
     private void applyMeta(String skillId, SkillInput input, String versionId) {
+        String oldSlug = jdbc.queryForObject("SELECT slug FROM skills WHERE id = :id::uuid",
+                new MapSqlParameterSource("id", skillId), String.class);
+
+        // Rename: solo cuando la revision la propuso un agente por el MCP
+        // (proposed_by_agent). El form web deshabilita el slug en edicion, asi que
+        // los caminos de edicion directa / voto de pares nunca llegan aca con un
+        // slug distinto; el gate evita que un PUT armado a mano renombre sin stub.
+        boolean renamed = input.slug() != null && !input.slug().equals(oldSlug)
+                && Boolean.TRUE.equals(jdbc.query(
+                        "SELECT proposed_by_agent FROM skill_versions WHERE id = :id::uuid",
+                        new MapSqlParameterSource("id", versionId),
+                        rs -> rs.next() ? rs.getBoolean(1) : null));
+        if (renamed) {
+            Integer taken = jdbc.query(
+                    "SELECT 1 FROM skills WHERE slug = :slug AND id <> :id::uuid LIMIT 1",
+                    new MapSqlParameterSource().addValue("slug", input.slug()).addValue("id", skillId),
+                    rs -> rs.next() ? 1 : null);
+            if (taken != null) throw new DomainException("Ya existe un skill con el slug \"" + input.slug() + "\"");
+            jdbc.update("UPDATE skills SET slug = :slug WHERE id = :id::uuid",
+                    new MapSqlParameterSource().addValue("slug", input.slug()).addValue("id", skillId));
+        }
+
         String searchText = Frontmatter.buildSearchText(input.title(), input.description(),
                 input.whenToUse(), input.tags(), input.content());
         jdbc.update("""
@@ -293,6 +315,23 @@ public class SkillWriteService {
         jdbc.update("DELETE FROM skill_tags WHERE skill_id = :id::uuid",
                 new MapSqlParameterSource("id", skillId));
         insertTags(skillId, input.tags());
+
+        if (renamed) {
+            // El slug viejo queda como fila `deprecated` -> superseded_by la viva.
+            // get_skill / sync_skills cortocircuitan en status antes de cargar
+            // version, asi que la stub no necesita current_version_id.
+            jdbc.update("""
+                    INSERT INTO skills (slug, title, description, when_to_use, stack, type, status,
+                                        owner_team, origin, superseded_by, search_text)
+                    SELECT :oldSlug, s.title, s.description, s.when_to_use, s.stack, s.type, 'deprecated',
+                           s.owner_team, s.origin, s.id, ''
+                    FROM skills s WHERE s.id = :id::uuid
+                    """, new MapSqlParameterSource().addValue("oldSlug", oldSlug).addValue("id", skillId));
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("from", oldSlug);
+            meta.put("to", input.slug());
+            audit.logAudit(null, "skill.renamed", "skill", skillId, meta);
+        }
     }
 
     private MapSqlParameterSource params(SkillInput in) {

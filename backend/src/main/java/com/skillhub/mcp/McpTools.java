@@ -89,7 +89,9 @@ public class McpTools {
             + "Creates a pending revision reviewed by an admin; it does not change the published "
             + "version. Fetch the current one with get_skill first and pass its `version` as "
             + "base_version. `content` is the full new body (Markdown starting with '## Rule'), not a "
-            + "diff. Pass description / when_to_use / tags / stack / type only if they change. Write in English.";
+            + "diff. Pass description / when_to_use / tags / stack / type only if they change. Pass "
+            + "`title` to rename the display name and `new_slug` to change the slug — the old slug is "
+            + "kept as a redirect, so local copies and links reconcile on the next sync_skills. Write in English.";
 
     private static final String STACK_ENUM = "[\"angular\",\"java\",\"shared\",\"infra\"]";
     private static final String TYPE_ENUM = "[\"skill\",\"convention\",\"reference\"]";
@@ -148,6 +150,8 @@ public class McpTools {
         "base_version":{"type":"integer","exclusiveMinimum":0,"description":"The version you based the change on (from get_skill). Rejected if it is stale."},\
         "content":{"type":"string","minLength":40,"description":"The full new body, Markdown starting with '## Rule'. Not a diff."},\
         "rationale":{"type":"string","minLength":10,"description":"Why the change is needed. An admin reads this"},\
+        "title":{"type":"string","minLength":3,"maxLength":120,"description":"Only if it changes"},\
+        "new_slug":{"type":"string","pattern":"^[a-z0-9]+(-[a-z0-9]+)*$","description":"Rename: the new slug. The old one is kept as a redirect."},\
         "description":{"type":"string","minLength":10,"maxLength":200,"description":"Only if it changes"},\
         "when_to_use":{"type":"string","minLength":10,"maxLength":200,"description":"Only if it changes"},\
         "tags":{"type":"array","maxItems":12,"items":{"type":"string"},"description":"Only if they change; replaces the whole set"},\
@@ -582,6 +586,7 @@ public class McpTools {
             return out;
         }
 
+        String title = args.hasNonNull("title") ? args.get("title").asText() : current.title();
         String description = args.hasNonNull("description") ? args.get("description").asText() : current.description();
         String whenToUse = args.hasNonNull("when_to_use") ? args.get("when_to_use").asText() : current.whenToUse();
         String stack = args.hasNonNull("stack") ? args.get("stack").asText() : current.stack();
@@ -593,7 +598,28 @@ public class McpTools {
             tags = newTags;
         }
 
-        SkillInput merged = new SkillInput(slug, current.title(), description, whenToUse, stack, type,
+        // Rename opcional: new_slug distinto al actual. El slug viejo queda como
+        // fila `deprecated` -> superseded_by cuando un admin acepta la revision.
+        String targetSlug = slug;
+        boolean renaming = false;
+        if (args.hasNonNull("new_slug") && !args.get("new_slug").asText().equals(slug)) {
+            targetSlug = args.get("new_slug").asText();
+            renaming = true;
+            if (!SkillInput.isValidSlug(targetSlug)) {
+                out.put("status", "rejected");
+                out.put("reason", "new_slug \"" + targetSlug + "\" is not a valid slug.");
+                out.put("instruction", "Use 3-64 chars, lowercase letters, digits and hyphens only.");
+                return out;
+            }
+            if (catalog.getSkillBySlug(targetSlug, null) != null) {
+                out.put("status", "rejected");
+                out.put("reason", "The slug \"" + targetSlug + "\" is already in use.");
+                out.put("instruction", "Pick another new_slug, or drop it to keep the current one.");
+                return out;
+            }
+        }
+
+        SkillInput merged = new SkillInput(targetSlug, title, description, whenToUse, stack, type,
                 current.ownerTeam(), tags, content, null, null);
         List<String> errs = merged.validate();
         if (!errs.isEmpty()) {
@@ -604,7 +630,7 @@ public class McpTools {
             return out;
         }
 
-        var idioma = LanguageDetector.revisarIdiomaSkill(current.title(), description, whenToUse, content);
+        var idioma = LanguageDetector.revisarIdiomaSkill(title, description, whenToUse, content);
         if (idioma != null) {
             out.put("status", "rejected");
             out.put("reason", "The \"" + idioma.campo() + "\" field is not in English.");
@@ -621,10 +647,14 @@ public class McpTools {
             out.put("slug", slug);
             out.put("base_version", baseVersion);
             out.put("pending_version", res.newVersion());
+            if (renaming) out.put("renamed_to", targetSlug);
             out.put("note", "Pending revision created against version " + res.currentVersion() + ". The "
                     + "published version is unchanged; an admin accepts it (which bumps the version) or "
                     + "discards it. get_skill still returns the published one, now flagged "
-                    + "pending_revision:true. Tell the user you proposed a change and it is not reviewed yet.");
+                    + "pending_revision:true."
+                    + (renaming ? " On approval the slug becomes \"" + targetSlug + "\" and \"" + slug
+                        + "\" keeps redirecting to it." : "")
+                    + " Tell the user you proposed a change and it is not reviewed yet.");
             return out;
         }
         switch (res.motivo()) {

@@ -49,7 +49,7 @@ So when a search comes back empty and you are going to solve the problem anyway:
 
 The proposal is served to other agents immediately, so the organisation converges from day one, but it travels clearly marked as provisional until a person reviews it. If a close match already exists, the call is refused and returns it with a similarity score — follow that one instead of creating a near-duplicate.
 
-If an existing convention is wrong, incomplete or outdated, do not just tell the user: call `propose_revision` with its slug and the `version` you got from `get_skill`. That creates a pending revision an admin accepts or discards — the published version does not change in the meantime, and `get_skill` will report `pending_revision: true` so other agents do not propose the same thing again.
+If an existing convention is wrong, incomplete or outdated, do not just tell the user: call `propose_revision` with its slug and the `version` you got from `get_skill`. That creates a pending revision an admin accepts or discards — the published version does not change in the meantime, and `get_skill` will report `pending_revision: true` so other agents do not propose the same thing again. `propose_revision` can also rename a convention: pass `new_slug` (and `title`); once accepted the old slug keeps redirecting.
 
 Publishing a skill, and accepting a revision, still goes through a person in the web app.""";
 }

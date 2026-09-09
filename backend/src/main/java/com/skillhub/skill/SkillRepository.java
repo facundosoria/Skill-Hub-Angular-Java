@@ -320,6 +320,8 @@ public class SkillRepository {
             SELECT s.slug, s.title, s.stack::text AS stack, s.owner_team AS "ownerTeam",
                    cur.version AS "currentVersion", cur.content AS "currentContent",
                    pend.version AS "proposedVersion", pend.content AS "proposedContent",
+                   pend.meta_snapshot::json ->> 'slug'  AS "proposedSlug",
+                   pend.meta_snapshot::json ->> 'title' AS "proposedTitle",
                    pend.changelog, pend.created_at AS "createdAt",
                    a.name AS "authorName", COALESCE(u.usos, 0) AS usos
             FROM skills s
@@ -339,6 +341,8 @@ public class SkillRepository {
             m.put("currentContent", rs.getString("currentContent"));
             m.put("proposedVersion", rs.getInt("proposedVersion"));
             m.put("proposedContent", rs.getString("proposedContent"));
+            m.put("proposedSlug", rs.getString("proposedSlug"));
+            m.put("proposedTitle", rs.getString("proposedTitle"));
             m.put("changelog", rs.getString("changelog"));
             m.put("createdAt", String.valueOf(rs.getObject("createdAt")));
             m.put("authorName", rs.getString("authorName"));

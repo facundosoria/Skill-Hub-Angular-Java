@@ -33,6 +33,12 @@ public record SkillInput(
     private static final List<String> STACKS = List.of("angular", "java", "shared", "infra");
     private static final List<String> TYPES = List.of("skill", "convention", "reference");
 
+    /** Mismo criterio que validate(): 3-64 chars, solo minusculas, numeros y guiones. */
+    public static boolean isValidSlug(String slug) {
+        return slug != null && slug.length() >= 3 && slug.length() <= 64
+                && SLUG_RE.matcher(slug).matches();
+    }
+
     /** Igual que slugify() del original: NFD, sin diacriticos, [^a-z0-9]->'-', trim, 64. */
     public static String slugify(String input) {
         String noDiacritics = Normalizer.normalize(input, Normalizer.Form.NFD)

@@ -61,6 +61,19 @@ import { UI } from '../../shared/ui';
                   <span class="ml-auto text-xs text-text-faint">{{ t().review.yaSeguida }} {{ r.usos }}×</span>
                 }
               </div>
+              @if (r.proposedSlug && r.proposedSlug !== r.slug) {
+                <p class="mt-1.5 text-xs text-text-muted">
+                  {{ t().review.renombra }}
+                  <span class="font-mono">{{ r.slug }}</span> →
+                  <span class="font-mono">{{ r.proposedSlug }}</span>
+                </p>
+              }
+              @if (r.proposedTitle && r.proposedTitle !== r.title) {
+                <p class="mt-1 text-xs text-text-muted">
+                  {{ t().review.renombra }} ({{ t().review.renombraTitulo }})
+                  «{{ r.title }}» → «{{ r.proposedTitle }}»
+                </p>
+              }
               @if (r.changelog) { <p class="mt-1.5 text-xs text-warning">{{ r.changelog }}</p> }
               <div class="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
                 <a

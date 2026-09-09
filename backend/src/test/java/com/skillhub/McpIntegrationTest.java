@@ -54,6 +54,8 @@ class McpIntegrationTest {
     @Autowired TestRestTemplate rest;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
+    @Autowired com.skillhub.skill.SkillWriteService write;
+    @Autowired com.skillhub.skill.SkillRepository repo;
 
     static String apiKey;
     static boolean seeded;
@@ -630,6 +632,114 @@ class McpIntegrationTest {
                 "rationale", "Should be rejected because the slug is unknown."));
         assertThat(rev.path("status").asText()).isEqualTo("rejected");
         assertThat(rev.path("reason").asText()).contains("No skill exists");
+    }
+
+    // --- propose_revision: title + rename (new_slug) -----------------
+
+    /** Skill publicado propio para los tests de rename; se borra en el finally. */
+    private void seedPublished(String slug, String title) {
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'zz-mcp-admin'", String.class);
+        String id = jdbc.queryForObject("""
+                INSERT INTO skills (slug, title, description, when_to_use, stack, type, status,
+                                    owner_team, created_by, search_text)
+                VALUES (?, ?, 'Seed skill for a rename test, at least ten chars.',
+                        'Use when testing the rename flow end to end in the catalogue.',
+                        'shared'::stack, 'convention'::skill_type, 'published', 'platform', ?::uuid, ?)
+                RETURNING id::text
+                """, String.class, slug, title, adminId, slug + " rename test");
+        String vid = jdbc.queryForObject("""
+                INSERT INTO skill_versions (skill_id, version, content, preview)
+                VALUES (?::uuid, 1, ?, NULL) RETURNING id::text
+                """, String.class, id,
+                "## Rule\n\nSeed body for the rename test. At least forty characters, easily met here.");
+        jdbc.update("UPDATE skills SET current_version_id = ?::uuid WHERE id = ?::uuid", vid, id);
+    }
+
+    @Test
+    void proposeRevisionPuedeCambiarSoloElTitulo() {
+        seedPublished("zz-title-only", "Zz Title Before");
+        try {
+            var g = tool("get_skill", java.util.Map.of("slug", "zz-title-only"));
+            int base = g.path("version").asInt();
+
+            var rev = tool("propose_revision", java.util.Map.of(
+                    "slug", "zz-title-only", "base_version", base,
+                    "content", "## Rule\n\nBody changes too, but the slug stays. Forty characters is easily met here.",
+                    "rationale", "Clarifying the display name and the rule wording.",
+                    "title", "Zz Title After"));
+            assertThat(rev.path("status").asText()).isEqualTo("revision_proposed");
+            assertThat(rev.has("renamed_to")).isFalse();
+
+            write.applyPendingEdit(repo.skillId("zz-title-only"));
+
+            var g2 = tool("get_skill", java.util.Map.of("slug", "zz-title-only"));
+            assertThat(g2.path("title").asText()).isEqualTo("Zz Title After");
+            assertThat(g2.path("version").asInt()).isEqualTo(base + 1);
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-title-only'");
+        }
+    }
+
+    @Test
+    void proposeRevisionRenombraYDejaRedirect() {
+        seedPublished("zz-rename-old", "Zz Rename Old");
+        try {
+            int base = tool("get_skill", java.util.Map.of("slug", "zz-rename-old")).path("version").asInt();
+
+            var rev = tool("propose_revision", java.util.Map.of(
+                    "slug", "zz-rename-old", "base_version", base,
+                    "content", "## Rule\n\nRenamed convention body, kept intact through the rename. Forty chars, easily.",
+                    "rationale", "Renaming to the generate-* convention as the team agreed.",
+                    "title", "Zz Rename New",
+                    "new_slug", "zz-rename-new"));
+            assertThat(rev.path("status").asText()).isEqualTo("revision_proposed");
+            assertThat(rev.path("renamed_to").asText()).isEqualTo("zz-rename-new");
+
+            String id = repo.skillId("zz-rename-old");
+            assertThat(repo.hasPendingAgentRevision(id)).isTrue();
+            write.applyPendingEdit(id);
+
+            // la fila viva es el slug nuevo, mismo id, contenido intacto
+            var gNew = tool("get_skill", java.util.Map.of("slug", "zz-rename-new"));
+            assertThat(gNew.path("slug").asText()).isEqualTo("zz-rename-new");
+            assertThat(gNew.path("title").asText()).isEqualTo("Zz Rename New");
+            assertThat(gNew.path("content").asText()).contains("Renamed convention body");
+            assertThat(repo.skillId("zz-rename-new")).isEqualTo(id);
+
+            // el slug viejo redirige
+            var gOld = tool("get_skill", java.util.Map.of("slug", "zz-rename-old"));
+            assertThat(gOld.path("status").asText()).isEqualTo("deprecated");
+            assertThat(gOld.path("superseded_by").asText()).isEqualTo("zz-rename-new");
+            assertThat(gOld.has("content")).isFalse();
+
+            // sync_skills manda a borrar la copia vieja y apunta al reemplazo
+            var sync = tool("sync_skills", java.util.Map.of("have", java.util.List.of(
+                    java.util.Map.of("slug", "zz-rename-old", "version", 1))));
+            var r0 = sync.path("results").path(0);
+            assertThat(r0.path("state").asText()).isEqualTo("deprecated");
+            assertThat(r0.path("superseded_by").asText()).isEqualTo("zz-rename-new");
+            assertThat(slugList(sync.path("to_delete"))).contains("zz-rename-old");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug IN ('zz-rename-old', 'zz-rename-new')");
+        }
+    }
+
+    @Test
+    void proposeRevisionRechazaNewSlugEnUso() {
+        seedPublished("zz-rename-src", "Zz Rename Src");
+        try {
+            int base = tool("get_skill", java.util.Map.of("slug", "zz-rename-src")).path("version").asInt();
+            var rev = tool("propose_revision", java.util.Map.of(
+                    "slug", "zz-rename-src", "base_version", base,
+                    "content", "## Rule\n\nTrying to rename onto a slug that already exists in the catalogue here.",
+                    "rationale", "This must be rejected because the target slug is taken.",
+                    "new_slug", PREFIX + "buttons"));
+            assertThat(rev.path("status").asText()).isEqualTo("rejected");
+            assertThat(rev.path("reason").asText().toLowerCase()).contains("already in use");
+        } finally {
+            jdbc.update("DELETE FROM skills WHERE slug = 'zz-rename-src'");
+        }
     }
 
     // --- helpers de los tests de tools -------------------------------
