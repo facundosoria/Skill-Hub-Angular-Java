@@ -664,9 +664,9 @@ public class McpTools {
             if (renaming) out.put("renamed_to", targetSlug);
             if (res.replaced()) out.put("replaced_pending", true);
             out.put("note", (res.replaced()
-                        ? "Replaced your earlier pending revision (it had not been reviewed yet) with this one. "
-                        : "Pending revision created ")
-                    + "against version " + res.currentVersion() + ". The "
+                        ? "Replaced your earlier unreviewed pending revision with this one, against version "
+                        : "Pending revision created against version ")
+                    + res.currentVersion() + ". The "
                     + "published version is unchanged; an admin accepts it (which bumps the version) or "
                     + "discards it. get_skill still returns the published one, now flagged "
                     + "pending_revision:true."
