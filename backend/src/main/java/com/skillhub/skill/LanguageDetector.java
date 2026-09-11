@@ -1,7 +1,6 @@
 package com.skillhub.skill;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -10,12 +9,22 @@ import java.util.regex.Pattern;
 /**
  * Puerto de src/server/skills/language.ts.
  *
- * Detector conservador de espanol/ingles. El catalogo admite ambos idiomas
- * (hay indice full-text para los dos, ver V17__skill_language.sql); lo que no
- * se admite es que un mismo skill mezcle idiomas entre sus campos, porque eso
- * degrada la lectura tanto para una persona como para un agente. Solo marca
- * con evidencia clara y nunca por una palabra suelta ("Modal", "Toast",
- * "Skeleton" son iguales en los dos idiomas).
+ * Clasificador de idioma por campo (ingles/espanol/ambiguo). El catalogo
+ * admite los dos idiomas (hay indice full-text para los dos, ver
+ * V17__skill_language.sql); lo que no se admite es que un mismo skill mezcle
+ * idiomas entre sus campos, porque eso degrada la lectura tanto para una
+ * persona como para un agente.
+ *
+ * Por campo se cuentan coincidencias contra dos listas chicas de palabras
+ * funcionales (articulos, preposiciones, conectores) mas los caracteres
+ * propios del espanol (ñ, acentos, ¿¡); gana el idioma con mas coincidencias,
+ * y CUALQUIER empate -- incluido 0 a 0, el caso tipico de un titulo corto o
+ * generico ("Plantilla de historia de usuario" solo pega en "de") -- queda
+ * ambiguo y no vota. Es deliberadamente conservador en los dos sentidos:
+ * nunca decide por una palabra suelta ("Modal", "Toast", "Skeleton" son
+ * iguales en los dos idiomas), y jerga o nombres propios que no estan en
+ * ninguna lista (Figma, Swagger, WCAG, backlog, Mock API...) no cuentan para
+ * ningun lado, asi que no empujan un campo hacia el idioma equivocado.
  */
 public final class LanguageDetector {
 
@@ -25,6 +34,8 @@ public final class LanguageDetector {
     private static final Pattern TOKEN_RE = Pattern.compile("[a-záéíóúñü]+");
     private static final Pattern FENCE_RE = Pattern.compile("```[\\s\\S]*?```");
     private static final Pattern INLINE_CODE_RE = Pattern.compile("`[^`]*`");
+
+    private static final int MIN_CHARS_DECIDIBLE = 12;
 
     private static final Set<String> PALABRAS_ES = Set.of(
             "el","la","los","las","un","una","unos","unas",
@@ -44,34 +55,6 @@ public final class LanguageDetector {
             "use","uses","used","should","must","can","never","always",
             "every","each","all","one","same","more","also","than","then");
 
-    public record Deteccion(boolean esEspanol, List<String> senales) {}
-
-    public static Deteccion detectarEspanol(String texto) {
-        String limpio = texto == null ? "" : texto.trim();
-        if (limpio.length() < 12) return new Deteccion(false, List.of());
-
-        List<String> senales = new ArrayList<>();
-        String sinCodigo = INLINE_CODE_RE.matcher(
-                FENCE_RE.matcher(limpio).replaceAll(" ")).replaceAll(" ");
-
-        Matcher acentosM = CARACTERES_ES.matcher(sinCodigo);
-        Set<String> acentos = new LinkedHashSet<>();
-        while (acentosM.find()) acentos.add(acentosM.group());
-        boolean hayAcentos = !acentos.isEmpty();
-        if (hayAcentos) senales.add("caracteres del espanol: " + String.join(" ", acentos));
-
-        List<String> tokens = tokenize(limpio);
-        List<String> es = tokens.stream().filter(PALABRAS_ES::contains).toList();
-        List<String> en = tokens.stream().filter(PALABRAS_EN::contains).toList();
-        List<String> esUnicas = new ArrayList<>(new LinkedHashSet<>(es));
-        if (!esUnicas.isEmpty())
-            senales.add("palabras en espanol: " + String.join(", ", esUnicas.subList(0, Math.min(6, esUnicas.size()))));
-
-        boolean porCaracteres = hayAcentos && !esUnicas.isEmpty();
-        boolean porVocabulario = es.size() >= 3 && es.size() > en.size() * 1.5;
-        return new Deteccion(porCaracteres || porVocabulario, senales);
-    }
-
     private static List<String> tokenize(String texto) {
         String limpio = INLINE_CODE_RE.matcher(
                 FENCE_RE.matcher(texto.toLowerCase()).replaceAll(" ")).replaceAll(" ");
@@ -82,10 +65,35 @@ public final class LanguageDetector {
     }
 
     /**
+     * Idioma de UN campo ("es"/"en"), o null si no hay evidencia suficiente:
+     * texto corto (menos de {@link #MIN_CHARS_DECIDIBLE} caracteres), o
+     * empate entre las dos listas -- 0 a 0 incluido, que es exactamente lo
+     * que pasa con un titulo generico o con jerga tecnica en ingles que no
+     * aparece en ninguna de las dos listas.
+     */
+    private static String idiomaDeCampo(String texto) {
+        String limpio = texto == null ? "" : texto.trim();
+        if (limpio.length() < MIN_CHARS_DECIDIBLE) return null;
+
+        String sinCodigo = INLINE_CODE_RE.matcher(
+                FENCE_RE.matcher(limpio).replaceAll(" ")).replaceAll(" ");
+        boolean hayAcentos = CARACTERES_ES.matcher(sinCodigo).find();
+
+        List<String> tokens = tokenize(limpio);
+        long es = tokens.stream().filter(PALABRAS_ES::contains).count() + (hayAcentos ? 1 : 0);
+        long en = tokens.stream().filter(PALABRAS_EN::contains).count();
+
+        if (es > en) return "es";
+        if (en > es) return "en";
+        return null;
+    }
+
+    /**
      * Idioma resuelto para el skill ("es"/"en") y si sus campos son
      * consistentes entre si. `camposEnMinoria` lista los campos decididos que
      * quedaron del lado minoritario: eso es lo unico que de verdad hay que
-     * bloquear, no el idioma en si.
+     * bloquear, no el idioma en si. Un campo ambiguo (ver
+     * {@link #idiomaDeCampo}) no vota ni puede quedar en minoria.
      */
     public record Clasificacion(String idioma, boolean consistente, List<String> camposEnMinoria) {}
 
@@ -98,14 +106,9 @@ public final class LanguageDetector {
         List<String[]> porCampo = new ArrayList<>(); // {campo, "es"|"en"|null si ambiguo}
         List<String> decididos = new ArrayList<>();
         for (String[] par : campos) {
-            String texto = par[1] == null ? "" : par[1].trim();
-            if (texto.length() < 12) {
-                porCampo.add(new String[]{par[0], null});
-                continue;
-            }
-            String idiomaCampo = detectarEspanol(texto).esEspanol() ? "es" : "en";
+            String idiomaCampo = idiomaDeCampo(par[1]);
             porCampo.add(new String[]{par[0], idiomaCampo});
-            decididos.add(idiomaCampo);
+            if (idiomaCampo != null) decididos.add(idiomaCampo);
         }
         if (decididos.isEmpty()) return new Clasificacion("en", true, List.of());
 
