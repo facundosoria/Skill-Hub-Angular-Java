@@ -137,14 +137,31 @@ class RestApiIntegrationTest {
     // --- skills ----------------------------------------------------
 
     @Test @Order(10)
-    void crearSkillEnEspanolLoRechaza() {
+    void crearSkillConIdiomaMezcladoLoRechaza() {
+        // titulo/whenToUse/content en ingles, description en espanol: inconsistente.
+        var r = post("/api/skills", Map.of(
+                "slug", "loading-mixed", "title", "Loading indicators",
+                "description", "Que mostrar mientras el contenido esta cargando en la interfaz de usuario.",
+                "whenToUse", "Use when rendering a button, a call to action, or a submit in a form.",
+                "stack", "angular", "content", "## Rule\n\nUse a skeleton instead of a spinner when the layout is known."),
+                adminCookie);
+        assertThat(r.body.path("error").asText()).isEqualTo("IDIOMA_INCONSISTENTE");
+        assertThat(r.body.path("idioma").path("camposEnMinoria")).isNotEmpty();
+    }
+
+    @Test @Order(15)
+    void crearSkillEnteramenteEnEspanolFunciona() {
+        // El catalogo admite ingles o espanol: lo unico que bloquea es mezclarlos.
         var r = post("/api/skills", Map.of(
                 "slug", "botones-de-accion", "title", "Botones",
                 "description", "Cada accion que se puede clickear en la interfaz de usuario.",
-                "whenToUse", "Usar cuando se renderiza un boton, una llamada a la accion o un submit.",
-                "stack", "angular", "content", "## Regla\n\nNunca uses un boton pelado."), adminCookie);
-        assertThat(r.body.path("error").asText()).isEqualTo("EN_SOLO_INGLES");
-        assertThat(r.body.path("idioma").path("campo").asText()).isNotEmpty();
+                "whenToUse", "Usar cuando se renderiza un boton, una llamada a la accion o un envio de formulario.",
+                "stack", "angular",
+                "content", "## Regla\n\nNunca uses un boton pelado. Usar el componente compartido AppButton."),
+                adminCookie);
+        assertThat(r.status).isEqualTo(200);
+        assertThat(r.body.path("slug").asText()).isEqualTo("botones-de-accion");
+        assertThat(post("/api/skills/botones-de-accion/publish", null, adminCookie).status).isEqualTo(200);
     }
 
     @Test @Order(11)
@@ -207,12 +224,24 @@ class RestApiIntegrationTest {
         var en = post("/api/skills/check-language", Map.of(
                 "title", "Buttons", "description", "Every clickable action", "whenToUse", "a button", "content", "## Rule"),
                 memberCookie);
-        assertThat(en.body.isNull()).isTrue();
+        assertThat(en.body.path("idioma").asText()).isEqualTo("en");
+        assertThat(en.body.path("consistente").asBoolean()).isTrue();
+
         var es = post("/api/skills/check-language", Map.of(
                 "title", "Botones", "description", "Cada accion que se puede clickear en la pantalla del usuario",
                 "whenToUse", "cuando hay un boton", "content", "## Regla\n\nNunca uses un boton pelado en la pagina"),
                 memberCookie);
-        assertThat(es.body.path("campo").asText()).isNotEmpty();
+        assertThat(es.body.path("idioma").asText()).isEqualTo("es");
+        assertThat(es.body.path("consistente").asBoolean()).isTrue();
+
+        // El titulo tiene que ser lo bastante largo para que el detector se anime
+        // a decidir un idioma (por debajo de 12 caracteres queda ambiguo y no vota).
+        var mixto = post("/api/skills/check-language", Map.of(
+                "title", "Save this button", "description", "Cada accion que se puede clickear en la pantalla del usuario",
+                "whenToUse", "cuando hay un boton", "content", "## Regla\n\nNunca uses un boton pelado en la pagina"),
+                memberCookie);
+        assertThat(mixto.body.path("consistente").asBoolean()).isFalse();
+        assertThat(mixto.body.path("camposEnMinoria")).isNotEmpty();
     }
 
     // --- flujo de votos de una edicion ------------------------

@@ -18,6 +18,12 @@ import java.util.List;
  *                 con piso de ts_rank para que una palabra suelta no matchee todo.
  *  3. trigramas - un typo no deberia devolver vacio.
  *
+ * El catalogo tiene skills en ingles y en espanol (V17), asi que las dos
+ * primeras pasadas evaluan la MISMA query del usuario contra las dos
+ * configuraciones de tsvector/tsquery con OR y se quedan con el mejor rank de
+ * las dos, en vez de adivinar el idioma de una query de 2-3 palabras (poco
+ * confiable) para elegir "la correcta".
+ *
  * Las tres pasadas tienen piso de relevancia (MIN_RANK): por debajo de eso el
  * match es demasiado debil para sugerirlo como convencion, y searchSkills
  * devuelve vacio para que el MCP empuje a propose_skill en vez de ofrecer algo
@@ -55,19 +61,22 @@ public class SearchRepository {
         if (q.isEmpty()) return List.of();
 
         var strict = runQuery(
-                "websearch_to_tsquery('english', :q::text)", q, stack, type, limit, MIN_RANK_STRICT);
+                "websearch_to_tsquery('english', :q::text)",
+                "websearch_to_tsquery('spanish', :q::text)",
+                q, stack, type, limit, MIN_RANK_STRICT);
         if (!strict.isEmpty()) return strict;
 
         var loose = runQuery(
                 "replace(websearch_to_tsquery('english', :q::text)::text, ' & ', ' | ')::tsquery",
+                "replace(websearch_to_tsquery('spanish', :q::text)::text, ' & ', ' | ')::tsquery",
                 q, stack, type, limit, MIN_RANK_LOOSE);
         if (!loose.isEmpty()) return loose;
 
         return fuzzySearch(q, stack, type, limit);
     }
 
-    private List<SearchHit> runQuery(String tsqueryExpr, String q, String stack, String type,
-                                     int limit, Double minRank) {
+    private List<SearchHit> runQuery(String tsqueryExprEn, String tsqueryExprEs, String q, String stack,
+                                     String type, int limit, Double minRank) {
         MapSqlParameterSource p = new MapSqlParameterSource()
                 .addValue("q", q)
                 .addValue("stack", stack)
@@ -99,7 +108,10 @@ public class SearchRepository {
                      COALESCE(v.version, 1) AS version,
                      COALESCE(u.usos_90d, 0) AS usos_90d,
                      COALESCE(u.personas, 0) AS personas,
-                     ts_rank(to_tsvector('english', s.search_text), %s) AS rank,
+                     GREATEST(
+                       ts_rank(to_tsvector('english', s.search_text), %1$s),
+                       ts_rank(to_tsvector('spanish', s.search_text), %2$s)
+                     ) AS rank,
                      GREATEST(
                        1 + ln(1 + COALESCE(u.usos_90d, 0)) * :usageWeight::float,
                        CASE WHEN s.created_at > now() - :graceDays::int * INTERVAL '1 day'
@@ -111,7 +123,8 @@ public class SearchRepository {
               WHERE s.status IN ('published', 'proposed')
                 AND (:stack::text IS NULL OR s.stack::text = :stack)
                 AND (:type::text  IS NULL OR s.type::text  = :type)
-                AND to_tsvector('english', s.search_text) @@ %s
+                AND (to_tsvector('english', s.search_text) @@ %1$s
+                     OR to_tsvector('spanish', s.search_text) @@ %2$s)
             )
             SELECT slug, title, description, when_to_use, stack, type, owner_team, status,
                    version, usos_90d, personas, rank AS score
@@ -119,7 +132,7 @@ public class SearchRepository {
             WHERE (:minRank::float IS NULL OR rank >= :minRank::float)
             ORDER BY rank * boost DESC, updated_at DESC
             LIMIT :limit::int
-            """.formatted(tsqueryExpr, tsqueryExpr);
+            """.formatted(tsqueryExprEn, tsqueryExprEs);
 
         return jdbc.query(sql, p, SearchRepository::mapHit);
     }

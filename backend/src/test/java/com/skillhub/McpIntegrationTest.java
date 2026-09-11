@@ -184,7 +184,7 @@ class McpIntegrationTest {
         )).path("body").path("result").path("instructions").asText();
         assertThat(instrucciones).contains("BEFORE writing");
         assertThat(instrucciones).contains("search_skills");
-        assertThat(instrucciones).contains("Search in English");
+        assertThat(instrucciones).contains("English and Spanish");
         assertThat(instrucciones).contains(".skill-hub/");
         assertThat(instrucciones.toLowerCase()).contains("cache");
     }
@@ -203,6 +203,18 @@ class McpIntegrationTest {
 
     @Test
     void tareaDeFrontEncuentraBotones() {
+        assertThat(slugs(tool("search_skills", java.util.Map.of("query", "save button in a form"))))
+                .contains(PREFIX + "buttons");
+    }
+
+    @Test
+    void unaConsultaEnEspanolEncuentraElSkillEnEspanol() {
+        // El catalogo tiene skills en ingles y en espanol (V17): una query en
+        // espanol tiene que poder encontrar el que esta en espanol...
+        assertThat(slugs(tool("search_skills", java.util.Map.of("query", "boton para guardar un formulario"))))
+                .contains(PREFIX + "boton-de-guardado");
+        // ...sin que eso degrade el recall del catalogo en ingles (la regresion
+        // que motivo V12 -> V11 al reves).
         assertThat(slugs(tool("search_skills", java.util.Map.of("query", "save button in a form"))))
                 .contains(PREFIX + "buttons");
     }
@@ -953,6 +965,12 @@ class McpIntegrationTest {
                     "Use when deciding the package structure or module layout of a Java service.",
                     "java", "convention", "platform", List.of("structure"),
                     md("## Rule", "", "One package per bounded context. No catch-all `util` package.")),
+            new Fixture(PREFIX + "boton-de-guardado", "Botón de guardado",
+                    "La acción que se puede clickear para guardar un formulario.",
+                    "Usar cuando se renderiza un botón de guardar, una llamada a la acción o un envío de formulario.",
+                    "angular", "skill", "design-system", List.of("botones", "es"),
+                    md("## Regla", "",
+                            "Nunca renderices un botón suelto. Usa siempre el componente compartido AppButton.")),
             new Fixture("port-registry", "Port registry", "The port ranges assigned to each team.",
                     "Use before choosing a port for a new service, so you do not take another team's range.",
                     "infra", "reference", "platform", List.of("ports"),

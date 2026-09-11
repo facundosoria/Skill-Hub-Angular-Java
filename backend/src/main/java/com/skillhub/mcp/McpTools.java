@@ -50,8 +50,11 @@ public class McpTools {
     private static final String SEARCH_SKILLS_DESC =
             "Search the organisation's convention catalogue from a natural-language description of "
             + "the task. Call this BEFORE writing Angular or Java code, without waiting to be asked. "
-            + "Search in English: the catalogue is written in English. Returns up to 5 candidates "
-            + "with their when_to_use and usage level; it does not return contents - use get_skill for that.";
+            + "The catalogue has skills in both English and Spanish; search in the language you expect "
+            + "the target skill to be written in, and if it comes back empty, try the same query in the "
+            + "other language before concluding there is no convention for this. Returns up to 5 "
+            + "candidates with their when_to_use and usage level; it does not return contents - use "
+            + "get_skill for that.";
 
     private static final String GET_SKILL_DESC =
             "Return the full contents of one skill. The response includes `file` (the skill as a "
@@ -82,7 +85,9 @@ public class McpTools {
             + "neutral: every team fills it differently. Saved as provisional and served to other "
             + "agents immediately; refused if a close match exists (its similarity is returned). To "
             + "change an existing convention instead, use propose_revision. Call "
-            + "get_skill('writing-skills') first — it defines every field below. Write in English.";
+            + "get_skill('writing-skills') first — it defines every field below. Write it in English or "
+            + "Spanish, but every field (title, description, when_to_use, content) must be in the same "
+            + "language.";
 
     private static final String PROPOSE_REVISION_DESC =
             "Propose a change to an existing convention when it is wrong, incomplete or outdated. "
@@ -91,14 +96,15 @@ public class McpTools {
             + "base_version. `content` is the full new body (Markdown starting with '## Rule'), not a "
             + "diff. Pass description / when_to_use / tags / stack / type only if they change. Pass "
             + "`title` to rename the display name and `new_slug` to change the slug — the old slug is "
-            + "kept as a redirect, so local copies and links reconcile on the next sync_skills. Write in English.";
+            + "kept as a redirect, so local copies and links reconcile on the next sync_skills. Keep the "
+            + "whole skill in a single language, English or Spanish — do not mix languages across fields.";
 
     private static final String STACK_ENUM = "[\"angular\",\"java\",\"shared\",\"infra\"]";
     private static final String TYPE_ENUM = "[\"skill\",\"convention\",\"reference\"]";
 
     private static final String SEARCH_SKILLS_SCHEMA = ("""
         {"type":"object","properties":{\
-        "query":{"type":"string","minLength":2,"description":"The task, described in natural language and in English. e.g. 'action button in a form'"},\
+        "query":{"type":"string","minLength":2,"description":"The task, described in natural language, in English or Spanish. e.g. 'action button in a form'"},\
         "stack":{"type":"string","enum":%s,"description":"Restrict to one stack"},\
         "type":{"type":"string","enum":%s,"description":"Restrict to one document type"}},\
         "required":["query"],"additionalProperties":false}""").formatted(STACK_ENUM, TYPE_ENUM);
@@ -512,14 +518,13 @@ public class McpTools {
             return out;
         }
         switch (res.motivo()) {
-            case "idioma" -> {
+            case "idioma_inconsistente" -> {
                 out.put("status", "rejected");
-                out.put("reason", "The \"" + res.campo() + "\" field is not in English.");
-                out.set("evidence", toArray(res.senales()));
-                out.put("instruction", "The catalogue is written in English because the search index "
-                        + "stems English and agents query in English — a skill in another "
-                        + "language is effectively invisible to them. Rewrite the whole skill in "
-                        + "English and call again.");
+                out.put("reason", "These fields are not in the same language as the rest of the skill: "
+                        + String.join(", ", res.camposEnMinoria()) + ".");
+                out.put("instruction", "The catalogue accepts English or Spanish, but every field of one "
+                        + "skill (title, description, when_to_use, content) must be in the same "
+                        + "language. Rewrite the whole skill in a single language and call again.");
             }
             case "duplicado" -> {
                 out.put("status", "rejected");
@@ -644,13 +649,14 @@ public class McpTools {
             return out;
         }
 
-        var idioma = LanguageDetector.revisarIdiomaSkill(title, description, whenToUse, content);
-        if (idioma != null) {
+        var idioma = LanguageDetector.clasificarIdiomaSkill(title, description, whenToUse, content);
+        if (!idioma.consistente()) {
             out.put("status", "rejected");
-            out.put("reason", "The \"" + idioma.campo() + "\" field is not in English.");
-            out.set("evidence", toArray(idioma.senales()));
-            out.put("instruction", "The catalogue is written in English. Rewrite the change in English "
-                    + "and call again.");
+            out.put("reason", "These fields are not in the same language as the rest of the skill: "
+                    + String.join(", ", idioma.camposEnMinoria()) + ".");
+            out.put("instruction", "The catalogue accepts English or Spanish, but every field of one "
+                    + "skill (title, description, when_to_use, content) must be in the same language. "
+                    + "Rewrite the whole skill in a single language and call again.");
             return out;
         }
 

@@ -71,7 +71,7 @@ export class SkillService {
     description: string;
     whenToUse: string;
     content: string;
-  }): Promise<LanguageFlag | null> {
-    return firstValueFrom(this.api.post<LanguageFlag | null>('/skills/check-language', fields));
+  }): Promise<LanguageFlag> {
+    return firstValueFrom(this.api.post<LanguageFlag>('/skills/check-language', fields));
   }
 }

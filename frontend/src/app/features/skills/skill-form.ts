@@ -21,8 +21,10 @@ import { UI } from '../../shared/ui';
  * escribe (decision 11a):
  *  - duplicados: debounce 350 ms sobre titulo+tags, solo en modo create. No
  *    bloquea; muestra los candidatos. Va antes del cuerpo a proposito.
- *  - idioma: debounce 600 ms sobre titulo/descripcion/cuando/contenido. Avisa
- *    en vivo y despues bloquea el submit (un skill en espanol es invisible).
+ *  - idioma: debounce 600 ms sobre titulo/descripcion/cuando/contenido. El
+ *    catalogo admite ingles o espanol; lo que se avisa en vivo y despues
+ *    bloquea el submit es que los campos de un mismo skill queden mezclados
+ *    entre los dos idiomas (`consistente === false`), no el idioma en si.
  *
  * Lo que devuelve el backend al enviar gana sobre lo live: si el submit vino con
  * `duplicates`, esos son los que bloquean (hasta que se justifique).
@@ -37,14 +39,14 @@ import { UI } from '../../shared/ui';
         {{ mode() === 'create' ? t().form.nuevoSubtitulo : t().form.editarSubtitulo }}
       </p>
 
-      @if (shownIdioma(); as ai) {
+      @if (shownIdiomaInconsistente(); as ai) {
         <div class="mb-4 rounded-xl border border-danger/35 bg-danger-soft p-4"
              animate.enter="anim-panel-in" animate.leave="anim-panel-out">
           <p class="text-sm font-medium text-danger">{{ t().idioma.titulo }}</p>
           <p class="mt-1.5 text-sm text-danger/90">{{ t().idioma.porQue }}</p>
           <p class="mt-2 text-xs text-danger/80">
-            {{ t().idioma.detectadoEn }}
-            <strong>{{ campoLabel(ai.campo) }}</strong>. {{ t().idioma.senales }} {{ ai.senales.join(' · ') }}
+            {{ t().idioma.camposEnMinoria }}
+            <strong>{{ camposLabel(ai.camposEnMinoria) }}</strong>.
           </p>
         </div>
       }
@@ -134,12 +136,12 @@ import { UI } from '../../shared/ui';
           </ui-field>
         }
 
-        @if (error() && error() !== 'EN_SOLO_INGLES' && !blocking()) {
+        @if (error() && error() !== 'IDIOMA_INCONSISTENTE' && !blocking()) {
           <p class="text-sm text-danger">{{ error() }}</p>
         }
 
         <div class="flex items-center gap-2 border-t border-border pt-5">
-          <button uiButton type="submit" [disabled]="busy() || !!shownIdioma()">
+          <button uiButton type="submit" [disabled]="busy() || !!shownIdiomaInconsistente()">
             {{ busy() ? t().form.guardando : mode() === 'create' ? t().form.crear : t().form.guardar }}
           </button>
           <a [routerLink]="mode() === 'edit' ? ['/skills', v.slug] : ['/skills']">
@@ -188,6 +190,11 @@ export class SkillForm {
   private liveDuplicates = signal<DuplicateCandidate[]>([]);
 
   shownIdioma = computed(() => this.serverIdioma() ?? this.liveIdioma());
+  /** Solo la inconsistencia entre campos bloquea; el idioma en si no. */
+  shownIdiomaInconsistente = computed(() => {
+    const ai = this.shownIdioma();
+    return ai && !ai.consistente ? ai : null;
+  });
   shownDuplicates = computed(() =>
     this.serverDuplicates().length ? this.serverDuplicates() : this.liveDuplicates(),
   );
@@ -290,6 +297,10 @@ export class SkillForm {
     return map[campo] ?? campo;
   }
 
+  camposLabel(campos: string[]): string {
+    return campos.map((c) => this.campoLabel(c)).join(', ');
+  }
+
   // --- submit -----------------------------------------------------
 
   async submit(): Promise<void> {
@@ -304,7 +315,7 @@ export class SkillForm {
           ? await this.skills.create(this.v)
           : await this.skills.update(this.v.slug, this.v);
 
-      if (res.error === 'EN_SOLO_INGLES') {
+      if (res.error === 'IDIOMA_INCONSISTENTE') {
         this.serverIdioma.set(res.idioma ?? null);
         return;
       }

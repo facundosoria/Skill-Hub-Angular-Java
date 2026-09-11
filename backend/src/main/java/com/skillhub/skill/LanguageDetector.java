@@ -10,10 +10,12 @@ import java.util.regex.Pattern;
 /**
  * Puerto de src/server/skills/language.ts.
  *
- * Detector conservador de espanol. El catalogo va en ingles porque el indice
- * full-text stemea en ingles; un skill en espanol queda invisible para los
- * agentes. Solo marca con evidencia clara y nunca por una palabra suelta
- * ("Modal", "Toast", "Skeleton" son iguales en los dos idiomas).
+ * Detector conservador de espanol/ingles. El catalogo admite ambos idiomas
+ * (hay indice full-text para los dos, ver V17__skill_language.sql); lo que no
+ * se admite es que un mismo skill mezcle idiomas entre sus campos, porque eso
+ * degrada la lectura tanto para una persona como para un agente. Solo marca
+ * con evidencia clara y nunca por una palabra suelta ("Modal", "Toast",
+ * "Skeleton" son iguales en los dos idiomas).
  */
 public final class LanguageDetector {
 
@@ -79,19 +81,41 @@ public final class LanguageDetector {
         return out;
     }
 
-    /** Primer campo en espanol, con su evidencia, o null si esta todo bien. */
-    public record CampoEnEspanol(String campo, List<String> senales) {}
+    /**
+     * Idioma resuelto para el skill ("es"/"en") y si sus campos son
+     * consistentes entre si. `camposEnMinoria` lista los campos decididos que
+     * quedaron del lado minoritario: eso es lo unico que de verdad hay que
+     * bloquear, no el idioma en si.
+     */
+    public record Clasificacion(String idioma, boolean consistente, List<String> camposEnMinoria) {}
 
-    public static CampoEnEspanol revisarIdiomaSkill(String title, String description,
-                                                    String whenToUse, String content) {
-        // El orden importa: se reporta el primero, y conviene el mas corto de corregir.
-        String[][] orden = {
-                {"description", description}, {"whenToUse", whenToUse},
-                {"title", title}, {"content", content}};
-        for (String[] par : orden) {
-            Deteccion r = detectarEspanol(par[1]);
-            if (r.esEspanol()) return new CampoEnEspanol(par[0], r.senales());
+    public static Clasificacion clasificarIdiomaSkill(String title, String description,
+                                                       String whenToUse, String content) {
+        String[][] campos = {
+                {"title", title}, {"description", description},
+                {"whenToUse", whenToUse}, {"content", content}};
+
+        List<String[]> porCampo = new ArrayList<>(); // {campo, "es"|"en"|null si ambiguo}
+        List<String> decididos = new ArrayList<>();
+        for (String[] par : campos) {
+            String texto = par[1] == null ? "" : par[1].trim();
+            if (texto.length() < 12) {
+                porCampo.add(new String[]{par[0], null});
+                continue;
+            }
+            String idiomaCampo = detectarEspanol(texto).esEspanol() ? "es" : "en";
+            porCampo.add(new String[]{par[0], idiomaCampo});
+            decididos.add(idiomaCampo);
         }
-        return null;
+        if (decididos.isEmpty()) return new Clasificacion("en", true, List.of());
+
+        long esCount = decididos.stream().filter("es"::equals).count();
+        long enCount = decididos.size() - esCount;
+        String mayoria = esCount > enCount ? "es" : "en";
+        List<String> minoria = porCampo.stream()
+                .filter(c -> c[1] != null && !c[1].equals(mayoria))
+                .map(c -> c[0])
+                .toList();
+        return new Clasificacion(mayoria, minoria.isEmpty(), minoria);
     }
 }

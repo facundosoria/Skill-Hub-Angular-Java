@@ -84,13 +84,14 @@ public class DuplicatesRepository {
                    COALESCE(u.usos_90d, 0) AS usos_90d,
                    COALESCE(u.personas, 0) AS personas,
                    similarity(s.title, :title::text)::float AS por_titulo,
-                   (to_tsvector('english', s.search_text)
-                      @@ websearch_to_tsquery('english', :title::text)) AS por_texto,
+                   ((to_tsvector('english', s.search_text) @@ websearch_to_tsquery('english', :title::text))
+                     OR (to_tsvector('spanish', s.search_text) @@ websearch_to_tsquery('spanish', :title::text))
+                   ) AS por_texto,
                    %1$s AS por_tags,
                    GREATEST(
                      similarity(s.title, :title::text)::float,
-                     CASE WHEN to_tsvector('english', s.search_text)
-                               @@ websearch_to_tsquery('english', :title::text)
+                     CASE WHEN (to_tsvector('english', s.search_text) @@ websearch_to_tsquery('english', :title::text))
+                               OR (to_tsvector('spanish', s.search_text) @@ websearch_to_tsquery('spanish', :title::text))
                           THEN 0.45::float ELSE 0::float END,
                      %1$s
                    ) AS similarity

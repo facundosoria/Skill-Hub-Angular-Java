@@ -191,7 +191,7 @@ export const es = {
     temaLight: "Claro",
     temaDark: "Oscuro",
     idioma: "Idioma",
-    idiomaHint: "Cambia la interfaz. Los skills siguen en inglés: es lo que consultan los agentes.",
+    idiomaHint: "Cambia la interfaz. El contenido de los skills puede escribirse en inglés o en español, elegí uno por skill.",
     nombreCorto: "El nombre necesita al menos 2 caracteres",
   },
   audit: {
@@ -327,11 +327,10 @@ export const es = {
     diff: "Diff",
   },
   idioma: {
-    titulo: "El catálogo se escribe en inglés",
+    titulo: "Este skill mezcla idiomas",
     porQue:
-      "No es estilo: el índice de búsqueda stemea en inglés y los agentes consultan en inglés. Un skill en español queda prácticamente invisible para ellos, que son su único lector real.",
-    detectadoEn: "Detectado en",
-    senales: "Lo que lo delató:",
+      "El catálogo admite inglés o español, pero un mismo skill no puede mezclar los dos: eso lo hace más difícil de leer, tanto para una persona como para un agente. Escribí todos los campos en un solo idioma.",
+    camposEnMinoria: "Quedaron en el idioma minoritario:",
     campos: {
       title: "el título",
       description: "la descripción",

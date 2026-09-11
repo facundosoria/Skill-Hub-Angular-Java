@@ -101,9 +101,16 @@ export interface DuplicateCandidate {
   similarity: number;
 }
 
+/**
+ * Resultado de clasificar el idioma de un skill: el catálogo acepta inglés o
+ * español, pero no que un mismo skill mezcle campos de los dos.
+ * `camposEnMinoria` lista los campos que quedaron del lado minoritario cuando
+ * `consistente` es false — eso es lo único que bloquea.
+ */
 export interface LanguageFlag {
-  campo: string;
-  senales: string[];
+  idioma: 'es' | 'en';
+  consistente: boolean;
+  camposEnMinoria: string[];
 }
 
 /** Respuesta de POST/PUT /api/skills: exito o rechazo con detalle. */

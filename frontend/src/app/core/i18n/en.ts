@@ -195,7 +195,7 @@ export const en: Dict = {
     temaDark: "Dark",
     idioma: "Language",
     idiomaHint:
-      "Changes the interface. Skills stay in English: that is what the agents read.",
+      "Changes the interface. A skill's own content can be written in English or Spanish, one language per skill.",
     nombreCorto: "The name needs at least 2 characters",
   },
   audit: {
@@ -331,11 +331,10 @@ export const en: Dict = {
     diff: "Diff",
   },
   idioma: {
-    titulo: "The catalogue is written in English",
+    titulo: "This skill mixes languages",
     porQue:
-      "Not a style choice: the search index stems English and agents query in English. A skill in another language is effectively invisible to them, and they are its only real reader.",
-    detectadoEn: "Found in",
-    senales: "What gave it away:",
+      "The catalogue accepts English or Spanish, but one skill cannot mix the two: it makes it harder to read, for a person and for an agent alike. Write every field in a single language.",
+    camposEnMinoria: "These stayed in the minority language:",
     campos: {
       title: "the title",
       description: "the description",

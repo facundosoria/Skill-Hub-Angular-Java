@@ -82,11 +82,11 @@ public class SkillController {
 
     @PostMapping("/check-language")
     public JsonNode checkLanguage(@AuthPrincipal CurrentUser user, @RequestBody Map<String, String> body) {
-        var r = LanguageDetector.revisarIdiomaSkill(
+        var r = LanguageDetector.clasificarIdiomaSkill(
                 body.getOrDefault("title", ""), body.getOrDefault("description", ""),
                 body.getOrDefault("whenToUse", ""), body.getOrDefault("content", ""));
-        // null si esta en ingles, {campo, senales} si detecto espanol
-        return r == null ? json.nullNode() : json.valueToTree(r);
+        // idioma detectado + si los campos son consistentes entre si
+        return json.valueToTree(r);
     }
 
     // --- escrituras --------------------------------------------------
@@ -107,11 +107,10 @@ public class SkillController {
     public Map<String, Object> create(@AuthPrincipal CurrentUser user, @RequestBody SkillFormRequest body) {
         SkillInput input = body.toInput();
 
-        var idioma = LanguageDetector.revisarIdiomaSkill(
+        var idioma = LanguageDetector.clasificarIdiomaSkill(
                 input.title(), input.description(), input.whenToUse(), input.content());
-        if (idioma != null) {
-            return Map.of("error", "EN_SOLO_INGLES",
-                    "idioma", Map.of("campo", idioma.campo(), "senales", idioma.senales()));
+        if (!idioma.consistente()) {
+            return Map.of("error", "IDIOMA_INCONSISTENTE", "idioma", idioma);
         }
 
         // No bloquea, fricciona: si hay parecidos y no vino justificacion, se
@@ -132,11 +131,10 @@ public class SkillController {
     public Map<String, Object> update(@AuthPrincipal CurrentUser user, @PathVariable String slug,
                                       @RequestBody SkillFormRequest body) {
         SkillInput input = body.toInput();
-        var idioma = LanguageDetector.revisarIdiomaSkill(
+        var idioma = LanguageDetector.clasificarIdiomaSkill(
                 input.title(), input.description(), input.whenToUse(), input.content());
-        if (idioma != null) {
-            return Map.of("error", "EN_SOLO_INGLES",
-                    "idioma", Map.of("campo", idioma.campo(), "senales", idioma.senales()));
+        if (!idioma.consistente()) {
+            return Map.of("error", "IDIOMA_INCONSISTENTE", "idioma", idioma);
         }
         var r = write.updateSkill(slug, input, user.id(), user.isAdmin());
         return Map.of("version", r.version(), "pending", r.pending(), "slug", slug);

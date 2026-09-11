@@ -54,9 +54,9 @@ public class SkillWriteService {
 
         String skillId = jdbc.queryForObject("""
                 INSERT INTO skills (slug, title, description, when_to_use, stack, type, owner_team,
-                                    duplicate_justification, created_by, search_text)
+                                    duplicate_justification, created_by, search_text, language)
                 VALUES (:slug, :title, :description, :whenToUse, :stack::stack, :type::skill_type,
-                        :ownerTeam, :dupJust, :actorId::uuid, :searchText)
+                        :ownerTeam, :dupJust, :actorId::uuid, :searchText, :language)
                 RETURNING id::text
                 """, params(input).addValue("actorId", actorId).addValue("searchText", searchText),
                 String.class);
@@ -341,7 +341,7 @@ public class SkillWriteService {
                 UPDATE skills SET title = :title, description = :description, when_to_use = :whenToUse,
                        stack = :stack::stack, type = :type::skill_type, owner_team = :ownerTeam,
                        current_version_id = :vid::uuid, pending_version_id = NULL,
-                       updated_at = now(), search_text = :searchText
+                       updated_at = now(), search_text = :searchText, language = :language
                 WHERE id = :id::uuid
                 """, params(input)
                 .addValue("vid", versionId).addValue("id", skillId).addValue("searchText", searchText));
@@ -355,9 +355,9 @@ public class SkillWriteService {
             // version, asi que la stub no necesita current_version_id.
             jdbc.update("""
                     INSERT INTO skills (slug, title, description, when_to_use, stack, type, status,
-                                        owner_team, origin, superseded_by, search_text)
+                                        owner_team, origin, superseded_by, search_text, language)
                     SELECT :oldSlug, s.title, s.description, s.when_to_use, s.stack, s.type, 'deprecated',
-                           s.owner_team, s.origin, s.id, ''
+                           s.owner_team, s.origin, s.id, '', s.language
                     FROM skills s WHERE s.id = :id::uuid
                     """, new MapSqlParameterSource().addValue("oldSlug", oldSlug).addValue("id", skillId));
             Map<String, Object> meta = new LinkedHashMap<>();
@@ -368,6 +368,8 @@ public class SkillWriteService {
     }
 
     private MapSqlParameterSource params(SkillInput in) {
+        var clasificacion = LanguageDetector.clasificarIdiomaSkill(
+                in.title(), in.description(), in.whenToUse(), in.content());
         return new MapSqlParameterSource()
                 .addValue("slug", in.slug())
                 .addValue("title", in.title())
@@ -376,7 +378,8 @@ public class SkillWriteService {
                 .addValue("stack", in.stack())
                 .addValue("type", in.type() == null ? "skill" : in.type())
                 .addValue("ownerTeam", in.ownerTeam())
-                .addValue("dupJust", in.duplicateJustification());
+                .addValue("dupJust", in.duplicateJustification())
+                .addValue("language", clasificacion.idioma());
     }
 
     private void insertTags(String skillId, List<String> tags) {

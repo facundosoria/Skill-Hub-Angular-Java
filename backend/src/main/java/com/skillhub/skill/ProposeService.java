@@ -18,7 +18,8 @@ import java.util.Map;
  * revise.
  *
  * Tres guardas, ninguna opcional:
- *  0. el catalogo va en ingles (un skill en espanol es invisible para los agentes)
+ *  0. el skill tiene que quedar en un solo idioma (ingles o espanol), sin
+ *     mezclar campos: el catalogo indexa y busca en los dos (V17)
  *  1. si ya existe algo parecido con corroboracion, NO crea: devuelve lo que existe
  *  2. valida el mismo esquema que la web, topes de longitud incluidos
  *  3. queda registrado como origen agente, con la busqueda que lo disparo
@@ -37,17 +38,19 @@ public class ProposeService {
         this.jdbc = jdbc;
     }
 
-    /** motivo: null (ok) | "invalido" | "idioma" | "duplicado". */
+    /** motivo: null (ok) | "invalido" | "idioma_inconsistente" | "duplicado". */
     public record Result(
             boolean ok, String slug, String motivo,
             List<String> errores,
-            String campo, List<String> senales,
+            List<String> camposEnMinoria,
             List<Map<String, Object>> existentes) {
 
-        static Result ok(String slug) { return new Result(true, slug, null, null, null, null, null); }
-        static Result invalido(List<String> e) { return new Result(false, null, "invalido", e, null, null, null); }
-        static Result idioma(String campo, List<String> s) { return new Result(false, null, "idioma", null, campo, s, null); }
-        static Result duplicado(List<Map<String, Object>> ex) { return new Result(false, null, "duplicado", null, null, null, ex); }
+        static Result ok(String slug) { return new Result(true, slug, null, null, null, null); }
+        static Result invalido(List<String> e) { return new Result(false, null, "invalido", e, null, null); }
+        static Result idiomaInconsistente(List<String> campos) {
+            return new Result(false, null, "idioma_inconsistente", null, campos, null);
+        }
+        static Result duplicado(List<Map<String, Object>> ex) { return new Result(false, null, "duplicado", null, null, ex); }
     }
 
     @Transactional
@@ -64,10 +67,11 @@ public class ProposeService {
         List<String> errores = withSlug.validate();
         if (!errores.isEmpty()) return Result.invalido(errores);
 
-        // Guarda 0: idioma.
-        var idioma = LanguageDetector.revisarIdiomaSkill(
+        // Guarda 0: idioma. El catalogo admite ingles y espanol, pero no que un
+        // mismo skill mezcle campos de los dos.
+        var clasificacion = LanguageDetector.clasificarIdiomaSkill(
                 withSlug.title(), withSlug.description(), withSlug.whenToUse(), withSlug.content());
-        if (idioma != null) return Result.idioma(idioma.campo(), idioma.senales());
+        if (!clasificacion.consistente()) return Result.idiomaInconsistente(clasificacion.camposEnMinoria());
 
         // Guarda 1: solapamiento con algo que ya existe. Se mide sobre la
         // sustancia (title + when_to_use + arranque del cuerpo), no sobre tags.
@@ -100,9 +104,9 @@ public class ProposeService {
 
         String skillId = jdbc.queryForObject("""
                 INSERT INTO skills (slug, title, description, when_to_use, stack, type, status,
-                                    origin, proposed_from_query, owner_team, created_by, search_text)
+                                    origin, proposed_from_query, owner_team, created_by, search_text, language)
                 VALUES (:slug, :title, :description, :whenToUse, :stack::stack, :type::skill_type,
-                        'proposed', 'agent', :fromQuery, :ownerTeam, :actorId::uuid, :searchText)
+                        'proposed', 'agent', :fromQuery, :ownerTeam, :actorId::uuid, :searchText, :language)
                 RETURNING id::text
                 """, new MapSqlParameterSource()
                 .addValue("slug", slug)
@@ -114,7 +118,8 @@ public class ProposeService {
                 .addValue("fromQuery", cut(fromQuery, 300))
                 .addValue("ownerTeam", withSlug.ownerTeam())
                 .addValue("actorId", actorId)
-                .addValue("searchText", searchText), String.class);
+                .addValue("searchText", searchText)
+                .addValue("language", clasificacion.idioma()), String.class);
 
         String versionId = jdbc.queryForObject("""
                 INSERT INTO skill_versions (skill_id, version, content, preview, changelog, author_id)
