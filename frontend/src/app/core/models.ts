@@ -4,7 +4,7 @@ export type Role = 'admin' | 'member';
 export type Theme = 'system' | 'light' | 'dark';
 export type Locale = 'es' | 'en';
 export type Stack = 'angular' | 'java' | 'shared' | 'infra';
-export type SkillType = 'skill' | 'convention' | 'reference';
+export type SkillType = 'skill' | 'convention' | 'reference' | 'plugin' | 'contract';
 export type SkillStatus = 'draft' | 'proposed' | 'published' | 'deprecated';
 
 export interface User {
@@ -39,6 +39,14 @@ export interface SkillVersion {
   version: number;
   content: string;
   preview: string | null;
+  artifact: CatalogArtifact | null;
+}
+
+export interface CatalogArtifact {
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  sha256: string;
 }
 
 export interface Skill {

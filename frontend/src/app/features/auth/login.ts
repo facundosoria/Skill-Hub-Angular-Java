@@ -87,7 +87,7 @@ export class Login {
     try {
       if (this.mode() === 'login') {
         await this.auth.login(this.username, this.password);
-        this.router.navigate(['/skills']);
+        this.router.navigate(['/']);
       } else {
         const res = await this.auth.register({
           username: this.username,
@@ -95,7 +95,7 @@ export class Login {
           team: this.team,
           legajo: this.legajo || undefined,
         });
-        if (res.user) this.router.navigate(['/skills']);
+        if (res.user) this.router.navigate(['/']);
         else this.info.set(res.info ?? null);
       }
     } catch (e: unknown) {

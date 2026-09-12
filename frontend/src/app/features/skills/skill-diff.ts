@@ -4,6 +4,8 @@ import { diffLines } from 'diff';
 import { I18n } from '../../core/i18n/i18n';
 import { SkillService } from '../../core/skills';
 
+type CatalogSection = 'skills' | 'plugins' | 'contracts';
+
 /** `ci` = índice entre las líneas CAMBIADAS, para el barrido escalonado (decisión 13). */
 type DiffRow = { kind: 'add' | 'del' | 'same'; line: string; ci: number };
 
@@ -18,7 +20,7 @@ type DiffRow = { kind: 'add' | 'del' | 'same'; line: string; ci: number };
   selector: 'app-skill-diff',
   imports: [RouterLink],
   template: `
-    <a [routerLink]="['/skills', slug()]" class="text-[13px] text-text-muted hover:text-text">← {{ slug() }}</a>
+    <a [routerLink]="[basePath(), slug()]" class="text-[13px] text-text-muted hover:text-text">← {{ slug() }}</a>
 
     @if (data(); as d) {
       <h1 class="mt-4 text-2xl font-semibold tracking-tight">v{{ d.fromVersion }} → v{{ d.toVersion }}</h1>
@@ -54,6 +56,7 @@ type DiffRow = { kind: 'add' | 'del' | 'same'; line: string; ci: number };
 })
 export class SkillDiff {
   slug = input.required<string>();
+  section = input<CatalogSection>('skills');
   a = input<string | undefined>(undefined);
   b = input<string | undefined>(undefined);
 
@@ -67,6 +70,7 @@ export class SkillDiff {
 
   added = computed(() => this.rows().filter((r) => r.kind === 'add').length);
   removed = computed(() => this.rows().filter((r) => r.kind === 'del').length);
+  basePath = computed(() => this.section() === 'plugins' ? '/plugins' : this.section() === 'contracts' ? '/contracts' : '/skills');
 
   constructor() {
     effect(() => {
