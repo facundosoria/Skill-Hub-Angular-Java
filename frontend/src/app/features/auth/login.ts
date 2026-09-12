@@ -17,6 +17,10 @@ function scrambleText(
     onUpdate(targetText);
     return () => {};
   }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    onUpdate(targetText);
+    return () => {};
+  }
   const chars = '!<>-_/[]{}—=+*^?#________';
   const length = Math.max(currentText.length, targetText.length);
   const startTime = performance.now();
@@ -120,6 +124,40 @@ function scrambleText(
   `,
   template: `
     <main class="relative mx-auto flex min-h-dvh max-w-5xl flex-col justify-center px-4 py-10 sm:px-6 lg:px-8">
+      <!-- Selector de idioma -->
+      <aside
+        class="absolute top-4 right-4 sm:top-6 sm:right-6 lg:right-8 z-20 flex items-center gap-1 rounded-full border border-border bg-surface-2/80 p-1 text-xs backdrop-blur"
+        role="group"
+        [attr.aria-label]="t().login.cambiarIdioma"
+      >
+        <button
+          type="button"
+          (click)="setLocale('es')"
+          class="cursor-pointer rounded-full px-2.5 py-1 font-mono transition-colors"
+          [class.bg-surface]="currentLocale() === 'es'"
+          [class.text-text]="currentLocale() === 'es'"
+          [class.text-text-muted]="currentLocale() !== 'es'"
+          [class.shadow-xs]="currentLocale() === 'es'"
+          [attr.aria-pressed]="currentLocale() === 'es'"
+          aria-label="Español"
+        >
+          ES
+        </button>
+        <button
+          type="button"
+          (click)="setLocale('en')"
+          class="cursor-pointer rounded-full px-2.5 py-1 font-mono transition-colors"
+          [class.bg-surface]="currentLocale() === 'en'"
+          [class.text-text]="currentLocale() === 'en'"
+          [class.text-text-muted]="currentLocale() !== 'en'"
+          [class.shadow-xs]="currentLocale() === 'en'"
+          [attr.aria-pressed]="currentLocale() === 'en'"
+          aria-label="English"
+        >
+          EN
+        </button>
+      </aside>
+
       <!-- Halo de acento sutil en el fondo -->
       <div
         class="pointer-events-none absolute -top-32 left-1/3 -z-10 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-accent/10 blur-3xl"
@@ -134,7 +172,7 @@ function scrambleText(
               <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75"></span>
               <span class="relative inline-flex h-2 w-2 rounded-full bg-accent"></span>
             </span>
-            <span>SYSTEM CONTEXT · v2.0</span>
+            <span>{{ t().login.contextoSistema }}</span>
           </div>
 
           <div class="space-y-1.5">
@@ -319,6 +357,7 @@ export class Login {
   @ViewChild('accessGrantedRef') accessGrantedRef?: ElementRef<HTMLElement>;
 
   mode = signal<'login' | 'register'>('login');
+  currentLocale = this.i18n.locale;
   displayTitle = signal(this.t().login.entrar);
   displaySubmit = signal(this.t().login.entrar);
 
@@ -470,6 +509,26 @@ export class Login {
     this.setMode(this.mode() === 'login' ? 'register' : 'login');
   }
 
+  setLocale(locale: 'es' | 'en'): void {
+    if (this.currentLocale() === locale) return;
+    this.i18n.setLocale(locale);
+
+    const targetTitle = this.mode() === 'register' ? this.t().login.crearCuenta : this.t().login.entrar;
+    if (this.titleScrambleCleanup) this.titleScrambleCleanup();
+    if (this.btnScrambleCleanup) this.btnScrambleCleanup();
+
+    this.titleScrambleCleanup = scrambleText(
+      this.displayTitle(),
+      targetTitle,
+      val => this.displayTitle.set(val),
+    );
+    this.btnScrambleCleanup = scrambleText(
+      this.displaySubmit(),
+      targetTitle,
+      val => this.displaySubmit.set(val),
+    );
+  }
+
   async submit(): Promise<void> {
     this.pending.set(true);
     this.error.set(null);
@@ -502,7 +561,7 @@ export class Login {
       }
     } catch (e: unknown) {
       this.resetProgress();
-      this.error.set(apiError(e));
+      this.error.set(apiError(e, this.t().login.errorGenerico));
       this.triggerShake();
     } finally {
       this.pending.set(false);
@@ -521,7 +580,10 @@ export class Login {
 
     if (!content || !card || !overlay || !message) return;
 
-    this.successAnnouncement.set('Access granted');
+    const accessGranted = this.t().login.accesoConcedido;
+    const welcome = this.t().login.bienvenido;
+
+    this.successAnnouncement.set(accessGranted);
     gsap.set(overlay, { autoAlpha: 0 });
     this.successScrambleCleanup?.();
     this.accessGrantedText.set('');
@@ -530,7 +592,7 @@ export class Login {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       gsap.set(content, { autoAlpha: 0 });
       gsap.set(overlay, { autoAlpha: 1 });
-      this.accessGrantedText.set(`WELCOME ${displayName}`);
+      this.accessGrantedText.set(`${welcome} ${displayName}`);
       gsap.set(message, { autoAlpha: 1 });
       await new Promise(resolve => setTimeout(resolve, 900));
       return;
@@ -548,7 +610,7 @@ export class Login {
       .call(() => {
         this.successScrambleCleanup = scrambleText(
           '',
-          'ACCESS GRANTED',
+          accessGranted,
           value => this.accessGrantedText.set(value),
           0.72,
         );
@@ -557,7 +619,7 @@ export class Login {
       .to({}, { duration: 0.35 })
       .call(() => {
         this.successScrambleCleanup = scrambleText(
-          'ACCESS GRANTED',
+          accessGranted,
           '',
           value => this.accessGrantedText.set(value),
           0.28,
@@ -567,7 +629,7 @@ export class Login {
       .call(() => {
         this.successScrambleCleanup = scrambleText(
           '',
-          `WELCOME ${displayName}`,
+          `${welcome} ${displayName}`,
           value => this.accessGrantedText.set(value),
           0.72,
         );
@@ -604,7 +666,7 @@ export class Login {
 }
 
 /** El backend manda { error } con 4xx; HttpClient lo envuelve en HttpErrorResponse. */
-export function apiError(e: unknown): string {
+export function apiError(e: unknown, fallback = 'Algo salio mal'): string {
   const err = e as { error?: { error?: string }; message?: string };
-  return err?.error?.error ?? err?.message ?? 'Algo salio mal';
+  return err?.error?.error ?? err?.message ?? fallback;
 }

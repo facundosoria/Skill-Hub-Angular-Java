@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  effect,
   ElementRef,
   inject,
 } from '@angular/core';
@@ -11,6 +12,7 @@ import gsap from 'gsap';
 import { Flip } from 'gsap/Flip';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import * as THREE from 'three';
+import { I18n } from '../../../core/i18n/i18n';
 
 gsap.registerPlugin(Flip, ScrollTrigger);
 
@@ -24,6 +26,8 @@ gsap.registerPlugin(Flip, ScrollTrigger);
 export class Landing {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly i18n = inject(I18n);
+  t = this.i18n.t;
   private media?: gsap.MatchMedia;
   private scrollContext?: gsap.Context;
   private renderer?: THREE.WebGLRenderer;
@@ -34,6 +38,10 @@ export class Landing {
 
   constructor() {
     afterNextRender(() => this.initializeMotion());
+    effect(() => {
+      this.i18n.locale();
+      ScrollTrigger.refresh();
+    });
     this.destroyRef.onDestroy(() => this.disposeMotion());
   }
 

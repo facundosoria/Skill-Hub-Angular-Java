@@ -1,82 +1,80 @@
 <main class="landing" aria-labelledby="landing-title">
   <section class="landing__hero">
     <div class="landing__hero-copy">
-      <p class="landing__eyebrow">Skill Hub / conocimiento operativo</p>
-      <h1 id="landing-title">Una forma de construir, para todos los equipos.</h1>
+      <p class="landing__eyebrow">{{ t().landing.eyebrowHero }}</p>
+      <h1 id="landing-title">{{ t().landing.tituloHero }}</h1>
       <p class="landing__lede">
-        Reuní skills, plugins y contratos en un catálogo vivo para que las personas y los
-        agentes trabajen con el mismo contexto.
+        {{ t().landing.ledeHero }}
       </p>
-      <div class="landing__actions" aria-label="Acciones principales">
-        <a routerLink="/skills" class="landing__action landing__action--primary">Explorar el catálogo</a>
-        <a routerLink="/docs" class="landing__action landing__action--secondary">Cómo usar Skill Hub</a>
+      <div class="landing__actions" [attr.aria-label]="t().landing.accionesPrincipales">
+        <a routerLink="/skills" class="landing__action landing__action--primary">{{ t().landing.explorar }}</a>
+        <a routerLink="/docs" class="landing__action landing__action--secondary">{{ t().landing.comoUsar }}</a>
       </div>
     </div>
 
-    <p class="landing__scroll-cue" aria-hidden="true">Desplazate para seguir el sistema <span>↓</span></p>
+    <p class="landing__scroll-cue" aria-hidden="true">{{ t().landing.scrollCue }} <span>↓</span></p>
     <div data-waypoint class="landing__waypoint landing__waypoint--hero" aria-hidden="true"></div>
   </section>
 
   <canvas data-landing-canvas class="landing__canvas" aria-hidden="true"></canvas>
 
   <section class="landing__chapter landing__chapter--problem">
-    <div data-waypoint class="landing__waypoint landing__waypoint--catalog">catálogo</div>
+    <div data-waypoint class="landing__waypoint landing__waypoint--catalog">{{ t().landing.waypointCatalogo }}</div>
     <div class="landing__chapter-copy" data-reveal>
-      <p class="landing__eyebrow">El problema</p>
-      <h2>Doce equipos pueden crear doce dialectos.</h2>
+      <p class="landing__eyebrow">{{ t().landing.problemaEyebrow }}</p>
+      <h2>{{ t().landing.problemaTitulo }}</h2>
       <p>
-        Decisiones que viven en conversaciones, repositorios y memoria individual hacen que cada
-        nuevo proyecto empiece buscando las mismas respuestas.
+        {{ t().landing.problemaTexto }}
       </p>
     </div>
     <blockquote class="landing__quote" data-reveal>
-      <p>“Lo que ya aprendimos debería estar disponible antes de volver a resolverlo.”</p>
+      <p>{{ t().landing.problemaCita }}</p>
     </blockquote>
   </section>
 
   <section class="landing__chapter landing__chapter--catalog">
-    <div data-waypoint class="landing__waypoint landing__waypoint--mcp">mcp</div>
+    <div data-waypoint class="landing__waypoint landing__waypoint--mcp">{{ t().landing.waypointMcp }}</div>
     <div class="landing__split" data-reveal>
       <div>
-        <p class="landing__eyebrow">Una fuente, dos formas de usarla</p>
-        <h2>El contexto correcto, cuando hace falta.</h2>
+        <p class="landing__eyebrow">{{ t().landing.fuenteEyebrow }}</p>
+        <h2>{{ t().landing.fuenteTitulo }}</h2>
       </div>
       <div class="landing__faces">
         <article>
-          <span>01</span>
-          <h3>Para personas</h3>
-          <p>Descubrí, leé y proponé conocimiento reutilizable desde un catálogo claro.</p>
+          <span>{{ t().landing.paraPersonasNumero }}</span>
+          <h3>{{ t().landing.paraPersonasTitulo }}</h3>
+          <p>{{ t().landing.paraPersonasTexto }}</p>
         </article>
         <article>
-          <span>02</span>
-          <h3>Para agentes</h3>
-          <p>Consultá la misma base a través de MCP, con una API key de alcance controlado.</p>
+          <span>{{ t().landing.paraAgentesNumero }}</span>
+          <h3>{{ t().landing.paraAgentesTitulo }}</h3>
+          <p>{{ t().landing.paraAgentesTexto }}</p>
         </article>
       </div>
     </div>
   </section>
 
   <section class="landing__chapter landing__chapter--inventory">
-    <div data-waypoint class="landing__waypoint landing__waypoint--review">revisión</div>
+    <div data-waypoint class="landing__waypoint landing__waypoint--review">{{ t().landing.waypointRevision }}</div>
     <div class="landing__chapter-copy" data-reveal>
-      <p class="landing__eyebrow">Qué encontrás</p>
-      <h2>Las piezas que hacen repetible el trabajo.</h2>
+      <p class="landing__eyebrow">{{ t().landing.inventarioEyebrow }}</p>
+      <h2>{{ t().landing.inventarioTitulo }}</h2>
     </div>
     <div class="landing__inventory" data-reveal>
       <article>
-        <span class="landing__index">01</span>
-        <h3>Skills y convenciones</h3>
-        <p>Instrucciones, criterios y referencias para resolver tareas con una práctica compartida.</p>
+        <span class="landing__index">{{ t().landing.skillsNumero }}</span>
+        <h3>{{ t().landing.skillsTitulo }}</h3>
+        <p>{{ t().landing.skillsTexto }}</p>
       </article>
       <article>
-        <span class="landing__index">02</span>
-        <h3>Plugins y paquetes</h3>
-        <p>Artefactos listos para adoptar, con sus archivos, versión y contexto de uso.</p>
+        <span class="landing__index">{{ t().landing.pluginsNumero }}</span>
+        <h3>{{ t().landing.pluginsTitulo }}</h3>
+        <p>{{ t().landing.pluginsTexto }}</p>
       </article>
       <article>
-        <span class="landing__index">03</span>
-        <h3>Contratos y referencias</h3>
-        <p>Acuerdos técnicos que reducen ambigüedad entre servicios, equipos y automatizaciones.</p>
+        <span class="landing__index">{{ t().landing.contratosNumero }}</span>
+        <h3>{{ t().landing.contratosTitulo }}</h3>
+        <p>{{ t().landing.contratosTexto }}</p>
       </article>
     </div>
   </section>
@@ -85,13 +83,13 @@
     <div data-waypoint class="landing__waypoint landing__waypoint--flow" aria-hidden="true"></div>
     <div class="landing__flow" data-reveal>
       <div>
-        <p class="landing__eyebrow">Del catálogo a la ejecución</p>
-        <h2>Conectar un agente no abre una puerta sin control.</h2>
+        <p class="landing__eyebrow">{{ t().landing.flujoEyebrow }}</p>
+        <h2>{{ t().landing.flujoTitulo }}</h2>
       </div>
       <ol>
-        <li><span>1</span><p>Creá una API key desde tu perfil.</p></li>
-        <li><span>2</span><p>Configurala en tu cliente MCP.</p></li>
-        <li><span>3</span><p>El agente consulta sólo el conocimiento publicado y autorizado.</p></li>
+        <li><span>1</span><p>{{ t().landing.flujoPaso1 }}</p></li>
+        <li><span>2</span><p>{{ t().landing.flujoPaso2 }}</p></li>
+        <li><span>3</span><p>{{ t().landing.flujoPaso3 }}</p></li>
       </ol>
     </div>
   </section>
@@ -99,18 +97,18 @@
   <section class="landing__chapter landing__chapter--governance">
     <div data-waypoint class="landing__waypoint landing__waypoint--governance" aria-hidden="true"></div>
     <div class="landing__governance" data-reveal>
-      <p class="landing__eyebrow">Gobernanza sin fricción</p>
-      <h2>Compartir no significa perder el control.</h2>
+      <p class="landing__eyebrow">{{ t().landing.gobernanzaEyebrow }}</p>
+      <h2>{{ t().landing.gobernanzaTitulo }}</h2>
       <div>
-        <p><strong>Proponé</strong> una mejora desde el catálogo.</p>
-        <p><strong>Versioná</strong> cada cambio para conservar el contexto.</p>
-        <p><strong>Revisá y auditá</strong> antes de que llegue a toda la organización.</p>
+        <p><strong>{{ t().landing.gobernanzaProponeStrong }}</strong> {{ t().landing.gobernanzaProponeTexto }}</p>
+        <p><strong>{{ t().landing.gobernanzaVersionaStrong }}</strong> {{ t().landing.gobernanzaVersionaTexto }}</p>
+        <p><strong>{{ t().landing.gobernanzaRevisaStrong }}</strong> {{ t().landing.gobernanzaRevisaTexto }}</p>
       </div>
     </div>
   </section>
 
   <footer class="landing__footer">
-    <span>Skill Hub</span>
-    <span>Conocimiento compartido, ejecución consistente.</span>
+    <span>{{ t().landing.footerMarca }}</span>
+    <span>{{ t().landing.footerSlogan }}</span>
   </footer>
 </main>
