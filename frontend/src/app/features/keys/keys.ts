@@ -94,7 +94,7 @@ async function copyToClipboard(value: string): Promise<boolean> {
         >
         <button
           type="button"
-          class="absolute top-1/2 -translate-y-1/2 right-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border border-border-strong bg-surface text-text shadow-[var(--shadow-sm)] transition-[background-color,border-color,color,transform,box-shadow,filter] duration-[var(--dur)] ease-[var(--ease)] hover:-translate-y-px hover:border-text-faint hover:bg-surface-2 focus-visible:shadow-[var(--ring)] focus-visible:outline-none active:scale-[0.98] active:translate-y-0 cursor-pointer"
+          class="absolute top-1/2 -translate-y-1/2 right-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--radius)] border border-border-strong bg-surface text-text shadow-[var(--shadow-sm)] transition-[background-color,border-color,color,transform,box-shadow,filter] duration-[var(--dur)] ease-[var(--ease)] hover:translate-y-[calc(-50%-1px)] hover:border-text-faint hover:bg-surface-2 focus-visible:shadow-[var(--ring)] focus-visible:outline-none active:scale-[0.98] cursor-pointer"
           (click)="copy()"
           [attr.aria-label]="copied() ? t().keys.copiado : t().keys.copiar"
           [attr.title]="copied() ? t().keys.copiado : t().keys.copiar"
