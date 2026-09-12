@@ -25,17 +25,11 @@ public class CatalogArtifactService {
         this.jdbc = jdbc;
     }
 
-    public void attachUploaded(String versionId, MultipartFile file, String actorId) {
-        if (file == null || file.isEmpty()) throw new DomainException("Debe adjuntar un archivo no vacio");
-        if (file.getSize() > MAX_BYTES) throw new DomainException("El archivo supera el limite de 25 MB");
+    public void attachBytes(String versionId, String fileName, String contentType, byte[] content, String actorId) {
+        if (content == null || content.length == 0) throw new DomainException("Debe adjuntar un archivo no vacio");
+        if (content.length > MAX_BYTES) throw new DomainException("El archivo supera el limite de 25 MB");
 
-        String name = safeName(file.getOriginalFilename());
-        byte[] content;
-        try {
-            content = file.getBytes();
-        } catch (IOException e) {
-            throw new DomainException("No se pudo leer el archivo adjunto");
-        }
+        String name = safeName(fileName);
         String hash = sha256(content);
         String blobId = jdbc.query("""
                 INSERT INTO catalog_file_blobs (sha256, content, size_bytes)
@@ -45,7 +39,39 @@ public class CatalogArtifactService {
                 """, new MapSqlParameterSource()
                 .addValue("hash", hash).addValue("content", content).addValue("size", content.length),
                 rs -> rs.next() ? rs.getString(1) : null);
-        link(versionId, blobId, name, contentType(file.getContentType()), actorId);
+        link(versionId, blobId, name, contentType(contentType), actorId);
+    }
+
+    public void attachUploaded(String versionId, MultipartFile file, String actorId) {
+        if (file == null || file.isEmpty()) throw new DomainException("Debe adjuntar un archivo no vacio");
+        if (file.getSize() > MAX_BYTES) throw new DomainException("El archivo supera el limite de 25 MB");
+
+        byte[] content;
+        try {
+            content = file.getBytes();
+        } catch (IOException e) {
+            throw new DomainException("No se pudo leer el archivo adjunto");
+        }
+        attachBytes(versionId, file.getOriginalFilename(), file.getContentType(), content, actorId);
+    }
+
+    public void ensureDefaultArtifact(String versionId, String slug, String type, String content, String actorId) {
+        if (hasArtifact(versionId)) return;
+        String ext = "contract".equals(type) ? "-contract.json" : "-plugin.json";
+        String fileName = slug + ext;
+        java.util.Map<String, Object> manifest = new java.util.LinkedHashMap<>();
+        manifest.put("name", slug);
+        manifest.put("type", type);
+        manifest.put("description", "Automated package manifest generated for " + slug);
+        manifest.put("content", content);
+        byte[] bytes;
+        try {
+            bytes = new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writerWithDefaultPrettyPrinter().writeValueAsBytes(manifest);
+        } catch (Exception e) {
+            bytes = ("{\"name\":\"" + slug + "\"}").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        }
+        attachBytes(versionId, fileName, "application/json", bytes, actorId);
     }
 
     public void copyFromVersion(String sourceVersionId, String targetVersionId, String actorId) {

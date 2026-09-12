@@ -53,10 +53,6 @@ public class SkillWriteService {
     public String createSkill(SkillInput input, String actorId, MultipartFile artifact) {
         List<String> errs = input.validate();
         if (!errs.isEmpty()) throw new DomainException(String.join("; ", errs));
-        if (requiresArtifact(input.type()) && artifact == null) {
-            throw new DomainException("Los plugins y contratos requieren un archivo adjunto");
-        }
-
         Integer exists = jdbc.query("SELECT 1 FROM skills WHERE slug = :slug LIMIT 1",
                 new MapSqlParameterSource("slug", input.slug()), rs -> rs.next() ? 1 : null);
         if (exists != null) throw new DomainException("Ya existe un skill con el slug \"" + input.slug() + "\"");
@@ -86,7 +82,11 @@ public class SkillWriteService {
 
         jdbc.update("UPDATE skills SET current_version_id = :vid::uuid WHERE id = :id::uuid",
                 new MapSqlParameterSource().addValue("vid", versionId).addValue("id", skillId));
-        if (artifact != null) artifacts.attachUploaded(versionId, artifact, actorId);
+        if (artifact != null) {
+            artifacts.attachUploaded(versionId, artifact, actorId);
+        } else if (requiresArtifact(input.type())) {
+            artifacts.ensureDefaultArtifact(versionId, input.slug(), input.type(), input.content(), actorId);
+        }
         insertTags(skillId, input.tags());
 
         audit.logAudit(actorId, "skill.created", "skill", skillId,
@@ -197,6 +197,12 @@ public class SkillWriteService {
     @Transactional
     public RevisionResult proposeRevision(String slug, int baseVersion, SkillInput proposed,
                                           String actorId, String rationale) {
+        return proposeRevision(slug, baseVersion, proposed, actorId, rationale, null, null, null);
+    }
+
+    public RevisionResult proposeRevision(String slug, int baseVersion, SkillInput proposed,
+                                          String actorId, String rationale,
+                                          byte[] fileBytes, String fileName, String fileContentType) {
         Map<String, Object> skill;
         try {
             skill = skillRow(slug);
@@ -268,6 +274,14 @@ public class SkillWriteService {
         jdbc.update("UPDATE skills SET pending_version_id = :vid::uuid WHERE id = :id::uuid",
                 new MapSqlParameterSource().addValue("vid", versionId).addValue("id", skillId));
 
+        if (fileBytes != null && fileBytes.length > 0) {
+            artifacts.attachBytes(versionId, fileName, fileContentType, fileBytes, actorId);
+        } else if (currentVersionId != null) {
+            artifacts.copyFromVersion(currentVersionId, versionId, actorId);
+        } else if (requiresArtifact(proposed.type())) {
+            artifacts.ensureDefaultArtifact(versionId, slug, proposed.type(), proposed.content(), actorId);
+        }
+
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("slug", slug);
         meta.put("version", version);
@@ -285,8 +299,12 @@ public class SkillWriteService {
     public void publishSkill(String slug, String actorId) {
         Map<String, Object> skill = skillRow(slug);
         String id = (String) skill.get("id");
-        if (requiresArtifact((String) skill.get("type")) && !artifacts.hasArtifact((String) skill.get("current_version_id"))) {
-            throw new DomainException("Los plugins y contratos requieren un archivo adjunto antes de publicarse");
+        String type = (String) skill.get("type");
+        String versionId = (String) skill.get("current_version_id");
+        if (requiresArtifact(type) && !artifacts.hasArtifact(versionId)) {
+            String content = jdbc.query("SELECT content FROM skill_versions WHERE id = :vid::uuid",
+                    new MapSqlParameterSource("vid", versionId), rs -> rs.next() ? rs.getString(1) : "");
+            artifacts.ensureDefaultArtifact(versionId, slug, type, content, actorId);
         }
         jdbc.update("UPDATE skills SET status = 'published', updated_at = now() WHERE id = :id::uuid",
                 new MapSqlParameterSource("id", id));

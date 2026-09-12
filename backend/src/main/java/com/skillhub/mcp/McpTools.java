@@ -141,7 +141,11 @@ public class McpTools {
         "slug":{"type":"string","description":"Derived from the title if omitted"},\
         "owning_team":{"type":"string","maxLength":80,"description":"Team that owns this convention. Defaults to your team; set it explicitly for a shared convention that is not really yours"},\
         "from_query":{"type":"string","description":"The search that returned nothing"},\
-        "rationale":{"type":"string","minLength":10,"description":"What you based the rule on. Be honest; an admin reads this"}},\
+        "rationale":{"type":"string","minLength":10,"description":"What you based the rule on. Be honest; an admin reads this"},\
+        "file_name":{"type":"string","description":"Optional filename for plugin or contract packages (e.g. 'plugin.zip', 'schema.json')"},\
+        "file_content_base64":{"type":"string","description":"Base64-encoded binary content for package or zip attachments"},\
+        "file_text":{"type":"string","description":"Plaintext or JSON string alternative to base64 for contracts/manifests"},\
+        "file_content_type":{"type":"string","description":"MIME type for the attached file"}},\
         "required":["title","description","when_to_use","stack","content","from_query","rationale"],\
         "additionalProperties":false}""").formatted(STACK_ENUM, TYPE_ENUM);
 
@@ -158,7 +162,11 @@ public class McpTools {
         "tags":{"type":"array","maxItems":12,"items":{"type":"string"},"description":"Only if they change; replaces the whole set"},\
         "owning_team":{"type":"string","maxLength":80,"description":"Only if it changes; e.g. hand a shared convention that was auto-assigned to your team over to another team"},\
         "stack":{"type":"string","enum":%s,"description":"Only if it changes"},\
-        "type":{"type":"string","enum":%s,"description":"Only if it changes"}},\
+        "type":{"type":"string","enum":%s,"description":"Only if it changes"},\
+        "file_name":{"type":"string","description":"Optional filename for new or updated package artifact (e.g. 'plugin.zip')"},\
+        "file_content_base64":{"type":"string","description":"Base64-encoded binary content for new or updated package artifact"},\
+        "file_text":{"type":"string","description":"Plaintext or JSON string alternative to base64 for contracts/manifests"},\
+        "file_content_type":{"type":"string","description":"MIME type for the attached file"}},\
         "required":["slug","base_version","content","rationale"],\
         "additionalProperties":false}""").formatted(STACK_ENUM, TYPE_ENUM);
 
@@ -510,12 +518,27 @@ public class McpTools {
 
         SkillInput input = new SkillInput(slug, title, description, whenToUse, stack, type,
                 owningTeam, tags, content, null, null);
-        ProposeService.Result res = propose.proposeSkill(input, identity.userId(), fromQuery, rationale);
+
+        ParsedAttachment att;
+        try {
+            att = parseAttachment(args, slug != null ? slug : SkillInput.slugify(title), type);
+        } catch (IllegalArgumentException e) {
+            ObjectNode out = json.createObjectNode();
+            out.put("status", "rejected");
+            out.put("reason", e.getMessage());
+            return out;
+        }
+
+        ProposeService.FileAttachment fileAttachment = att != null
+                ? new ProposeService.FileAttachment(att.fileName(), att.contentType(), att.bytes())
+                : null;
+        ProposeService.Result res = propose.proposeSkill(input, identity.userId(), fromQuery, rationale, fileAttachment);
 
         ObjectNode out = json.createObjectNode();
         if (res.ok()) {
             out.put("status", "proposed");
             out.put("slug", res.slug());
+            if (att != null) out.put("artifact", att.fileName());
             out.put("note", "Saved as a provisional convention and already visible to other agents, "
                     + "so the team converges on one answer instead of improvising separately. An "
                     + "admin will review it. Tell the user you created it and that it has not been "
@@ -665,13 +688,26 @@ public class McpTools {
             return out;
         }
 
+        ParsedAttachment att;
+        try {
+            att = parseAttachment(args, targetSlug, type);
+        } catch (IllegalArgumentException e) {
+            out.put("status", "rejected");
+            out.put("reason", e.getMessage());
+            return out;
+        }
+
         SkillWriteService.RevisionResult res =
-                write.proposeRevision(slug, baseVersion, merged, identity.userId(), rationale);
+                write.proposeRevision(slug, baseVersion, merged, identity.userId(), rationale,
+                        att != null ? att.bytes() : null,
+                        att != null ? att.fileName() : null,
+                        att != null ? att.contentType() : null);
         if (res.ok()) {
             out.put("status", "revision_proposed");
             out.put("slug", slug);
             out.put("base_version", baseVersion);
             out.put("pending_version", res.newVersion());
+            if (att != null) out.put("artifact", att.fileName());
             if (renaming) out.put("renamed_to", targetSlug);
             if (res.replaced()) out.put("replaced_pending", true);
             out.put("note", (res.replaced()
@@ -713,6 +749,41 @@ public class McpTools {
     }
 
     // --- helpers --------------------------------------------
+
+    private record ParsedAttachment(String fileName, String contentType, byte[] bytes) {}
+
+    private ParsedAttachment parseAttachment(JsonNode args, String fallbackSlug, String type) {
+        byte[] bytes = null;
+        String fileName = args.hasNonNull("file_name") ? args.get("file_name").asText().trim() : null;
+        String contentType = args.hasNonNull("file_content_type") ? args.get("file_content_type").asText().trim() : null;
+
+        if (args.hasNonNull("file_content_base64") && !args.get("file_content_base64").asText().isBlank()) {
+            try {
+                bytes = java.util.Base64.getDecoder().decode(args.get("file_content_base64").asText().trim());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("file_content_base64 is not valid base64");
+            }
+        } else if (args.hasNonNull("file_text") && !args.get("file_text").asText().isBlank()) {
+            bytes = args.get("file_text").asText().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            if (contentType == null) contentType = "text/plain";
+        }
+
+        if (bytes != null) {
+            if (fileName == null || fileName.isBlank()) {
+                String ext = "plugin".equals(type) ? ".zip" : "contract".equals(type) ? ".json" : ".bin";
+                fileName = (fallbackSlug != null && !fallbackSlug.isBlank() ? fallbackSlug : "package") + ext;
+            }
+            if (contentType == null || contentType.isBlank()) {
+                if (fileName.endsWith(".zip")) contentType = "application/zip";
+                else if (fileName.endsWith(".tar.gz") || fileName.endsWith(".tgz")) contentType = "application/gzip";
+                else if (fileName.endsWith(".json")) contentType = "application/json";
+                else if (fileName.endsWith(".yaml") || fileName.endsWith(".yml")) contentType = "application/yaml";
+                else contentType = "application/octet-stream";
+            }
+            return new ParsedAttachment(fileName, contentType, bytes);
+        }
+        return null;
+    }
 
     private ArrayNode toArray(List<String> values) {
         ArrayNode a = json.createArrayNode();

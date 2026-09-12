@@ -462,6 +462,70 @@ class McpIntegrationTest {
         assertThat(r.toString()).contains(String.valueOf(largo.length())).contains("200");
     }
 
+    @Test
+    void proposePluginConArchivoBase64YAprobar() {
+        String slug = "zz-test-agent-plugin";
+        jdbc.update("DELETE FROM skills WHERE slug = ?", slug);
+
+        byte[] fakeZip = "PK\3\4fake-plugin-zip-contents".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        String b64 = Base64.getEncoder().encodeToString(fakeZip);
+
+        var creada = tool("propose_skill", java.util.Map.of(
+                "title", "Zz Test Agent Plugin",
+                "description", "A test plugin proposed by an agent with binary artifact attached.",
+                "when_to_use", "Use when testing agent plugins with binary payloads.",
+                "stack", "shared",
+                "type", "plugin",
+                "content", "## Rule\n\nPlugins must include executable packages attached by the agent.",
+                "from_query", "zz test agent plugin attachment",
+                "rationale", "Testing agent file uploading automation.",
+                "file_name", "test-plugin.zip",
+                "file_content_base64", b64
+        ));
+
+        assertThat(creada.path("status").asText()).isEqualTo("proposed");
+        assertThat(creada.path("slug").asText()).isEqualTo(slug);
+        assertThat(creada.path("artifact").asText()).isEqualTo("test-plugin.zip");
+
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'zz-mcp-admin'", String.class);
+        write.publishSkill(slug, adminId);
+
+        var publicado = jdbc.queryForMap("SELECT status::text FROM skills WHERE slug = ?", slug);
+        assertThat(publicado.get("status")).isEqualTo("published");
+
+        jdbc.update("DELETE FROM skills WHERE slug = ?", slug);
+    }
+
+    @Test
+    void proposePluginSinArchivoAutoGeneraManifestYAprueba() {
+        String slug = "zz-test-plugin-no-file";
+        jdbc.update("DELETE FROM skills WHERE slug = ?", slug);
+
+        var creada = tool("propose_skill", java.util.Map.of(
+                "title", "Zz Test Plugin No File",
+                "description", "A test plugin proposed by an agent without file payload.",
+                "when_to_use", "Use when testing agent plugin auto-generated manifest.",
+                "stack", "shared",
+                "type", "plugin",
+                "content", "## Rule\n\nPlugins without file must auto-generate a manifest.",
+                "from_query", "zz test agent plugin no file",
+                "rationale", "Testing fallback manifest generation."
+        ));
+
+        assertThat(creada.path("status").asText()).isEqualTo("proposed");
+        assertThat(creada.path("slug").asText()).isEqualTo(slug);
+
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'zz-mcp-admin'", String.class);
+        write.publishSkill(slug, adminId);
+
+        var publicado = jdbc.queryForMap("SELECT status::text FROM skills WHERE slug = ?", slug);
+        assertThat(publicado.get("status")).isEqualTo("published");
+
+        jdbc.update("DELETE FROM skills WHERE slug = ?", slug);
+    }
+
     // --- dedup: no rechazar por vocabulario compartido (bug A) --------
 
     static final java.util.Map<String, Object> STORIES = java.util.Map.of(

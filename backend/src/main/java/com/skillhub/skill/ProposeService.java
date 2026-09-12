@@ -29,13 +29,17 @@ public class ProposeService {
     private final DuplicatesRepository duplicates;
     private final AuditService audit;
     private final NamedParameterJdbcTemplate jdbc;
+    private final CatalogArtifactService artifacts;
 
     public ProposeService(DuplicatesRepository duplicates, AuditService audit,
-                          NamedParameterJdbcTemplate jdbc) {
+                          NamedParameterJdbcTemplate jdbc, CatalogArtifactService artifacts) {
         this.duplicates = duplicates;
         this.audit = audit;
         this.jdbc = jdbc;
+        this.artifacts = artifacts;
     }
+
+    public record FileAttachment(String fileName, String contentType, byte[] bytes) {}
 
     /** motivo: null (ok) | "invalido" | "idioma" | "duplicado". */
     public record Result(
@@ -52,6 +56,12 @@ public class ProposeService {
 
     @Transactional
     public Result proposeSkill(SkillInput input, String actorId, String fromQuery, String rationale) {
+        return proposeSkill(input, actorId, fromQuery, rationale, null);
+    }
+
+    @Transactional
+    public Result proposeSkill(SkillInput input, String actorId, String fromQuery, String rationale,
+                               FileAttachment attachment) {
         String slug = (input.slug() != null && !input.slug().isBlank())
                 ? input.slug().trim()
                 : SkillInput.slugify(input.title());
@@ -129,6 +139,13 @@ public class ProposeService {
 
         jdbc.update("UPDATE skills SET current_version_id = :vid::uuid WHERE id = :id::uuid",
                 new MapSqlParameterSource().addValue("vid", versionId).addValue("id", skillId));
+
+        if (attachment != null && attachment.bytes() != null && attachment.bytes().length > 0) {
+            artifacts.attachBytes(versionId, attachment.fileName(), attachment.contentType(),
+                    attachment.bytes(), actorId);
+        } else if ("plugin".equals(withSlug.type()) || "contract".equals(withSlug.type())) {
+            artifacts.ensureDefaultArtifact(versionId, slug, withSlug.type(), withSlug.content(), actorId);
+        }
 
         for (String tag : withSlug.tags()) {
             jdbc.update("INSERT INTO skill_tags (skill_id, tag) VALUES (:id::uuid, :tag)",
