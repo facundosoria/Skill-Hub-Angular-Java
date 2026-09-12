@@ -210,6 +210,8 @@ h3 { font-size: 1.1rem; letter-spacing: -0.02em; }
 }
 .landing__waypoint--mcp { right: auto; left: 6%; top: 62%; }
 .landing__waypoint--review { top: 58%; }
+.landing__waypoint--flow { right: auto; left: 6%; top: 76%; border: 0; }
+.landing__waypoint--governance { right: 0; top: 76%; border: 0; }
 
 .landing__footer { position: relative; z-index: 2; display: flex; justify-content: space-between; gap: 1rem; padding-top: 2rem; border-top: 1px solid var(--border); color: var(--text-faint); font-family: var(--font-app-mono); font-size: 0.7rem; letter-spacing: 0.04em; }
 

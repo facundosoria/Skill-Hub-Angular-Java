@@ -25,6 +25,7 @@ export class Landing {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroyRef = inject(DestroyRef);
   private media?: gsap.MatchMedia;
+  private scrollContext?: gsap.Context;
   private renderer?: THREE.WebGLRenderer;
   private scene?: THREE.Scene;
   private camera?: THREE.PerspectiveCamera;
@@ -41,6 +42,7 @@ export class Landing {
     const canvas = root.querySelector('[data-landing-canvas]') as HTMLCanvasElement | null;
     if (!canvas) return;
 
+    this.scrollContext = gsap.context(() => {}, root);
     this.media = gsap.matchMedia();
     this.media.add(
       {
@@ -52,9 +54,27 @@ export class Landing {
         if (!conditions.desktop || !conditions.motion) return;
 
         this.createScene(canvas);
-        this.createScrollTimeline(root, canvas);
+        const rebuild = () => {
+          this.scrollContext?.revert();
+          this.scrollContext?.add(() => this.createScrollTimeline(root, canvas));
+          ScrollTrigger.refresh();
+        };
+        rebuild();
+        const resize = gsap.delayedCall(0.2, rebuild).pause();
+        const onResize = () => { resize.restart(true); };
+        window.addEventListener('resize', onResize);
+        let active = true;
+        document.fonts.ready.then(() => { if (active) rebuild(); });
 
-        return () => this.disposeScene();
+        this.createReveals(root);
+
+        return () => {
+          active = false;
+          window.removeEventListener('resize', onResize);
+          resize.kill();
+          this.scrollContext?.revert();
+          this.disposeScene();
+        };
       },
     );
   }
@@ -66,7 +86,7 @@ export class Landing {
     this.camera.position.set(0, 0, 5);
 
     const object = new THREE.Group();
-    const geometry = new THREE.IcosahedronGeometry(1.15, 1);
+    const geometry = new THREE.BoxGeometry(1.35, 1.35, 1.35);
     const surface = new THREE.Mesh(
       geometry,
       new THREE.MeshStandardMaterial({ color: 0x16c7d8, metalness: 0.25, roughness: 0.45 }),
@@ -76,6 +96,7 @@ export class Landing {
       new THREE.LineBasicMaterial({ color: 0x063f4a, transparent: true, opacity: 0.55 }),
     );
     object.add(surface, edges);
+    object.rotation.set(0.4, 0.6, 0);
     this.scene.add(object);
     this.scene.add(new THREE.AmbientLight(0xffffff, 2.2));
     const keyLight = new THREE.DirectionalLight(0xc9f7ff, 3.5);
@@ -91,7 +112,8 @@ export class Landing {
 
   private resizeCanvas(canvas: HTMLCanvasElement): void {
     if (!this.renderer || !this.camera) return;
-    const { width, height } = canvas.getBoundingClientRect();
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
     if (!width || !height) return;
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
@@ -101,39 +123,43 @@ export class Landing {
 
   private createScrollTimeline(root: HTMLElement, canvas: HTMLCanvasElement): void {
     const waypoints = Array.from(root.querySelectorAll<HTMLElement>('[data-waypoint]'));
-    if (waypoints.length !== 4) return;
+    if (waypoints.length < 2 || !this.object) return;
+    // Adaptado de https://demos.gsap.com/demo/threejs-scroll-waypoints/:
+    // medir marcadores con Flip, desplazar el canvas y girar el objeto en paralelo.
     const states = waypoints.map((waypoint) => Flip.getState(waypoint));
     Flip.fit(canvas, states[0], { absolute: true, scale: true });
+    gsap.set(this.object.rotation, { x: 0.4, y: 0.6, z: 0 });
     const timeline = gsap.timeline({
       scrollTrigger: {
-        trigger: root,
-        start: 'top top',
+        trigger: root.querySelector('.landing')!,
+        start: 'clamp(top top)',
         end: 'bottom bottom',
-        scrub: true,
-        invalidateOnRefresh: true,
+        scrub: 0.6,
       },
     });
 
     // Mantiene la duración total en 1: los offsets que siguen son progreso real de scroll.
     timeline.to({}, { duration: 1 }, 0);
 
-    const arrivals = waypoints.slice(1).map((waypoint) => this.waypointProgress(root, waypoint));
+    const landing = root.querySelector<HTMLElement>('.landing')!;
+    const arrivals = waypoints.slice(1).map((waypoint) => this.waypointProgress(landing, waypoint));
     let departure = 0;
-    const rotations = [
-      { x: 1.2, y: 2.4 },
-      { x: 2.7, y: 4.8 },
-      { x: 4.1, y: 7.2 },
-    ];
 
     arrivals.forEach((arrival, index) => {
       const duration = Math.max(arrival - departure, 0.001);
       this.addWaypointTransition(timeline, canvas, states[index + 1], departure, duration);
-      timeline.to(this.object!.rotation, { ...rotations[index], duration, ease: 'none' }, departure);
+      timeline.to(this.object!.rotation, {
+        x: 0.4 + Math.PI * (index + 1),
+        y: 0.6 + Math.PI * (index + 1),
+        duration,
+        ease: 'none',
+      }, departure);
       departure = arrival;
     });
 
-    ScrollTrigger.refresh();
+  }
 
+  private createReveals(root: HTMLElement): void {
     gsap.utils.toArray<HTMLElement>('[data-reveal]', root).forEach((element) => {
       gsap.fromTo(
         element,
@@ -171,6 +197,8 @@ export class Landing {
   private disposeMotion(): void {
     this.media?.revert();
     this.media = undefined;
+    this.scrollContext?.revert();
+    this.scrollContext = undefined;
     this.disposeScene();
   }
 
