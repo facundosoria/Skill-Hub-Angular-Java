@@ -1,6 +1,7 @@
 package com.skillhub.session;
 
 import com.skillhub.audit.AuditService;
+import com.skillhub.team.Team;
 import com.skillhub.web.DomainException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
@@ -66,7 +67,8 @@ public class UserService {
     public RegisterResult register(String rawUsername, String password, String team, String legajo) {
         String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase();
         if (username.isEmpty()) throw new DomainException("Ingresa tu usuario");
-        if (team == null || team.isBlank()) throw new DomainException("Ingresa tu equipo");
+        String canonicalTeam = Team.canonicalOrNull(team);
+        if (canonicalTeam == null) throw new DomainException("Selecciona un equipo valido");
         if (password == null || password.length() < 10) throw new DomainException("Al menos 10 caracteres");
         String legajoClean = legajo != null && !legajo.isBlank() ? legajo.trim() : null;
 
@@ -84,8 +86,8 @@ public class UserService {
                     UPDATE users SET name = :name, team = :team, legajo = :legajo,
                            status = 'pending', password_hash = :hash
                     WHERE id = :id::uuid
-                    """, base(username, team, legajoClean, password).addValue("id", id));
-            audit.logAudit(id, "user.registered", "user", id, meta(username, team, legajoClean, true));
+                    """, base(username, canonicalTeam, legajoClean, password).addValue("id", id));
+            audit.logAudit(id, "user.registered", "user", id, meta(username, canonicalTeam, legajoClean, true));
             return new RegisterResult(
                     "Cuenta creada. Un administrador tiene que aprobarla antes de que puedas entrar.", null);
         }
@@ -97,17 +99,17 @@ public class UserService {
                 INSERT INTO users (username, name, team, legajo, role, status, password_hash)
                 VALUES (:username, :name, :team, :legajo, :role::role, :status::account_status, :hash)
                 RETURNING id::text
-                """, base(username, team, legajoClean, password)
+                """, base(username, canonicalTeam, legajoClean, password)
                 .addValue("role", first ? "admin" : "member")
                 .addValue("status", first ? "active" : "pending"), String.class);
-        audit.logAudit(id, "user.registered", "user", id, meta(username, team, legajoClean, false));
+        audit.logAudit(id, "user.registered", "user", id, meta(username, canonicalTeam, legajoClean, false));
 
         if (!first) {
             return new RegisterResult(
                     "Cuenta creada. Un administrador tiene que aprobarla antes de que puedas entrar.", null);
         }
         return new RegisterResult(null, new LoginResult(
-                new CurrentUser(id, username, username, team, "admin"),
+                new CurrentUser(id, username, username, canonicalTeam, "admin"),
                 new SessionService.SessionPayload(id, username, "admin")));
     }
 

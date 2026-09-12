@@ -5,6 +5,7 @@ import { Api } from '../../core/api';
 import { I18n } from '../../core/i18n/i18n';
 import type { Proposal, RevisionProposal } from '../../core/models';
 import { UI } from '../../shared/ui';
+import { apiError } from '../auth/login';
 
 /** Puerto de src/app/(app)/review/page.tsx + review-actions.tsx. */
 @Component({
@@ -14,6 +15,12 @@ import { UI } from '../../shared/ui';
     <div class="max-w-3xl">
       <h1 class="text-2xl font-semibold tracking-tight">{{ t().review.titulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">{{ t().review.subtitulo }}</p>
+
+      @if (error()) {
+        <div class="mb-4 rounded-md border border-danger/30 bg-danger/10 p-3 text-sm text-danger">
+          {{ error() }}
+        </div>
+      }
 
       @if (proposals().length === 0) {
         <ui-empty-state [title]="t().review.vacio" [hint]="t().review.vacioHint" />
@@ -100,6 +107,7 @@ export class Review {
   t = this.i18n.t;
   proposals = signal<Proposal[]>([]);
   revisions = signal<RevisionProposal[]>([]);
+  error = signal<string | null>(null);
 
   constructor() {
     this.load();
@@ -111,25 +119,42 @@ export class Review {
     ).then((r) => {
       this.proposals.set(r.proposals);
       this.revisions.set(r.revisions ?? []);
+    }).catch((e) => {
+      this.error.set(apiError(e));
     });
   }
 
   async approve(slug: string): Promise<void> {
-    await firstValueFrom(this.api.post(`/review/${slug}/approve`));
-    this.load();
+    try {
+      this.error.set(null);
+      await firstValueFrom(this.api.post(`/review/${slug}/approve`));
+      this.load();
+    } catch (e) {
+      this.error.set(apiError(e));
+    }
   }
 
   async reject(slug: string): Promise<void> {
     const motivo = prompt(this.t().review.porQueNoSirve) ?? '';
     if (motivo.trim().length < 3) return;
-    await firstValueFrom(this.api.post(`/review/${slug}/reject`, { motivo: motivo.trim() }));
-    this.load();
+    try {
+      this.error.set(null);
+      await firstValueFrom(this.api.post(`/review/${slug}/reject`, { motivo: motivo.trim() }));
+      this.load();
+    } catch (e) {
+      this.error.set(apiError(e));
+    }
   }
 
   async rejectRevision(slug: string): Promise<void> {
     const motivo = prompt(this.t().review.porQueDescartar) ?? '';
     if (motivo.trim().length < 3) return;
-    await firstValueFrom(this.api.post(`/review/${slug}/reject`, { motivo: motivo.trim() }));
-    this.load();
+    try {
+      this.error.set(null);
+      await firstValueFrom(this.api.post(`/review/${slug}/reject`, { motivo: motivo.trim() }));
+      this.load();
+    } catch (e) {
+      this.error.set(apiError(e));
+    }
   }
 }

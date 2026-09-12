@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Top Cylinder -->
+  <ellipse cx="64" cy="30" rx="46" ry="16" fill="#60A5FA"/>
+  <ellipse cx="64" cy="30" rx="42" ry="13" fill="#93C5FD"/>
+  <path d="M18 30v26c0 8.8 20.6 16 46 16s46-7.2 46-16V30c0 8.8-20.6 16-46 16S18 38.8 18 30z" fill="#3B82F6"/>
+  <!-- Middle Cylinder -->
+  <path d="M18 56v26c0 8.8 20.6 16 46 16s46-7.2 46-16V56c0 8.8-20.6 16-46 16S18 64.8 18 56z" fill="#2563EB"/>
+  <!-- Bottom Cylinder -->
+  <path d="M18 82v26c0 8.8 20.6 16 46 16s46-7.2 46-16V82c0 8.8-20.6 16-46 16S18 90.8 18 82z" fill="#1D4ED8"/>
+</svg>

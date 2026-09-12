@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demos de Rediseño de Docs & Transiciones GSAP | Skill Hub</title>
+  <style>
+    :root {
+      --bg: #131311;
+      --surface: #1c1c1a;
+      --surface-2: #242422;
+      --border: #33322e;
+      --text: #f2f0ea;
+      --text-muted: #a3a099;
+      --accent: #a9a2f0;
+      --accent-soft: #262346;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 3rem 1.5rem;
+      max-width: 900px;
+      margin: 0 auto;
+      line-height: 1.6;
+    }
+    h1 { font-size: 2.2rem; font-weight: 750; letter-spacing: -0.03em; margin-bottom: 0.5rem; }
+    p.subtitle { color: var(--text-muted); font-size: 1.05rem; margin-bottom: 2.5rem; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.75rem;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.2s ease;
+    }
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      align-self: flex-start;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .card h2 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.6rem; }
+    .card p { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.2rem; flex-grow: 1; }
+    .btn {
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Demos de Rediseño — Sección /docs</h1>
+  <p class="subtitle">3 propuestas interactivas que igualan la estética del resto de Skill Hub y resuelven el desplazamiento brusco con animaciones cinemáticas en GSAP.</p>
+
+  <div class="grid">
+    <a href="demo1.html" class="card">
+      <span class="tag">Propuesta 1 (Recomendada)</span>
+      <h2>Tarjeta & Indicador Magnético</h2>
+      <p>Consistencia pura con el sistema actual de Skill Hub. Hero unificado, menú lateral en tarjeta <code>uiCard</code> e indicador tipo píldora flotante que se desplaza suavemente con <code>gsap.to</code> al navegar o scrollear.</p>
+      <div class="btn">Abrir Demo 1 →</div>
+    </a>
+
+    <a href="demo2.html" class="card">
+      <span class="tag">Propuesta 2</span>
+      <h2>Timeline Tracker & Modular</h2>
+      <p>Línea de tiempo vertical interactiva con barra de progreso continua en gradiente que se llena al leer, nodos elásticos con pulsos sutiles y secciones en tarjetas independientes.</p>
+      <div class="btn">Abrir Demo 2 →</div>
+    </a>
+
+    <a href="demo3.html" class="card">
+      <span class="tag">Propuesta 3</span>
+      <h2>Estilo Linear Docs & Liquid Stretch</h2>
+      <p>Diseño inspirado en Linear/Stripe Docs. Temas agrupados por categorías, barra lateral con efecto elástico <i>liquid stretch</i> que se alarga entre saltos de sección, y micro-interacciones hover.</p>
+      <div class="btn">Abrir Demo 3 →</div>
+    </a>
+  </div>
+</body>
+</html>

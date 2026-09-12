@@ -2,6 +2,7 @@ import { inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Api } from './api';
 import type { User } from './models';
+import type { Team } from './teams';
 
 /**
  * Puerto de src/server/auth/index.ts (lado cliente). La sesion vive en la cookie
@@ -46,7 +47,7 @@ export class AuthService {
   async register(body: {
     username: string;
     password: string;
-    team: string;
+    team: Team;
     legajo?: string;
   }): Promise<{ user?: User; info?: string }> {
     const res = await firstValueFrom(

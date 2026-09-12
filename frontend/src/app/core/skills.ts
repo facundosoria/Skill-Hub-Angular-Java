@@ -29,12 +29,12 @@ export class SkillService {
     return firstValueFrom(this.api.get(`/skills/${slug}/diff`, { a, b }));
   }
 
-  create(values: SkillFormValues): Promise<SkillMutationResult> {
-    return firstValueFrom(this.api.post<SkillMutationResult>('/skills', values));
+  create(values: SkillFormValues, file: File | null): Promise<SkillMutationResult> {
+    return firstValueFrom(this.api.postForm<SkillMutationResult>('/skills', packageForm(values, file)));
   }
 
-  update(slug: string, values: SkillFormValues): Promise<SkillMutationResult> {
-    return firstValueFrom(this.api.put<SkillMutationResult>(`/skills/${slug}`, values));
+  update(slug: string, values: SkillFormValues, file: File | null): Promise<SkillMutationResult> {
+    return firstValueFrom(this.api.putForm<SkillMutationResult>(`/skills/${slug}`, packageForm(values, file)));
   }
 
   publish(slug: string): Promise<unknown> {
@@ -47,6 +47,10 @@ export class SkillService {
 
   vote(slug: string): Promise<{ votes: number; required: number; applied: boolean }> {
     return firstValueFrom(this.api.post(`/skills/${slug}/vote`));
+  }
+
+  rate(slug: string, rating: number, comment: string): Promise<unknown> {
+    return firstValueFrom(this.api.post(`/skills/${slug}/ratings`, { rating, comment }));
   }
 
   applyEdit(slug: string): Promise<unknown> {
@@ -74,4 +78,11 @@ export class SkillService {
   }): Promise<LanguageFlag> {
     return firstValueFrom(this.api.post<LanguageFlag>('/skills/check-language', fields));
   }
+}
+
+function packageForm(values: SkillFormValues, file: File | null): FormData {
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(values)], { type: 'application/json' }));
+  if (file) form.append('file', file, file.name);
+  return form;
 }

@@ -6,6 +6,7 @@ import { AuthService } from '../../core/auth';
 import { I18n, type Locale } from '../../core/i18n/i18n';
 import { ThemeService } from '../../core/theme';
 import type { Theme } from '../../core/models';
+import { TEAM_OPTIONS, type Team } from '../../core/teams';
 import { UI } from '../../shared/ui';
 import { apiError } from '../auth/login';
 
@@ -23,7 +24,12 @@ import { apiError } from '../auth/login';
           <input uiInput [(ngModel)]="name" name="name" />
         </ui-field>
         <ui-field [label]="t().perfil.equipo" [hint]="t().perfil.equipoHint">
-          <input uiInput [(ngModel)]="team" name="team" />
+          <select uiSelect [(ngModel)]="team" name="team" class="w-full">
+            <option value="">{{ t().catalogo.sinEquipo }}</option>
+            @for (option of teams; track option) {
+              <option [value]="option">{{ option }}</option>
+            }
+          </select>
         </ui-field>
 
         <ui-field [label]="t().perfil.tema">
@@ -59,7 +65,8 @@ export class Profile {
   t = this.i18n.t;
 
   name = '';
-  team = '';
+  team: Team | '' = '';
+  teams = TEAM_OPTIONS;
   theme: Theme = this.themeSvc.theme();
   locale: Locale = this.i18n.locale();
   busy = signal(false);
@@ -67,7 +74,7 @@ export class Profile {
   error = signal<string | null>(null);
 
   constructor() {
-    firstValueFrom(this.api.get<{ name: string; team: string | null; theme: Theme; locale: Locale }>('/profile'))
+    firstValueFrom(this.api.get<{ name: string; team: Team | null; theme: Theme; locale: Locale }>('/profile'))
       .then((p) => {
         this.name = p.name;
         this.team = p.team ?? '';

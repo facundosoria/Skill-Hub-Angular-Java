@@ -1,0 +1,114 @@
+<main class="landing" aria-labelledby="landing-title">
+  <section class="landing__hero">
+    <div class="landing__hero-copy">
+      <p class="landing__eyebrow">{{ t().landing.eyebrowHero }}</p>
+      <h1 id="landing-title">{{ t().landing.tituloHero }}</h1>
+      <p class="landing__lede">
+        {{ t().landing.ledeHero }}
+      </p>
+      <div class="landing__actions" [attr.aria-label]="t().landing.accionesPrincipales">
+        <a routerLink="/skills" class="landing__action landing__action--primary">{{ t().landing.explorar }}</a>
+        <a routerLink="/docs" class="landing__action landing__action--secondary">{{ t().landing.comoUsar }}</a>
+      </div>
+    </div>
+
+    <p class="landing__scroll-cue" aria-hidden="true">{{ t().landing.scrollCue }} <span>↓</span></p>
+    <div data-waypoint class="landing__waypoint landing__waypoint--hero" aria-hidden="true"></div>
+  </section>
+
+  <canvas data-landing-canvas class="landing__canvas" aria-hidden="true"></canvas>
+
+  <section class="landing__chapter landing__chapter--problem">
+    <div data-waypoint class="landing__waypoint landing__waypoint--catalog">{{ t().landing.waypointCatalogo }}</div>
+    <div class="landing__chapter-copy" data-reveal>
+      <p class="landing__eyebrow">{{ t().landing.problemaEyebrow }}</p>
+      <h2>{{ t().landing.problemaTitulo }}</h2>
+      <p>
+        {{ t().landing.problemaTexto }}
+      </p>
+    </div>
+    <blockquote class="landing__quote" data-reveal>
+      <p>{{ t().landing.problemaCita }}</p>
+    </blockquote>
+  </section>
+
+  <section class="landing__chapter landing__chapter--catalog">
+    <div data-waypoint class="landing__waypoint landing__waypoint--mcp">{{ t().landing.waypointMcp }}</div>
+    <div class="landing__split" data-reveal>
+      <div>
+        <p class="landing__eyebrow">{{ t().landing.fuenteEyebrow }}</p>
+        <h2>{{ t().landing.fuenteTitulo }}</h2>
+      </div>
+      <div class="landing__faces">
+        <article>
+          <span>{{ t().landing.paraPersonasNumero }}</span>
+          <h3>{{ t().landing.paraPersonasTitulo }}</h3>
+          <p>{{ t().landing.paraPersonasTexto }}</p>
+        </article>
+        <article>
+          <span>{{ t().landing.paraAgentesNumero }}</span>
+          <h3>{{ t().landing.paraAgentesTitulo }}</h3>
+          <p>{{ t().landing.paraAgentesTexto }}</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="landing__chapter landing__chapter--inventory">
+    <div data-waypoint class="landing__waypoint landing__waypoint--review">{{ t().landing.waypointRevision }}</div>
+    <div class="landing__chapter-copy" data-reveal>
+      <p class="landing__eyebrow">{{ t().landing.inventarioEyebrow }}</p>
+      <h2>{{ t().landing.inventarioTitulo }}</h2>
+    </div>
+    <div class="landing__inventory" data-reveal>
+      <article>
+        <span class="landing__index">{{ t().landing.skillsNumero }}</span>
+        <h3>{{ t().landing.skillsTitulo }}</h3>
+        <p>{{ t().landing.skillsTexto }}</p>
+      </article>
+      <article>
+        <span class="landing__index">{{ t().landing.pluginsNumero }}</span>
+        <h3>{{ t().landing.pluginsTitulo }}</h3>
+        <p>{{ t().landing.pluginsTexto }}</p>
+      </article>
+      <article>
+        <span class="landing__index">{{ t().landing.contratosNumero }}</span>
+        <h3>{{ t().landing.contratosTitulo }}</h3>
+        <p>{{ t().landing.contratosTexto }}</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="landing__chapter landing__chapter--flow">
+    <div data-waypoint class="landing__waypoint landing__waypoint--flow" aria-hidden="true"></div>
+    <div class="landing__flow" data-reveal>
+      <div>
+        <p class="landing__eyebrow">{{ t().landing.flujoEyebrow }}</p>
+        <h2>{{ t().landing.flujoTitulo }}</h2>
+      </div>
+      <ol>
+        <li><span>1</span><p>{{ t().landing.flujoPaso1 }}</p></li>
+        <li><span>2</span><p>{{ t().landing.flujoPaso2 }}</p></li>
+        <li><span>3</span><p>{{ t().landing.flujoPaso3 }}</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="landing__chapter landing__chapter--governance">
+    <div data-waypoint class="landing__waypoint landing__waypoint--governance" aria-hidden="true"></div>
+    <div class="landing__governance" data-reveal>
+      <p class="landing__eyebrow">{{ t().landing.gobernanzaEyebrow }}</p>
+      <h2>{{ t().landing.gobernanzaTitulo }}</h2>
+      <div>
+        <p><strong>{{ t().landing.gobernanzaProponeStrong }}</strong> {{ t().landing.gobernanzaProponeTexto }}</p>
+        <p><strong>{{ t().landing.gobernanzaVersionaStrong }}</strong> {{ t().landing.gobernanzaVersionaTexto }}</p>
+        <p><strong>{{ t().landing.gobernanzaRevisaStrong }}</strong> {{ t().landing.gobernanzaRevisaTexto }}</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="landing__footer">
+    <span>{{ t().landing.footerMarca }}</span>
+    <span>{{ t().landing.footerSlogan }}</span>
+  </footer>
+</main>

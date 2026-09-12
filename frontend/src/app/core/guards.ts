@@ -19,10 +19,10 @@ export const adminGuard: CanActivateFn = async () => {
   return auth.isAdmin ? true : router.createUrlTree(['/skills']);
 };
 
-/** Para /login: si ya hay sesion, mandar al catalogo. */
+/** Para /login: si ya hay sesion, mandar al inicio autenticado. */
 export const guestGuard: CanActivateFn = async () => {
   const auth = inject(AuthService);
   const router = inject(Router);
   if (!auth.loaded()) await auth.refresh();
-  return auth.user() ? router.createUrlTree(['/skills']) : true;
+  return auth.user() ? router.createUrlTree(['/']) : true;
 };

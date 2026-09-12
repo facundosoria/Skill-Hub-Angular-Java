@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Sequential step circles -->
+  <circle cx="28" cy="64" r="14" fill="#F59E0B"/>
+  <text x="28" y="70" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#FFF" text-anchor="middle">1</text>
+  <path d="M42 64h16" stroke="#FBBF24" stroke-width="4" stroke-linecap="round"/>
+  
+  <circle cx="64" cy="64" r="16" fill="#F97316"/>
+  <text x="64" y="70" font-family="system-ui, sans-serif" font-size="18" font-weight="bold" fill="#FFF" text-anchor="middle">2</text>
+  <path d="M80 64h16" stroke="#FB923C" stroke-width="4" stroke-linecap="round"/>
+
+  <circle cx="100" cy="64" r="14" fill="#EF4444"/>
+  <text x="100" y="70" font-family="system-ui, sans-serif" font-size="16" font-weight="bold" fill="#FFF" text-anchor="middle">3</text>
+
+  <!-- Arc connectors symbolizing iteration/feedback -->
+  <path d="M100 50 C100 28, 28 28, 28 50" stroke="#F59E0B" stroke-width="3" stroke-dasharray="4 4" stroke-linecap="round"/>
+  <polygon points="34,48 28,54 22,48" fill="#F59E0B"/>
+</svg>

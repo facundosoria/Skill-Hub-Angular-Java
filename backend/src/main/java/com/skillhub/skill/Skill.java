@@ -23,5 +23,6 @@ public record Skill(
         List<String> tags,
         SkillVersion version
 ) {
-    public record SkillVersion(int version, String content, String preview) {}
+    public record SkillVersion(int version, String content, String preview,
+                               CatalogArtifactService.Summary artifact) {}
 }

@@ -13,8 +13,11 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { I18n } from '../../core/i18n/i18n';
 import { SkillService } from '../../core/skills';
+import { TEAM_OPTIONS } from '../../core/teams';
 import type { DuplicateCandidate, LanguageFlag, SkillFormValues, Stack, SkillType } from '../../core/models';
 import { UI } from '../../shared/ui';
+
+type CatalogSection = 'skills' | 'plugins' | 'contracts';
 
 /**
  * Puerto de src/components/skill-form.tsx, incluidos los chequeos MIENTRAS se
@@ -34,9 +37,9 @@ import { UI } from '../../shared/ui';
   imports: [FormsModule, RouterLink, ...UI],
   template: `
     <div class="max-w-2xl">
-      <h1 class="text-2xl font-semibold tracking-tight">{{ mode() === 'create' ? t().form.nuevoTitulo : t().form.editarTitulo }}</h1>
+      <h1 class="text-2xl font-semibold tracking-tight">{{ mode() === 'create' ? createTitle() : t().form.editarTitulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">
-        {{ mode() === 'create' ? t().form.nuevoSubtitulo : t().form.editarSubtitulo }}
+        {{ mode() === 'create' ? createSubtitle() : t().form.editarSubtitulo }}
       </p>
 
       @if (shownIdiomaInconsistente(); as ai) {
@@ -114,20 +117,54 @@ import { UI } from '../../shared/ui';
             </select>
           </ui-field>
           <ui-field [label]="t().form.tipo">
-            <select uiSelect name="type" [(ngModel)]="v.type" class="w-full">
-              <option value="skill">Skill</option><option value="convention">Convención</option><option value="reference">Referencia</option>
-            </select>
+            @if (section() === 'skills') {
+              <select uiSelect name="type" [(ngModel)]="v.type" class="w-full">
+                <option value="skill">Skill</option><option value="convention">Convención</option><option value="reference">Referencia</option>
+              </select>
+            } @else {
+              <div class="flex h-10 items-center rounded-[var(--radius)] border border-border bg-surface-2 px-3 text-sm text-text-muted">
+                {{ typeLabel() }}
+              </div>
+            }
           </ui-field>
           <ui-field [label]="t().form.tags" [hint]="t().form.tagsHint">
             <input uiInput name="tags" [(ngModel)]="tagsCsv" (ngModelChange)="onTitle()" />
           </ui-field>
         </div>
+        <ui-field [label]="t().form.equipoDueno">
+          <select uiSelect name="ownerTeam" [(ngModel)]="v.ownerTeam" class="w-full">
+            <option [ngValue]="null">{{ t().catalogo.sinEquipo }}</option>
+            @for (option of teams; track option) {
+              <option [ngValue]="option">{{ option }}</option>
+            }
+          </select>
+        </ui-field>
         <ui-field [label]="t().form.contenido" [hint]="t().form.contenidoHint">
           <textarea uiTextarea name="content" rows="16" class="font-mono text-[13px]" [(ngModel)]="v.content" (ngModelChange)="onLangField()"></textarea>
+        </ui-field>
+        <ui-field [label]="t().form.archivoPaquete" [hint]="fileHint()">
+          <input uiInput type="file" name="artifact" [required]="artifactRequired()"
+                 (change)="onFileSelected($event)" [attr.aria-describedby]="'artifact-help'" />
+          <p id="artifact-help" class="mt-1.5 text-xs text-text-faint" aria-live="polite">
+            @if (selectedFile()) {
+              {{ selectedFile()!.name }} · {{ formatBytes(selectedFile()!.size) }}
+            } @else if (existingArtifactName()) {
+              {{ t().form.archivoActual }} {{ existingArtifactName() }}
+            }
+          </p>
+          @if (fileError()) { <p class="mt-1 text-xs text-danger">{{ fileError() }}</p> }
         </ui-field>
         <ui-field [label]="t().form.notaCambio" [hint]="t().form.notaCambioHint">
           <input uiInput name="changelog" [(ngModel)]="v.changelog" />
         </ui-field>
+
+        @if (mode() === 'create') {
+          <section uiCard class="bg-surface-2 p-4">
+            <h2 class="text-sm font-medium">{{ t().catalogo.paqueteContenido }}</h2>
+            <p class="mt-1.5 text-sm text-text-muted">{{ packageStructure() }}</p>
+            <p class="mt-2 text-xs text-text-faint">{{ t().catalogo.cargaProximamente }}</p>
+          </section>
+        }
 
         @if (justify()) {
           <ui-field [label]="t().form.duplicadoJustificacion" [hint]="t().form.duplicadoJustificacionHint"
@@ -144,7 +181,7 @@ import { UI } from '../../shared/ui';
           <button uiButton type="submit" [disabled]="busy() || !!shownIdiomaInconsistente()">
             {{ busy() ? t().form.guardando : mode() === 'create' ? t().form.crear : t().form.guardar }}
           </button>
-          <a [routerLink]="mode() === 'edit' ? ['/skills', v.slug] : ['/skills']">
+          <a [routerLink]="mode() === 'edit' ? [basePath(), v.slug] : [basePath()]">
             <button uiButton type="button" variant="ghost">{{ t().form.cancelar }}</button>
           </a>
         </div>
@@ -155,6 +192,7 @@ import { UI } from '../../shared/ui';
 export class SkillForm {
   mode = input<'create' | 'edit'>('create');
   slug = input<string>();
+  section = input<CatalogSection>('skills');
 
   private skills = inject(SkillService);
   private router = inject(Router);
@@ -177,11 +215,15 @@ export class SkillForm {
     duplicateJustification: null,
   };
   tagsCsv = '';
+  teams = TEAM_OPTIONS;
   slugTouched = false;
 
   busy = signal(false);
   error = signal<string | null>(null);
   justify = signal(false);
+  selectedFile = signal<File | null>(null);
+  existingArtifactName = signal<string | null>(null);
+  fileError = signal<string | null>(null);
 
   // Server (submit) vs live (mientras se escribe). El server gana.
   private serverIdioma = signal<LanguageFlag | null>(null);
@@ -200,6 +242,25 @@ export class SkillForm {
   );
   /** Solo lo que devolvio el backend al enviar bloquea (hasta justificar). */
   blocking = computed(() => this.serverDuplicates().length > 0);
+  basePath = computed(() => this.section() === 'plugins' ? '/plugins' : this.section() === 'contracts' ? '/contracts' : '/skills');
+  createTitle = computed(() => {
+    const c = this.t().catalogo;
+    return this.section() === 'plugins' ? c.nuevoPlugin : this.section() === 'contracts' ? c.nuevoContrato : this.t().form.nuevoTitulo;
+  });
+  createSubtitle = computed(() => this.t().form.nuevoSubtitulo);
+  typeLabel = computed(() => this.section() === 'plugins' ? 'Plugin' : this.section() === 'contracts' ? 'Contrato' : 'Skill');
+  packageStructure = computed(() => {
+    const c = this.t().catalogo;
+    return this.section() === 'plugins' ? c.estructuraPlugin : this.section() === 'contracts' ? c.estructuraContrato : c.estructuraSkill;
+  });
+  artifactRequired(): boolean {
+    return this.v.type === 'plugin' || this.v.type === 'contract';
+  }
+  fileHint(): string {
+    return this.artifactRequired()
+    ? this.t().form.archivoObligatorio
+    : this.t().form.archivoOpcional;
+  }
 
   private dupTimer?: ReturnType<typeof setTimeout>;
   private langTimer?: ReturnType<typeof setTimeout>;
@@ -216,6 +277,12 @@ export class SkillForm {
       const slug = this.slug();
       if (this.mode() !== 'edit' || !slug) return;
       untracked(() => this.loadForEdit(slug));
+    });
+
+    effect(() => {
+      if (this.mode() !== 'create') return;
+      const type: SkillType = this.section() === 'plugins' ? 'plugin' : this.section() === 'contracts' ? 'contract' : 'skill';
+      this.v.type = type;
     });
   }
 
@@ -235,6 +302,7 @@ export class SkillForm {
       duplicateJustification: null,
     };
     this.tagsCsv = d.skill.tags.join(', ');
+    this.existingArtifactName.set(d.skill.version?.artifact?.fileName ?? null);
     this.slugTouched = true;
     // App zoneless (sin zone.js): reasignar this.v tras el await no agenda
     // detección de cambios por sí solo, hay que empujarla o el form queda vacío.
@@ -297,8 +365,21 @@ export class SkillForm {
     return map[campo] ?? campo;
   }
 
-  camposLabel(campos: string[]): string {
-    return campos.map((c) => this.campoLabel(c)).join(', ');
+  onFileSelected(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.item(0) ?? null;
+    this.fileError.set(null);
+    if (file && file.size > 25 * 1024 * 1024) {
+      this.selectedFile.set(null);
+      this.fileError.set(this.t().form.archivoGrande);
+      return;
+    }
+    this.selectedFile.set(file);
+  }
+
+  formatBytes(bytes: number): string {
+    return bytes < 1024 * 1024
+      ? `${Math.ceil(bytes / 1024)} KB`
+      : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   // --- submit -----------------------------------------------------
@@ -309,11 +390,20 @@ export class SkillForm {
     this.serverIdioma.set(null);
     this.serverDuplicates.set([]);
     this.v.tags = this.csvTags();
+    if (this.artifactRequired() && !this.selectedFile() && !this.existingArtifactName()) {
+      this.fileError.set(this.t().form.archivoRequerido);
+      this.busy.set(false);
+      return;
+    }
+    if (this.fileError()) {
+      this.busy.set(false);
+      return;
+    }
     try {
       const res =
         this.mode() === 'create'
-          ? await this.skills.create(this.v)
-          : await this.skills.update(this.v.slug, this.v);
+          ? await this.skills.create(this.v, this.selectedFile())
+          : await this.skills.update(this.v.slug, this.v, this.selectedFile());
 
       if (res.error === 'IDIOMA_INCONSISTENTE') {
         this.serverIdioma.set(res.idioma ?? null);
@@ -328,7 +418,7 @@ export class SkillForm {
         this.error.set(res.error);
         return;
       }
-      this.router.navigate(['/skills', res.slug ?? this.v.slug]);
+      this.router.navigate([this.basePath(), res.slug ?? this.v.slug]);
     } catch (e: unknown) {
       const err = e as { error?: { error?: string } };
       this.error.set(err?.error?.error ?? 'No se pudo guardar');

@@ -2,13 +2,22 @@ package com.skillhub.web;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.skillhub.auth.ApiKeyService;
 import com.skillhub.session.AuthPrincipal;
 import com.skillhub.session.CurrentUser;
 import com.skillhub.skill.*;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,16 +34,23 @@ public class SkillController {
     private final SkillRepository repo;
     private final SkillWriteService write;
     private final VoteService votes;
+    private final SkillRatingService ratings;
     private final DuplicatesRepository duplicates;
     private final ObjectMapper json;
+    private final CatalogArtifactService artifacts;
+    private final ApiKeyService apiKeys;
 
     public SkillController(SkillRepository repo, SkillWriteService write,
-                           VoteService votes, DuplicatesRepository duplicates, ObjectMapper json) {
+                           VoteService votes, SkillRatingService ratings, DuplicatesRepository duplicates, ObjectMapper json,
+                           CatalogArtifactService artifacts, ApiKeyService apiKeys) {
         this.repo = repo;
         this.write = write;
         this.votes = votes;
+        this.ratings = ratings;
         this.duplicates = duplicates;
         this.json = json;
+        this.artifacts = artifacts;
+        this.apiKeys = apiKeys;
     }
 
     // --- lecturas ------------------------------------------------------
@@ -58,6 +74,7 @@ public class SkillController {
         out.put("skill", skill);
         out.put("history", repo.getHistory(slug));
         out.put("related", repo.getRelated(skill.id()));
+        out.put("ratings", repo.getRatings(skill.id()));
         out.put("voteStatus", skill.pendingVersionId() != null
                 ? votes.getVoteStatus(skill.id(), user.id()) : null);
         return out;
@@ -103,8 +120,19 @@ public class SkillController {
         }
     }
 
-    @PostMapping
-    public Map<String, Object> create(@AuthPrincipal CurrentUser user, @RequestBody SkillFormRequest body) {
+    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> createJson(@AuthPrincipal CurrentUser user, @RequestBody SkillFormRequest body) {
+        return create(user, body, null);
+    }
+
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> createMultipart(@AuthPrincipal CurrentUser user,
+                                                @RequestPart("metadata") SkillFormRequest body,
+                                                @RequestPart(value = "file", required = false) MultipartFile file) {
+        return create(user, body, file);
+    }
+
+    private Map<String, Object> create(CurrentUser user, SkillFormRequest body, MultipartFile file) {
         SkillInput input = body.toInput();
 
         var idioma = LanguageDetector.clasificarIdiomaSkill(
@@ -123,21 +151,60 @@ public class SkillController {
             }
         }
 
-        write.createSkill(input, user.id());
+        write.createSkill(input, user.id(), file);
         return Map.of("slug", input.slug());
     }
 
-    @PutMapping("/{slug}")
-    public Map<String, Object> update(@AuthPrincipal CurrentUser user, @PathVariable String slug,
-                                      @RequestBody SkillFormRequest body) {
+    @PutMapping(value = "/{slug}", consumes = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> updateJson(@AuthPrincipal CurrentUser user, @PathVariable String slug,
+                                          @RequestBody SkillFormRequest body) {
+        return update(user, slug, body, null);
+    }
+
+    @PutMapping(value = "/{slug}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Map<String, Object> updateMultipart(@AuthPrincipal CurrentUser user, @PathVariable String slug,
+                                               @RequestPart("metadata") SkillFormRequest body,
+                                               @RequestPart(value = "file", required = false) MultipartFile file) {
+        return update(user, slug, body, file);
+    }
+
+    private Map<String, Object> update(CurrentUser user, String slug, SkillFormRequest body, MultipartFile file) {
         SkillInput input = body.toInput();
         var idioma = LanguageDetector.clasificarIdiomaSkill(
                 input.title(), input.description(), input.whenToUse(), input.content());
         if (!idioma.consistente()) {
             return Map.of("error", "IDIOMA_INCONSISTENTE", "idioma", idioma);
         }
-        var r = write.updateSkill(slug, input, user.id(), user.isAdmin());
+        var r = write.updateSkill(slug, input, user.id(), user.isAdmin(), file);
         return Map.of("version", r.version(), "pending", r.pending(), "slug", slug);
+    }
+
+    @GetMapping("/{slug}/artifact")
+    public ResponseEntity<ByteArrayResource> downloadArtifact(@AuthPrincipal(required = false) CurrentUser user,
+                                                                HttpServletRequest request,
+                                                                @PathVariable String slug,
+                                                                @RequestParam int v) {
+        if (user == null) {
+            var identity = apiKeys.identifyByAuthHeader(request.getHeader("Authorization"));
+            if (identity == null) throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED");
+            apiKeys.touchApiKey(identity.apiKeyId());
+        }
+        String skillId = repo.skillId(slug);
+        if (skillId == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No existe el skill");
+        var artifact = artifacts.findDownload(skillId, v);
+        if (artifact == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "La version no tiene archivo adjunto");
+
+        var summary = artifact.summary();
+        MediaType type;
+        try { type = MediaType.parseMediaType(summary.contentType()); }
+        catch (IllegalArgumentException ignored) { type = MediaType.APPLICATION_OCTET_STREAM; }
+        return ResponseEntity.ok()
+                .contentType(type)
+                .contentLength(summary.sizeBytes())
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename(summary.fileName(), StandardCharsets.UTF_8).build().toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(new ByteArrayResource(artifact.content()));
     }
 
     @PostMapping("/{slug}/publish")
@@ -161,6 +228,17 @@ public class SkillController {
         String id = repo.skillId(slug);
         if (id == null) throw new DomainException("No existe el skill \"" + slug + "\"");
         return votes.castVote(id, user.id());
+    }
+
+    public record SkillRatingRequest(int rating, String comment) {}
+
+    @PostMapping("/{slug}/ratings")
+    public Map<String, Object> rate(@AuthPrincipal CurrentUser user, @PathVariable String slug,
+                                    @RequestBody SkillRatingRequest body) {
+        String id = repo.skillId(slug);
+        if (id == null) throw new DomainException("No existe el skill \"" + slug + "\"");
+        ratings.rate(id, user.id(), body.rating(), body.comment());
+        return Map.of("ok", true);
     }
 
     @PostMapping("/{slug}/apply-edit")

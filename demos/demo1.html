@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo 1 - Tarjeta & Indicador Magnético Flotante | Skill Hub</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollToPlugin.min.js"></script>
+  <style>
+    :root {
+      --bg: #131311;
+      --surface: #1c1c1a;
+      --surface-2: #242422;
+      --border: #33322e;
+      --border-strong: #4a4844;
+      --text: #f2f0ea;
+      --text-muted: #a3a099;
+      --text-faint: #78756e;
+      --accent: #a9a2f0;
+      --accent-fg: #1a1a19;
+      --accent-soft: #262346;
+      --radius: 0.75rem;
+      --radius-lg: 1.1rem;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Demo Switcher Bar */
+    .demo-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0d0d0c;
+      border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+    .demo-bar__badge {
+      background: var(--accent-soft);
+      color: var(--accent);
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    .demo-bar__tabs {
+      display: flex;
+      gap: 0.4rem;
+    }
+    .demo-bar__tab {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.3rem 0.75rem;
+      border-radius: 0.5rem;
+      transition: all 0.2s;
+    }
+    .demo-bar__tab:hover { color: var(--text); background: var(--surface-2); }
+    .demo-bar__tab.active {
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    /* App Shell Header Mockup */
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    .app-header__logo {
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .app-header__nav {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+    .app-header__link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 0.5rem;
+      transition: all 0.15s;
+    }
+    .app-header__link:hover { color: var(--text); }
+    .app-header__link.active {
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .app-header__user {
+      margin-left: auto;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+    }
+
+    /* Container */
+    .main-container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem 5rem;
+    }
+
+    /* Hero Banner matching catalog-hero */
+    .catalog-hero {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+      margin-bottom: 2rem;
+      background: linear-gradient(125deg, color-mix(in srgb, var(--accent) 9%, var(--surface)), var(--surface) 60%), var(--surface);
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    }
+    .catalog-hero__eyebrow {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+    .catalog-hero__title {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .catalog-hero__subtitle {
+      color: var(--text-muted);
+      font-size: 0.98rem;
+      max-width: 48rem;
+      line-height: 1.5;
+    }
+
+    /* Layout Grid */
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    /* Sidebar Card */
+    .toc-card {
+      position: sticky;
+      top: 4.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.25rem 0.9rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .toc-card__header {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-faint);
+      padding: 0 0.6rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .toc-nav {
+      position: relative;
+    }
+    .toc-list {
+      list-style: none;
+      position: relative;
+      z-index: 2;
+    }
+    .toc-item {
+      position: relative;
+    }
+    .toc-link {
+      display: block;
+      padding: 0.42rem 0.8rem;
+      font-size: 0.84rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      border-radius: 0.5rem;
+      transition: color 0.2s ease;
+      position: relative;
+      z-index: 2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .toc-link:hover {
+      color: var(--text);
+    }
+    .toc-link.active {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    /* The Sliding Magnetic Pill Indicator (GSAP-powered) */
+    .active-pill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 32px;
+      background: var(--accent-soft);
+      border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+      border-left: 3px solid var(--accent);
+      border-radius: 0.5rem;
+      z-index: 1;
+      pointer-events: none;
+      will-change: transform, height;
+      opacity: 0;
+    }
+
+    /* Content Card */
+    .content-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.5rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .doc-section {
+      padding-top: 1.5rem;
+      margin-bottom: 3rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 3rem;
+    }
+    .doc-section:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      padding-bottom: 0;
+    }
+    .doc-section h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+    .doc-section h2::before {
+      content: "";
+      display: inline-block;
+      width: 4px;
+      height: 1.2rem;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+    .doc-section p {
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      font-size: 0.98rem;
+    }
+    .doc-section ul {
+      margin: 1rem 0 1.25rem 1.5rem;
+      color: var(--text-muted);
+    }
+    .doc-section li {
+      margin-bottom: 0.5rem;
+    }
+    .doc-section li strong {
+      color: var(--text);
+    }
+    code {
+      font-family: var(--font-mono);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      font-size: 0.85em;
+      color: var(--accent);
+    }
+    .info-box {
+      background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+      border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
+      border-radius: var(--radius);
+      padding: 1.2rem;
+      margin: 1.5rem 0;
+    }
+    .info-box p {
+      margin: 0;
+      color: var(--text);
+      font-size: 0.92rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Demo Switcher Header -->
+  <aside class="demo-bar">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="demo-bar__badge">Propuesta 1</span>
+      <strong>Tarjeta Elevada & Indicador Magnético Flotante (GSAP)</strong>
+    </div>
+    <nav class="demo-bar__tabs">
+      <a href="demo1.html" class="demo-bar__tab active">Demo 1</a>
+      <a href="demo2.html" class="demo-bar__tab">Demo 2</a>
+      <a href="demo3.html" class="demo-bar__tab">Demo 3</a>
+    </nav>
+  </aside>
+
+  <!-- App Header Mockup -->
+  <header class="app-header">
+    <div class="app-header__logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+      Skill Hub
+    </div>
+    <nav class="app-header__nav">
+      <a href="#" class="app-header__link">Catálogo</a>
+      <a href="#" class="app-header__link">Mi key</a>
+      <a href="#" class="app-header__link active">Cómo funciona</a>
+      <a href="#" class="app-header__link">Revisar</a>
+      <a href="#" class="app-header__link">Uso</a>
+      <a href="#" class="app-header__link">Auditoría</a>
+    </nav>
+    <div class="app-header__user">admin_test · Salir</div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="main-container">
+    
+    <!-- Hero Banner (matches catalog-hero style) -->
+    <header class="catalog-hero">
+      <p class="catalog-hero__eyebrow">DOCUMENTACIÓN · GUÍA OFICIAL</p>
+      <h1 class="catalog-hero__title">Cómo funciona Skill Hub</h1>
+      <p class="catalog-hero__subtitle">
+        Qué es esto, para qué sirve, cómo se conecta tu IDE y qué hace la IA con las convenciones que recibe.
+      </p>
+    </header>
+
+    <div class="docs-layout">
+      
+      <!-- Left Sidebar (TOC in a sleek uiCard) -->
+      <aside class="toc-card" aria-label="Tabla de contenidos">
+        <div class="toc-card__header">
+          <span>Contenido</span>
+          <span style="font-size: 0.68rem; color: var(--accent); font-weight: normal;">12 temas</span>
+        </div>
+        <nav class="toc-nav">
+          <div class="active-pill" id="activePill"></div>
+          <ul class="toc-list" id="tocList">
+            <li class="toc-item"><a href="#el-problema" class="toc-link active" data-target="el-problema">El problema</a></li>
+            <li class="toc-item"><a href="#la-idea" class="toc-link" data-target="la-idea">La idea</a></li>
+            <li class="toc-item"><a href="#por-que-no-es-un-marketplace" class="toc-link" data-target="por-que-no-es-un-marketplace">Por qué no es un marketplace</a></li>
+            <li class="toc-item"><a href="#que-es-un-skill" class="toc-link" data-target="que-es-un-skill">Qué es un skill</a></li>
+            <li class="toc-item"><a href="#que-es-mcp" class="toc-link" data-target="que-es-mcp">Qué es MCP</a></li>
+            <li class="toc-item"><a href="#como-esta-implementado" class="toc-link" data-target="como-esta-implementado">Cómo está implementado</a></li>
+            <li class="toc-item"><a href="#que-es-tu-api-key" class="toc-link" data-target="que-es-tu-api-key">Qué es tu API key</a></li>
+            <li class="toc-item"><a href="#conectar-tu-ide" class="toc-link" data-target="conectar-tu-ide">Conectar tu IDE</a></li>
+            <li class="toc-item"><a href="#se-instala" class="toc-link" data-target="se-instala">¿Se instala?</a></li>
+            <li class="toc-item"><a href="#como-lo-usa-la-ia" class="toc-link" data-target="como-lo-usa-la-ia">Cómo lo usa la IA</a></li>
+            <li class="toc-item"><a href="#las-tools" class="toc-link" data-target="las-tools">Las tools</a></li>
+            <li class="toc-item"><a href="#las-reglas" class="toc-link" data-target="las-reglas">Las reglas</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <!-- Main Reader Body -->
+      <article class="content-card">
+        
+        <section id="el-problema" class="doc-section">
+          <h2>El problema</h2>
+          <p>
+            Somos once equipos trabajando en paralelo sobre el mismo sistema. Sin una fuente única, cada equipo inventa su forma de manejar errores, de nombrar endpoints, de armar un formulario. A los seis meses hay once dialectos y nadie puede moverse entre equipos sin reaprender todo.
+          </p>
+          <p>
+            Los documentos de Confluence no lo resuelven, porque nadie los abre en el momento exacto en que está escribiendo el código.
+          </p>
+        </section>
+
+        <section id="la-idea" class="doc-section">
+          <h2>La idea</h2>
+          <p>Un solo catálogo de convenciones, con <strong>dos caras sobre los mismos datos</strong>:</p>
+          <ul>
+            <li><strong>Para personas:</strong> esta web. Buscás, leés, proponés cambios. Todo queda versionado y auditado.</li>
+            <li><strong>Para agentes:</strong> un endpoint MCP. Tu IDE se conecta con tu key y el agente consulta el catálogo solo, antes de escribir código.</li>
+          </ul>
+          <div class="info-box">
+            <p>💡 Las dos caras leen la misma base. Lo que se aprueba acá es lo que el agente lee un segundo después: no hay <code>git pull</code> ni versiones desfasadas entre equipos.</p>
+          </div>
+        </section>
+
+        <section id="por-que-no-es-un-marketplace" class="doc-section">
+          <h2>Por qué no es un marketplace</h2>
+          <p>
+            La palabra aparece seguido y conviene sacarla del medio, porque el modelo mental equivocado lleva a decisiones equivocadas.
+          </p>
+          <p>
+            En un marketplace hay <strong>muchos oferentes compitiendo</strong> y quien consume elige entre opciones. Acá pasa exactamente lo contrario: si aparecen seis versiones distintas del skill de botones, eso no es variedad — es el fracaso del proyecto.
+          </p>
+        </section>
+
+        <section id="que-es-un-skill" class="doc-section">
+          <h2>Qué es un skill</h2>
+          <p>
+            Un archivo Markdown con un frontmatter de metadatos y un cuerpo que describe una regla concreta con ejemplos de código.
+          </p>
+          <p>
+            Cada skill define exactamente cuándo debe ser utilizado por una máquina mediante el campo <code>when_to_use</code>.
+          </p>
+        </section>
+
+        <section id="que-es-mcp" class="doc-section">
+          <h2>Qué es MCP</h2>
+          <p>
+            <strong>Model Context Protocol</strong> es el estándar abierto que permite conectar asistentes de IA (Cursor, Claude Code, Antigravity) con herramientas locales o remotas mediante JSON-RPC.
+          </p>
+        </section>
+
+        <section id="como-esta-implementado" class="doc-section">
+          <h2>Cómo está implementado</h2>
+          <p>
+            El backend está construido con Spring Boot 3.4 y Java 21, persistiendo convenciones en PostgreSQL con soporte para búsqueda full-text y trigramas. El frontend corre sobre Angular 22 zoneless con Signals y Tailwind CSS.
+          </p>
+        </section>
+
+        <section id="que-es-tu-api-key" class="doc-section">
+          <h2>Qué es tu API key</h2>
+          <p>
+            Una credencial criptográfica personal con formato <code>sk_hub_...</code> que identifica tu equipo y tus permisos cuando tu agente de IA realiza consultas o propone revisiones.
+          </p>
+        </section>
+
+        <section id="conectar-tu-ide" class="doc-section">
+          <h2>Conectar tu IDE</h2>
+          <p>
+            Agregá la configuración MCP en tu archivo <code>mcp.json</code> apuntando a <code>/api/mcp</code> con tu Bearer token en los headers de autorización.
+          </p>
+        </section>
+
+        <section id="se-instala" class="doc-section">
+          <h2>¿Se instala?</h2>
+          <p>
+            No necesitás instalar ningún binario extra: el IDE se comunica directamente vía HTTP con el servidor central de Skill Hub.
+          </p>
+        </section>
+
+        <section id="como-lo-usa-la-ia" class="doc-section">
+          <h2>Cómo lo usa la IA</h2>
+          <p>
+            Antes de comenzar una tarea, el agente llama a <code>search_skills</code> con una descripción de lo que está por construir. Si encuentra una convención activa, la descarga y aplica sus reglas de inmediato.
+          </p>
+        </section>
+
+        <section id="las-tools" class="doc-section">
+          <h2>Las tools</h2>
+          <p>
+            El servidor expone herramientas para buscar (<code>search_skills</code>), descargar (<code>get_skill</code>), sincronizar (<code>sync_skills</code>) y proponer nuevas reglas organizacionales (<code>propose_skill</code>).
+          </p>
+        </section>
+
+        <section id="las-reglas" class="doc-section">
+          <h2>Las reglas</h2>
+          <p>
+            Todas las propuestas viajan como provisionales hasta que un administrador las audita en la vista de revisión, asegurando que solo el código consensuado sea canónico.
+          </p>
+        </section>
+
+      </article>
+
+    </div>
+  </main>
+
+  <script>
+    gsap.registerPlugin(ScrollToPlugin);
+
+    const pill = document.getElementById('activePill');
+    const links = Array.from(document.querySelectorAll('.toc-link'));
+    const sections = links.map(l => document.getElementById(l.dataset.target));
+
+    let activeLink = links[0];
+    let isClickScrolling = false;
+
+    // Position the magnetic pill with GSAP
+    function movePillTo(link, animate = true) {
+      if (!link) return;
+      const top = link.offsetTop;
+      const height = link.offsetHeight;
+
+      if (!animate) {
+        gsap.set(pill, { y: top, height: height, opacity: 1 });
+      } else {
+        gsap.to(pill, {
+          y: top,
+          height: height,
+          opacity: 1,
+          duration: 0.32,
+          ease: "power2.out",
+          overwrite: "auto"
+        });
+      }
+
+      links.forEach(l => l.classList.remove('active'));
+      link.classList.add('active');
+      activeLink = link;
+    }
+
+    // Init pill position
+    window.addEventListener('load', () => {
+      movePillTo(links[0], false);
+      // Subtle stagger entrance for TOC items
+      gsap.from('.toc-item', {
+        x: -12,
+        opacity: 0,
+        stagger: 0.03,
+        duration: 0.45,
+        ease: 'power2.out'
+      });
+    });
+
+    // Smooth scroll with GSAP ScrollToPlugin
+    links.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = link.dataset.target;
+        const targetEl = document.getElementById(targetId);
+        if (!targetEl) return;
+
+        isClickScrolling = true;
+        movePillTo(link, true);
+
+        gsap.to(window, {
+          duration: 0.75,
+          scrollTo: { y: targetEl, offsetY: 84 },
+          ease: "power3.out",
+          overwrite: "auto",
+          onComplete: () => {
+            setTimeout(() => { isClickScrolling = false; }, 50);
+          }
+        });
+      });
+    });
+
+    // ScrollSpy to update active item smoothly
+    window.addEventListener('scroll', () => {
+      if (isClickScrolling) return;
+
+      const scrollPos = window.scrollY + 120;
+      let currentSection = sections[0];
+
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].offsetTop <= scrollPos) {
+          currentSection = sections[i];
+        } else {
+          break;
+        }
+      }
+
+      if (currentSection) {
+        const correspondingLink = links.find(l => l.dataset.target === currentSection.id);
+        if (correspondingLink && correspondingLink !== activeLink) {
+          movePillTo(correspondingLink, true);
+        }
+      }
+    }, { passive: true });
+  </script>
+</body>
+</html>

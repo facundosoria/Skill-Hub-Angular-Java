@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -31,20 +32,27 @@ public class SkillWriteService {
     private final NamedParameterJdbcTemplate jdbc;
     private final AuditService audit;
     private final ObjectMapper json;
+    private final CatalogArtifactService artifacts;
 
-    public SkillWriteService(NamedParameterJdbcTemplate jdbc, AuditService audit, ObjectMapper json) {
+    public SkillWriteService(NamedParameterJdbcTemplate jdbc, AuditService audit, ObjectMapper json,
+                             CatalogArtifactService artifacts) {
         this.jdbc = jdbc;
         this.audit = audit;
         this.json = json;
+        this.artifacts = artifacts;
     }
 
     // --- create ---------------------------------------------------------
 
     @Transactional
     public String createSkill(SkillInput input, String actorId) {
+        return createSkill(input, actorId, null);
+    }
+
+    @Transactional
+    public String createSkill(SkillInput input, String actorId, MultipartFile artifact) {
         List<String> errs = input.validate();
         if (!errs.isEmpty()) throw new DomainException(String.join("; ", errs));
-
         Integer exists = jdbc.query("SELECT 1 FROM skills WHERE slug = :slug LIMIT 1",
                 new MapSqlParameterSource("slug", input.slug()), rs -> rs.next() ? 1 : null);
         if (exists != null) throw new DomainException("Ya existe un skill con el slug \"" + input.slug() + "\"");
@@ -74,6 +82,11 @@ public class SkillWriteService {
 
         jdbc.update("UPDATE skills SET current_version_id = :vid::uuid WHERE id = :id::uuid",
                 new MapSqlParameterSource().addValue("vid", versionId).addValue("id", skillId));
+        if (artifact != null) {
+            artifacts.attachUploaded(versionId, artifact, actorId);
+        } else if (requiresArtifact(input.type())) {
+            artifacts.ensureDefaultArtifact(versionId, input.slug(), input.type(), input.content(), actorId);
+        }
         insertTags(skillId, input.tags());
 
         audit.logAudit(actorId, "skill.created", "skill", skillId,
@@ -91,6 +104,12 @@ public class SkillWriteService {
 
     @Transactional
     public UpdateResult updateSkill(String slug, SkillInput input, String actorId, boolean isAdmin) {
+        return updateSkill(slug, input, actorId, isAdmin, null);
+    }
+
+    @Transactional
+    public UpdateResult updateSkill(String slug, SkillInput input, String actorId, boolean isAdmin,
+                                    MultipartFile artifact) {
         List<String> errs = input.validate();
         if (!errs.isEmpty()) throw new DomainException(String.join("; ", errs));
 
@@ -98,6 +117,9 @@ public class SkillWriteService {
         String skillId = (String) skill.get("id");
         String status = (String) skill.get("status");
         String currentVersionId = (String) skill.get("current_version_id");
+        if (requiresArtifact(input.type()) && artifact == null && !artifacts.hasArtifact(currentVersionId)) {
+            throw new DomainException("Los plugins y contratos requieren un archivo adjunto");
+        }
 
         boolean applyDirectly = isAdmin || !"published".equals(status);
         int version = nextVersion(skillId);
@@ -126,6 +148,9 @@ public class SkillWriteService {
                 .addValue("changelog", input.changelog())
                 .addValue("actorId", actorId)
                 .addValue("meta", metaSnapshot), String.class);
+
+        if (artifact != null) artifacts.attachUploaded(versionId, artifact, actorId);
+        else artifacts.copyFromVersion(currentVersionId, versionId, actorId);
 
         if (applyDirectly) {
             applyMeta(skillId, input, versionId);
@@ -172,6 +197,12 @@ public class SkillWriteService {
     @Transactional
     public RevisionResult proposeRevision(String slug, int baseVersion, SkillInput proposed,
                                           String actorId, String rationale) {
+        return proposeRevision(slug, baseVersion, proposed, actorId, rationale, null, null, null);
+    }
+
+    public RevisionResult proposeRevision(String slug, int baseVersion, SkillInput proposed,
+                                          String actorId, String rationale,
+                                          byte[] fileBytes, String fileName, String fileContentType) {
         Map<String, Object> skill;
         try {
             skill = skillRow(slug);
@@ -243,6 +274,14 @@ public class SkillWriteService {
         jdbc.update("UPDATE skills SET pending_version_id = :vid::uuid WHERE id = :id::uuid",
                 new MapSqlParameterSource().addValue("vid", versionId).addValue("id", skillId));
 
+        if (fileBytes != null && fileBytes.length > 0) {
+            artifacts.attachBytes(versionId, fileName, fileContentType, fileBytes, actorId);
+        } else if (currentVersionId != null) {
+            artifacts.copyFromVersion(currentVersionId, versionId, actorId);
+        } else if (requiresArtifact(proposed.type())) {
+            artifacts.ensureDefaultArtifact(versionId, slug, proposed.type(), proposed.content(), actorId);
+        }
+
         Map<String, Object> meta = new LinkedHashMap<>();
         meta.put("slug", slug);
         meta.put("version", version);
@@ -258,7 +297,15 @@ public class SkillWriteService {
 
     @Transactional
     public void publishSkill(String slug, String actorId) {
-        String id = requireSkillId(slug);
+        Map<String, Object> skill = skillRow(slug);
+        String id = (String) skill.get("id");
+        String type = (String) skill.get("type");
+        String versionId = (String) skill.get("current_version_id");
+        if (requiresArtifact(type) && !artifacts.hasArtifact(versionId)) {
+            String content = jdbc.query("SELECT content FROM skill_versions WHERE id = :vid::uuid",
+                    new MapSqlParameterSource("vid", versionId), rs -> rs.next() ? rs.getString(1) : "");
+            artifacts.ensureDefaultArtifact(versionId, slug, type, content, actorId);
+        }
         jdbc.update("UPDATE skills SET status = 'published', updated_at = now() WHERE id = :id::uuid",
                 new MapSqlParameterSource("id", id));
         audit.logAudit(actorId, "skill.published", "skill", id, Map.of("slug", slug));
@@ -412,6 +459,10 @@ public class SkillWriteService {
 
     private String requireSkillId(String slug) {
         return (String) skillRow(slug).get("id");
+    }
+
+    private static boolean requiresArtifact(String type) {
+        return "plugin".equals(type) || "contract".equals(type);
     }
 
     private Map<String, Object> diffFields(Map<String, Object> before, SkillInput after,

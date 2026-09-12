@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo 3 - Stripe / Linear Docs Style & Liquid Stretch | Skill Hub</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollToPlugin.min.js"></script>
+  <style>
+    :root {
+      --bg: #11110f;
+      --surface: #181816;
+      --surface-2: #21211e;
+      --border: #2d2d2a;
+      --border-strong: #44443f;
+      --text: #f4f4f0;
+      --text-muted: #9e9d96;
+      --text-faint: #6e6d67;
+      --accent: #8b5cf6;
+      --accent-light: #a78bfa;
+      --accent-soft: rgba(139, 92, 246, 0.12);
+      --radius: 0.65rem;
+      --radius-lg: 1rem;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Demo Switcher Bar */
+    .demo-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0a0a09;
+      border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+    .demo-bar__badge {
+      background: #2b1f47;
+      color: #c084fc;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    .demo-bar__tabs { display: flex; gap: 0.4rem; }
+    .demo-bar__tab {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.3rem 0.75rem;
+      border-radius: 0.5rem;
+      transition: all 0.2s;
+    }
+    .demo-bar__tab:hover { color: var(--text); background: var(--surface-2); }
+    .demo-bar__tab.active {
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    /* App Header Mockup */
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    .app-header__logo {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .app-header__nav { display: flex; align-items: center; gap: 0.3rem; }
+    .app-header__link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 0.5rem;
+      transition: all 0.15s;
+    }
+    .app-header__link:hover { color: var(--text); }
+    .app-header__link.active {
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .app-header__user { margin-left: auto; font-size: 0.84rem; color: var(--text-muted); }
+
+    /* Main Container */
+    .main-container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem 5rem;
+    }
+
+    /* Clean Compact Hero */
+    .compact-hero {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .compact-hero__crumb {
+      font-size: 0.8rem;
+      color: var(--accent-light);
+      margin-bottom: 0.4rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .compact-hero__title {
+      font-size: 2.1rem;
+      font-weight: 750;
+      letter-spacing: -0.035em;
+      color: var(--text);
+    }
+    .compact-hero__desc {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      margin-top: 0.4rem;
+      max-width: 48rem;
+    }
+
+    /* Layout Grid */
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 3rem;
+      align-items: start;
+    }
+
+    /* Stripe/Linear Style Sidebar */
+    .linear-sidebar {
+      position: sticky;
+      top: 4.5rem;
+      padding-right: 1rem;
+    }
+    .nav-group {
+      margin-bottom: 1.75rem;
+    }
+    .nav-group__title {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-faint);
+      margin-bottom: 0.6rem;
+      padding-left: 0.8rem;
+    }
+    .nav-list-wrapper {
+      position: relative;
+      border-left: 1px solid var(--border);
+    }
+    /* Liquid Stretch Left Border Bar (GSAP-powered) */
+    .liquid-bar {
+      position: absolute;
+      left: -1px;
+      top: 0;
+      width: 2.5px;
+      height: 28px;
+      background: var(--accent-light);
+      border-radius: 2px;
+      box-shadow: 0 0 10px var(--accent);
+      z-index: 5;
+      pointer-events: none;
+      will-change: transform, height;
+    }
+    .nav-item {
+      display: block;
+      padding: 0.38rem 0.85rem;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+      position: relative;
+      border-radius: 0 0.4rem 0.4rem 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nav-item:hover {
+      color: var(--text);
+    }
+    .nav-item.active {
+      color: var(--accent-light);
+      font-weight: 600;
+      background: var(--accent-soft);
+    }
+
+    /* Reader Document Pane */
+    .linear-content {
+      max-width: 52rem;
+    }
+    .content-block {
+      padding-bottom: 3.5rem;
+      margin-bottom: 3.5rem;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+    }
+    .content-block:last-child {
+      border-bottom: none;
+    }
+    .content-block h2 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--text);
+      margin-bottom: 1rem;
+      padding-top: 0.5rem;
+      transition: color 0.3s;
+    }
+    .content-block h2.flash {
+      color: var(--accent-light);
+    }
+    .content-block p {
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+      font-size: 1rem;
+      line-height: 1.65;
+    }
+    .content-block ul {
+      margin: 1rem 0 1.25rem 1.5rem;
+      color: var(--text-muted);
+    }
+    .content-block li {
+      margin-bottom: 0.5rem;
+    }
+    .content-block strong {
+      color: var(--text);
+    }
+    code {
+      font-family: var(--font-mono);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      font-size: 0.85em;
+      color: var(--accent-light);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Demo Switcher Header -->
+  <aside class="demo-bar">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="demo-bar__badge">Propuesta 3</span>
+      <strong>Estilo Linear / Stripe Docs con Liquid Stretch & Grupos</strong>
+    </div>
+    <nav class="demo-bar__tabs">
+      <a href="demo1.html" class="demo-bar__tab">Demo 1</a>
+      <a href="demo2.html" class="demo-bar__tab">Demo 2</a>
+      <a href="demo3.html" class="demo-bar__tab active">Demo 3</a>
+    </nav>
+  </aside>
+
+  <!-- App Header Mockup -->
+  <header class="app-header">
+    <div class="app-header__logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" stroke-width="2.2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+      Skill Hub
+    </div>
+    <nav class="app-header__nav">
+      <a href="#" class="app-header__link">Catálogo</a>
+      <a href="#" class="app-header__link">Mi key</a>
+      <a href="#" class="app-header__link active">Cómo funciona</a>
+      <a href="#" class="app-header__link">Revisar</a>
+      <a href="#" class="app-header__link">Uso</a>
+    </nav>
+    <div class="app-header__user">admin_test · Salir</div>
+  </header>
+
+  <main class="main-container">
+
+    <header class="compact-hero">
+      <div>
+        <div class="compact-hero__crumb">
+          <span>Docs</span> <span>/</span> <span>Guía de Arquitectura</span>
+        </div>
+        <h1 class="compact-hero__title">Cómo funciona Skill Hub</h1>
+        <p class="compact-hero__desc">
+          Fuente de verdad de ingeniería: qué es, cómo sincroniza tu IDE y cómo los agentes de IA adoptan las convenciones en vivo.
+        </p>
+      </div>
+    </header>
+
+    <div class="docs-layout">
+      
+      <!-- Grouped Categorized Sidebar -->
+      <aside class="linear-sidebar">
+        
+        <div class="nav-list-wrapper" id="navWrapper">
+          <div class="liquid-bar" id="liquidBar"></div>
+
+          <div class="nav-group">
+            <div class="nav-group__title">1. Fundamentos</div>
+            <a href="#el-problema" class="nav-item active" data-target="el-problema">El problema</a>
+            <a href="#la-idea" class="nav-item" data-target="la-idea">La idea</a>
+            <a href="#por-que-no-es-un-marketplace" class="nav-item" data-target="por-que-no-es-un-marketplace">Por qué no es marketplace</a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group__title">2. Arquitectura & MCP</div>
+            <a href="#que-es-un-skill" class="nav-item" data-target="que-es-un-skill">Qué es un skill</a>
+            <a href="#que-es-mcp" class="nav-item" data-target="que-es-mcp">Qué es MCP</a>
+            <a href="#como-esta-implementado" class="nav-item" data-target="como-esta-implementado">Implementación técnica</a>
+            <a href="#que-es-tu-api-key" class="nav-item" data-target="que-es-tu-api-key">Tu API key</a>
+            <a href="#conectar-tu-ide" class="nav-item" data-target="conectar-tu-ide">Conectar tu IDE</a>
+          </div>
+
+          <div class="nav-group">
+            <div class="nav-group__title">3. Agentes en Acción</div>
+            <a href="#como-lo-usa-la-ia" class="nav-item" data-target="como-lo-usa-la-ia">Cómo lo usa la IA</a>
+            <a href="#las-tools" class="nav-item" data-target="las-tools">Las tools MCP</a>
+            <a href="#las-reglas" class="nav-item" data-target="las-reglas">Reglas y auditoría</a>
+          </div>
+
+        </div>
+
+      </aside>
+
+      <!-- Main Reader Pane -->
+      <article class="linear-content">
+
+        <section id="el-problema" class="content-block">
+          <h2>El problema</h2>
+          <p>
+            Somos once equipos trabajando en paralelo sobre el mismo sistema. Sin una fuente única, cada equipo inventa su forma de manejar errores, de nombrar endpoints, de armar un formulario. A los seis meses hay once dialectos y nadie puede moverse entre equipos sin reaprender todo.
+          </p>
+          <p>
+            Los documentos de Confluence no lo resuelven, porque nadie los abre en el momento exacto en que está escribiendo el código.
+          </p>
+        </section>
+
+        <section id="la-idea" class="content-block">
+          <h2>La idea</h2>
+          <p>Un solo catálogo de convenciones, con <strong>dos caras sobre los mismos datos</strong>:</p>
+          <ul>
+            <li><strong>Para personas:</strong> esta web. Buscás, leés, proponés cambios. Todo queda versionado y auditado.</li>
+            <li><strong>Para agentes:</strong> un endpoint MCP. Tu IDE se conecta con tu key y el agente consulta el catálogo solo, antes de escribir código.</li>
+          </ul>
+          <p>
+            Las dos leen la misma base. Lo que se aprueba acá es lo que el agente lee un segundo después: no hay <code>git pull</code> ni versiones desfasadas entre equipos.
+          </p>
+        </section>
+
+        <section id="por-que-no-es-un-marketplace" class="content-block">
+          <h2>Por qué no es un marketplace</h2>
+          <p>
+            La palabra aparece seguido y conviene sacarla del medio, porque el modelo mental equivocado lleva a decisiones equivocadas.
+          </p>
+          <p>
+            En un marketplace hay <strong>muchos oferentes compitiendo</strong> y quien consume elige entre opciones. Acá pasa exactamente lo contrario: si aparecen seis versiones distintas del skill de botones, eso no es variedad — es el fracaso del proyecto.
+          </p>
+        </section>
+
+        <section id="que-es-un-skill" class="content-block">
+          <h2>Qué es un skill</h2>
+          <p>
+            Un archivo Markdown con un frontmatter determinista y un cuerpo estructurado con la regla <code>## Rule</code> y ejemplos concretos.
+          </p>
+        </section>
+
+        <section id="que-es-mcp" class="content-block">
+          <h2>Qué es MCP</h2>
+          <p>
+            <strong>Model Context Protocol</strong>: estándar abierto para conectar asistentes de IA de manera estandarizada y segura con servidores de herramientas y contexto.
+          </p>
+        </section>
+
+        <section id="como-esta-implementado" class="content-block">
+          <h2>Implementación técnica</h2>
+          <p>
+            Backend en <strong>Spring Boot 3.4 (Java 21)</strong> con PostgreSQL y búsqueda vectorial/full-text. Frontend en <strong>Angular 22</strong> standalone, signals y Tailwind CSS.
+          </p>
+        </section>
+
+        <section id="que-es-tu-api-key" class="content-block">
+          <h2>Tu API key</h2>
+          <p>
+            Tu identidad como desarrollador: autentica las consultas de tus agentes de IA e imputa auditoría al equipo correcto.
+          </p>
+        </section>
+
+        <section id="conectar-tu-ide" class="content-block">
+          <h2>Conectar tu IDE</h2>
+          <p>
+            Configuración directa en Cursor, Claude Code o Windsurf agregando el endpoint <code>/api/mcp</code> con tu Bearer token.
+          </p>
+        </section>
+
+        <section id="como-lo-usa-la-ia" class="content-block">
+          <h2>Cómo lo usa la IA</h2>
+          <p>
+            El agente busca proactivamente en el catálogo antes de editar o crear código. No requiere que le indiques el skill por nombre.
+          </p>
+        </section>
+
+        <section id="las-tools" class="content-block">
+          <h2>Las tools MCP</h2>
+          <p>
+            Lectura (<code>search_skills</code>, <code>get_skill</code>, <code>sync_skills</code>, <code>list_skills</code>, <code>get_port_registry</code>) y escritura auditada (<code>propose_skill</code>, <code>propose_revision</code>).
+          </p>
+        </section>
+
+        <section id="las-reglas" class="content-block">
+          <h2>Reglas y auditoría</h2>
+          <p>
+            Todas las propuestas viajan como provisionales hasta que un administrador las audita en la vista de revisión, asegurando que solo el código consensuado sea canónico.
+          </p>
+        </section>
+
+      </article>
+
+    </div>
+  </main>
+
+  <script>
+    gsap.registerPlugin(ScrollToPlugin);
+
+    const bar = document.getElementById('liquidBar');
+    const wrapper = document.getElementById('navWrapper');
+    const items = Array.from(document.querySelectorAll('.nav-item'));
+    const sections = items.map(it => document.getElementById(it.dataset.target));
+    let currentActive = items[0];
+    let isClickScrolling = false;
+
+    function moveLiquidBar(targetItem, animate = true) {
+      if (!targetItem) return;
+      const targetY = targetItem.offsetTop;
+      const targetH = targetItem.offsetHeight;
+      const prevY = currentActive ? currentActive.offsetTop : targetY;
+      const distance = Math.abs(targetY - prevY);
+
+      items.forEach(it => it.classList.remove('active'));
+      targetItem.classList.add('active');
+      currentActive = targetItem;
+
+      if (!animate) {
+        gsap.set(bar, { y: targetY, height: targetH });
+        return;
+      }
+
+      // "Liquid stretch" effect: stretch height during transition if jumping multiple items
+      const tl = gsap.timeline();
+      if (distance > 35) {
+        tl.to(bar, {
+          y: Math.min(prevY, targetY),
+          height: distance + targetH,
+          duration: 0.18,
+          ease: "power2.in"
+        })
+        .to(bar, {
+          y: targetY,
+          height: targetH,
+          duration: 0.28,
+          ease: "elastic.out(1, 0.75)"
+        });
+      } else {
+        tl.to(bar, {
+          y: targetY,
+          height: targetH,
+          duration: 0.35,
+          ease: "power3.out"
+        });
+      }
+    }
+
+    // Interactive Hover on inactive items
+    items.forEach(item => {
+      item.addEventListener('mouseenter', () => {
+        if (!item.classList.contains('active')) {
+          gsap.to(item, { x: 5, duration: 0.2, ease: "power2.out" });
+        }
+      });
+      item.addEventListener('mouseleave', () => {
+        gsap.to(item, { x: 0, duration: 0.2, ease: "power2.out" });
+      });
+
+      item.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = item.dataset.target;
+        const targetEl = document.getElementById(targetId);
+        if (!targetEl) return;
+
+        isClickScrolling = true;
+        moveLiquidBar(item, true);
+
+        // Flash target heading softly
+        const h2 = targetEl.querySelector('h2');
+        if (h2) {
+          h2.classList.add('flash');
+          setTimeout(() => h2.classList.remove('flash'), 800);
+        }
+
+        gsap.to(window, {
+          duration: 0.65,
+          scrollTo: { y: targetEl, offsetY: 84 },
+          ease: "expo.out",
+          overwrite: "auto",
+          onComplete: () => {
+            setTimeout(() => { isClickScrolling = false; }, 50);
+          }
+        });
+      });
+    });
+
+    window.addEventListener('load', () => {
+      moveLiquidBar(items[0], false);
+    });
+
+    window.addEventListener('scroll', () => {
+      if (isClickScrolling) return;
+      const scrollPos = window.scrollY + 130;
+      let activeIdx = 0;
+
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].offsetTop <= scrollPos) {
+          activeIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      if (items[activeIdx] && items[activeIdx] !== currentActive) {
+        moveLiquidBar(items[activeIdx], true);
+      }
+    }, { passive: true });
+  </script>
+</body>
+</html>
