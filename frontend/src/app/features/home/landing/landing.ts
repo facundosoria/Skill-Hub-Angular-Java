@@ -69,16 +69,16 @@ export class Landing {
     const geometry = new THREE.IcosahedronGeometry(1.15, 1);
     const surface = new THREE.Mesh(
       geometry,
-      new THREE.MeshStandardMaterial({ color: 0xe67e22, metalness: 0.25, roughness: 0.45 }),
+      new THREE.MeshStandardMaterial({ color: 0x16c7d8, metalness: 0.25, roughness: 0.45 }),
     );
     const edges = new THREE.LineSegments(
       new THREE.EdgesGeometry(geometry),
-      new THREE.LineBasicMaterial({ color: 0x43210a, transparent: true, opacity: 0.55 }),
+      new THREE.LineBasicMaterial({ color: 0x063f4a, transparent: true, opacity: 0.55 }),
     );
     object.add(surface, edges);
     this.scene.add(object);
     this.scene.add(new THREE.AmbientLight(0xffffff, 2.2));
-    const keyLight = new THREE.DirectionalLight(0xffe1be, 3.5);
+    const keyLight = new THREE.DirectionalLight(0xc9f7ff, 3.5);
     keyLight.position.set(2, 3, 4);
     this.scene.add(keyLight);
     this.object = object;
@@ -101,7 +101,7 @@ export class Landing {
 
   private createScrollTimeline(root: HTMLElement, canvas: HTMLCanvasElement): void {
     const waypoints = Array.from(root.querySelectorAll<HTMLElement>('[data-waypoint]'));
-    if (waypoints.length !== 4 || !this.object) return;
+    if (waypoints.length !== 4) return;
     const states = waypoints.map((waypoint) => Flip.getState(waypoint));
     Flip.fit(canvas, states[0], { absolute: true, scale: true });
     const timeline = gsap.timeline({
@@ -168,15 +168,15 @@ export class Landing {
     return gsap.utils.clamp(0.001, 0.999, (arrivalScroll - rootTop) / scrollRange);
   }
 
-  private readonly render = (): void => {
-    if (this.renderer && this.scene && this.camera) this.renderer.render(this.scene, this.camera);
-  };
-
   private disposeMotion(): void {
     this.media?.revert();
     this.media = undefined;
     this.disposeScene();
   }
+
+  private readonly render = (): void => {
+    if (this.renderer && this.scene && this.camera) this.renderer.render(this.scene, this.camera);
+  };
 
   private disposeScene(): void {
     this.resizeObserver?.disconnect();

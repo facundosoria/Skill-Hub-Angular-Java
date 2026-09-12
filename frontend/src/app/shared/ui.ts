@@ -108,6 +108,7 @@ export class UiEmptyState {
 
 @Component({
   selector: 'ui-field',
+  host: { class: 'block' },
   template: `
     <label class="block">
       <span class="mb-1.5 block text-[13px] font-medium text-text-muted">{{ label() }}</span>
