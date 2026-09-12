@@ -292,6 +292,9 @@ export const en: Dict = {
     personas: "people",
     sobre: "across",
     skills: "skills",
+    verTodas: "View all",
+    todasLasBusquedas: "Searches that found nothing",
+    cerrar: "Close",
   },
   usuarios: {
     titulo: "Pending users",

@@ -288,6 +288,9 @@ export const es = {
     personas: "personas",
     sobre: "sobre",
     skills: "skills",
+    verTodas: "Ver todas",
+    todasLasBusquedas: "Búsquedas sin resultado",
+    cerrar: "Cerrar",
   },
   usuarios: {
     titulo: "Usuarios pendientes",

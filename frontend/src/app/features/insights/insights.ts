@@ -1,4 +1,4 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../../core/api';
@@ -72,35 +72,62 @@ type Miss = { query_text: string; veces: number };
 
           <!-- Panel 2: Lo que falta / Búsquedas sin resultado (5 columnas) -->
           <section uiCard class="lg:col-span-5 flex flex-col justify-between border-warning/30">
-            <div class="p-4 border-b border-border bg-warning-soft/20 flex items-center justify-between">
-              <div>
-                <h2 class="text-sm font-semibold text-warning flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
-                  </svg>
-                  <span>{{ t().insights.faltaTitulo }}</span>
-                </h2>
-                <p class="mt-0.5 text-xs text-text-faint">{{ t().insights.faltaSubtitulo }}</p>
+            <div>
+              <div class="p-4 border-b border-border bg-warning-soft/20 flex items-center justify-between">
+                <div>
+                  <h2 class="text-sm font-semibold text-warning flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="12" y1="8" x2="12" y2="12" />
+                      <line x1="12" y1="16" x2="12.01" y2="16" />
+                    </svg>
+                    <span>{{ t().insights.faltaTitulo }}</span>
+                  </h2>
+                  <p class="mt-0.5 text-xs text-text-faint">{{ t().insights.faltaSubtitulo }}</p>
+                </div>
+                @if (missed().length > 0) {
+                  <button
+                    type="button"
+                    (click)="modalMissedOpen.set(true)"
+                    class="cursor-pointer transition-opacity hover:opacity-80"
+                    [attr.title]="t().insights.verTodas"
+                  >
+                    <span uiBadge tone="warning">{{ missed().length }}</span>
+                  </button>
+                }
               </div>
-              @if (missed().length > 0) {
-                <span uiBadge tone="warning">{{ missed().length }}</span>
+
+              @if (missed().length === 0) {
+                <div class="p-6">
+                  <ui-empty-state [title]="t().insights.faltaVacio" />
+                </div>
+              } @else {
+                <div class="divide-y divide-border">
+                  @for (m of topMissed(); track m.query_text) {
+                    <div class="flex items-center justify-between gap-3 p-3.5 hover:bg-surface-2/60 transition-colors">
+                      <span class="font-mono text-xs text-text truncate">"{{ m.query_text }}"</span>
+                      <span uiBadge tone="warning">{{ m.veces }}×</span>
+                    </div>
+                  }
+                </div>
               }
             </div>
 
-            @if (missed().length === 0) {
-              <div class="p-6">
-                <ui-empty-state [title]="t().insights.faltaVacio" />
-              </div>
-            } @else {
-              <div class="divide-y divide-border">
-                @for (m of missed(); track m.query_text) {
-                  <div class="flex items-center justify-between gap-3 p-3.5 hover:bg-surface-2/60 transition-colors">
-                    <span class="font-mono text-xs text-text truncate">"{{ m.query_text }}"</span>
-                    <span uiBadge tone="warning">{{ m.veces }}×</span>
-                  </div>
-                }
+            @if (missed().length > 5) {
+              <div class="p-3 border-t border-border bg-surface-2/30 flex items-center justify-between">
+                <span class="text-xs text-text-faint">
+                  Top 5
+                </span>
+                <button
+                  type="button"
+                  uiButton
+                  variant="secondary"
+                  size="sm"
+                  (click)="modalMissedOpen.set(true)"
+                  class="cursor-pointer text-xs"
+                >
+                  {{ t().insights.verTodas }} ({{ missed().length }})
+                </button>
               </div>
             }
           </section>
@@ -155,6 +182,86 @@ type Miss = { query_text: string; veces: number };
           </section>
         </div>
       }
+
+      <!-- Modal para ver todas las búsquedas sin resultado -->
+      @if (modalMissedOpen()) {
+        <div
+          class="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm"
+          (click)="modalMissedOpen.set(false)"
+          role="dialog"
+          aria-modal="true"
+          [attr.aria-label]="t().insights.todasLasBusquedas"
+        >
+          <div
+            class="relative w-full max-w-2xl rounded-[var(--radius-lg)] border border-border bg-surface p-5 sm:p-6 shadow-2xl flex flex-col max-h-[85vh] anim-pop-in"
+            (click)="$event.stopPropagation()"
+          >
+            <!-- Header del modal -->
+            <div class="flex items-center justify-between border-b border-border pb-3.5 mb-4">
+              <div class="flex items-center gap-2.5">
+                <div class="flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" class="h-4 w-4 text-warning" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                  <h2 class="text-base font-semibold tracking-tight">{{ t().insights.todasLasBusquedas }}</h2>
+                </div>
+                <span uiBadge tone="warning">{{ missed().length }}</span>
+              </div>
+              <button
+                type="button"
+                (click)="modalMissedOpen.set(false)"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-[var(--radius)] text-text-muted hover:text-text hover:bg-surface-2 transition-colors cursor-pointer"
+                [attr.aria-label]="t().insights.cerrar"
+                [attr.title]="t().insights.cerrar"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  class="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Explicación -->
+            <p class="text-xs text-text-muted mb-3">
+              {{ t().insights.faltaSubtitulo }}
+            </p>
+
+            <!-- Lista scrollable con todos los términos -->
+            <div class="flex-1 overflow-y-auto pr-1 divide-y divide-border border border-border rounded-[var(--radius)]">
+              @for (m of missed(); track m.query_text; let i = $index) {
+                <div class="flex items-center justify-between gap-3 p-3 hover:bg-surface-2/60 transition-colors">
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="font-mono text-xs text-text-faint w-5 text-right shrink-0">{{ i + 1 }}</span>
+                    <span class="font-mono text-xs text-text truncate">"{{ m.query_text }}"</span>
+                  </div>
+                  <span uiBadge tone="warning" class="shrink-0">{{ m.veces }}×</span>
+                </div>
+              }
+            </div>
+
+            <!-- Footer del modal -->
+            <div class="mt-4 pt-3.5 border-t border-border flex items-center justify-between">
+              <span class="text-xs text-text-faint">
+                {{ missed().length }} {{ missed().length === 1 ? t().insights.consulta : t().insights.consultas }}
+              </span>
+              <button uiButton variant="secondary" size="sm" (click)="modalMissedOpen.set(false)">
+                {{ t().insights.cerrar }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     </div>
   `,
 })
@@ -167,7 +274,17 @@ export class Insights {
   missed = signal<Miss[]>([]);
   loading = signal(true);
 
+  topMissed = computed(() => this.missed().slice(0, 5));
+  modalMissedOpen = signal(false);
+
   maxHits = computed(() => Math.max(...this.top().map((t) => t.hits), 1));
+
+  @HostListener('window:keydown.escape')
+  onEscape(): void {
+    if (this.modalMissedOpen()) {
+      this.modalMissedOpen.set(false);
+    }
+  }
 
   constructor() {
     firstValueFrom(this.api.get<{ top: Top[]; teams: Team[]; missed: Miss[] }>('/insights'))

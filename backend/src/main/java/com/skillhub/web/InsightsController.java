@@ -57,7 +57,7 @@ public class InsightsController {
                 SELECT query_text, COUNT(*)::int AS veces
                 FROM missed_queries
                 WHERE created_at >= now() - 90 * INTERVAL '1 day'
-                GROUP BY query_text ORDER BY veces DESC, MAX(created_at) DESC LIMIT 15
+                GROUP BY query_text ORDER BY veces DESC, MAX(created_at) DESC LIMIT 100
                 """);
         return Map.of("top", top, "teams", teams, "missed", missed);
     }
