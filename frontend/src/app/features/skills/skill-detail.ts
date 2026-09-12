@@ -105,6 +105,81 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
         <skill-markdown [content]="d.skill.version?.content ?? ''" />
       </article>
 
+      <section uiCard class="mt-8 p-4" [attr.aria-label]="t().skill.calificaciones">
+        <h2 class="text-[13px] text-text-muted">{{ t().skill.calificaciones }}</h2>
+
+        @if (user()) {
+          <form class="mt-3 border-b border-border pb-4" (ngSubmit)="submitRating()">
+            <p class="text-sm font-medium">{{ t().skill.puntuar }}</p>
+            <div class="rating-demo mt-2" role="radiogroup" [attr.aria-label]="t().skill.puntuar">
+              @for (star of ratingStars; track star) {
+                <input [class]="'rating-demo__input rating-demo__input-' + star" [id]="'rating-' + star" type="radio" name="skill-rating"
+                       [value]="star" [checked]="selectedRating() === star" [disabled]="busy()"
+                       (change)="selectRating(star)" />
+              }
+              @for (star of ratingStars; track star) {
+                <label class="rating-demo__label" [for]="'rating-' + star"
+                       [class.rating-demo__label--delay1]="ratingDelays()[star - 1] === 1"
+                       [class.rating-demo__label--delay2]="ratingDelays()[star - 1] === 2"
+                       [class.rating-demo__label--delay3]="ratingDelays()[star - 1] === 3"
+                       [class.rating-demo__label--delay4]="ratingDelays()[star - 1] === 4">
+                  <svg class="rating-star" viewBox="0 0 32 32" aria-hidden="true">
+                    <g transform="translate(16,16)">
+                      <circle class="rating-star__ring" fill="none" stroke-width="16" r="8" transform="scale(0)" />
+                    </g>
+                    <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <g transform="translate(16,16) rotate(180)">
+                        <polygon class="rating-star__stroke" points="0,15 4.41,6.07 14.27,4.64 7.13,-2.32 8.82,-12.14 0,-7.5 -8.82,-12.14 -7.13,-2.32 -14.27,4.64 -4.41,6.07" fill="none" />
+                        <polygon class="rating-star__fill" points="0,15 4.41,6.07 14.27,4.64 7.13,-2.32 8.82,-12.14 0,-7.5 -8.82,-12.14 -7.13,-2.32 -14.27,4.64 -4.41,6.07" />
+                      </g>
+                      <g class="rating-star__lines" transform="translate(16,16)">
+                        <polyline transform="rotate(0)" points="0 4,0 16" />
+                        <polyline transform="rotate(72)" points="0 4,0 16" />
+                        <polyline transform="rotate(144)" points="0 4,0 16" />
+                        <polyline transform="rotate(216)" points="0 4,0 16" />
+                        <polyline transform="rotate(288)" points="0 4,0 16" />
+                      </g>
+                    </g>
+                  </svg>
+                  <span class="rating-demo__sr">{{ star }} {{ ratingLabel(star) }}</span>
+                </label>
+              }
+              @if (selectedRating()) {
+                <p class="rating-demo__display" aria-live="polite">{{ ratingLabel(selectedRating()) }}</p>
+              }
+            </div>
+            <label class="mt-3 block text-[13px] font-medium text-text-muted" for="rating-comment">
+              {{ t().skill.comentario }}
+            </label>
+            <textarea id="rating-comment" uiTextarea class="mt-1.5 min-h-24" name="rating-comment"
+                      [(ngModel)]="ratingComment" [disabled]="busy()" maxlength="2000"
+                      [placeholder]="t().skill.comentarioPlaceholder" required></textarea>
+            <div class="mt-3 flex items-center gap-3">
+              <button uiButton size="sm" type="submit" [disabled]="busy() || !selectedRating() || !ratingComment.trim()">
+                {{ busy() ? t().skill.enviandoCalificacion : t().skill.enviarCalificacion }}
+              </button>
+              @if (error()) { <p class="text-xs text-danger">{{ error() }}</p> }
+            </div>
+          </form>
+        }
+
+        @if (d.ratings.length) {
+          <ol class="mt-4 space-y-4">
+            @for (rating of d.ratings; track rating.voterName + rating.updatedAt) {
+              <li class="border-b border-border pb-4 last:border-0 last:pb-0">
+                <div class="text-lg leading-none text-warning" role="img" [attr.aria-label]="rating.rating + ' / 5'">
+                  {{ stars(rating.rating) }}
+                </div>
+                <p class="mt-2 text-sm font-medium">{{ rating.voterName }}</p>
+                <p class="mt-1 whitespace-pre-wrap text-sm text-text-muted">{{ rating.comment }}</p>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="mt-3 text-sm text-text-faint">{{ t().skill.sinCalificaciones }}</p>
+        }
+      </section>
+
       @if (d.related.length) {
         <section class="mt-8">
           <h2 class="mb-2 text-[13px] text-text-muted">{{ t().skill.relacionados }}</h2>
@@ -178,6 +253,66 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
       <div class="mt-6 h-40 animate-pulse rounded-md bg-surface-2"></div>
     }
   `,
+  styles: `
+    .rating-demo { display: flex; align-items: center; }
+    .rating-demo__input { position: absolute; appearance: none; }
+    .rating-demo__label { cursor: pointer; padding: 0.125rem; }
+    .rating-demo__input-1:focus-visible ~ .rating-demo__label:nth-of-type(1),
+    .rating-demo__input-2:focus-visible ~ .rating-demo__label:nth-of-type(2),
+    .rating-demo__input-3:focus-visible ~ .rating-demo__label:nth-of-type(3),
+    .rating-demo__input-4:focus-visible ~ .rating-demo__label:nth-of-type(4),
+    .rating-demo__input-5:focus-visible ~ .rating-demo__label:nth-of-type(5) {
+      outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius);
+    }
+    .rating-star { display: block; width: 2rem; height: 2rem; overflow: visible; pointer-events: none; }
+    .rating-star__ring, .rating-star__fill, .rating-star__lines, .rating-star__stroke { animation-duration: 1s; animation-timing-function: ease-in-out; animation-fill-mode: forwards; }
+    .rating-star__ring, .rating-star__lines { stroke: var(--warning); }
+    .rating-star__stroke { stroke: currentColor; }
+    .rating-star__fill { fill: var(--warning); transform: scale(0); transform-origin: center; }
+    .rating-star__lines { stroke-dasharray: 12 13; stroke-dashoffset: -13; }
+    .rating-demo__input-1:hover ~ .rating-demo__label:nth-of-type(-n + 1) .rating-star__stroke,
+    .rating-demo__input-2:hover ~ .rating-demo__label:nth-of-type(-n + 2) .rating-star__stroke,
+    .rating-demo__input-3:hover ~ .rating-demo__label:nth-of-type(-n + 3) .rating-star__stroke,
+    .rating-demo__input-4:hover ~ .rating-demo__label:nth-of-type(-n + 4) .rating-star__stroke,
+    .rating-demo__input-5:hover ~ .rating-demo__label:nth-of-type(-n + 5) .rating-star__stroke { stroke: var(--warning); transform: scale(1); }
+    .rating-demo__input:nth-of-type(1):checked ~ .rating-demo__label:nth-of-type(-n + 1) .rating-star__ring,
+    .rating-demo__input:nth-of-type(2):checked ~ .rating-demo__label:nth-of-type(-n + 2) .rating-star__ring,
+    .rating-demo__input:nth-of-type(3):checked ~ .rating-demo__label:nth-of-type(-n + 3) .rating-star__ring,
+    .rating-demo__input:nth-of-type(4):checked ~ .rating-demo__label:nth-of-type(-n + 4) .rating-star__ring,
+    .rating-demo__input:nth-of-type(5):checked ~ .rating-demo__label:nth-of-type(-n + 5) .rating-star__ring { animation-name: rating-ring; }
+    .rating-demo__input:nth-of-type(1):checked ~ .rating-demo__label:nth-of-type(-n + 1) .rating-star__stroke,
+    .rating-demo__input:nth-of-type(2):checked ~ .rating-demo__label:nth-of-type(-n + 2) .rating-star__stroke,
+    .rating-demo__input:nth-of-type(3):checked ~ .rating-demo__label:nth-of-type(-n + 3) .rating-star__stroke,
+    .rating-demo__input:nth-of-type(4):checked ~ .rating-demo__label:nth-of-type(-n + 4) .rating-star__stroke,
+    .rating-demo__input:nth-of-type(5):checked ~ .rating-demo__label:nth-of-type(-n + 5) .rating-star__stroke { animation-name: rating-stroke; }
+    .rating-demo__input:nth-of-type(1):checked ~ .rating-demo__label:nth-of-type(-n + 1) .rating-star__fill,
+    .rating-demo__input:nth-of-type(2):checked ~ .rating-demo__label:nth-of-type(-n + 2) .rating-star__fill,
+    .rating-demo__input:nth-of-type(3):checked ~ .rating-demo__label:nth-of-type(-n + 3) .rating-star__fill,
+    .rating-demo__input:nth-of-type(4):checked ~ .rating-demo__label:nth-of-type(-n + 4) .rating-star__fill,
+    .rating-demo__input:nth-of-type(5):checked ~ .rating-demo__label:nth-of-type(-n + 5) .rating-star__fill { animation-name: rating-fill; }
+    .rating-demo__input:nth-of-type(1):checked ~ .rating-demo__label:nth-of-type(-n + 1) .rating-star__lines,
+    .rating-demo__input:nth-of-type(2):checked ~ .rating-demo__label:nth-of-type(-n + 2) .rating-star__lines,
+    .rating-demo__input:nth-of-type(3):checked ~ .rating-demo__label:nth-of-type(-n + 3) .rating-star__lines,
+    .rating-demo__input:nth-of-type(4):checked ~ .rating-demo__label:nth-of-type(-n + 4) .rating-star__lines,
+    .rating-demo__input:nth-of-type(5):checked ~ .rating-demo__label:nth-of-type(-n + 5) .rating-star__lines { animation-name: rating-lines; }
+    .rating-demo__label--delay1 .rating-star__ring, .rating-demo__label--delay1 .rating-star__fill, .rating-demo__label--delay1 .rating-star__lines, .rating-demo__label--delay1 .rating-star__stroke { animation-delay: 0.05s; }
+    .rating-demo__label--delay2 .rating-star__ring, .rating-demo__label--delay2 .rating-star__fill, .rating-demo__label--delay2 .rating-star__lines, .rating-demo__label--delay2 .rating-star__stroke { animation-delay: 0.1s; }
+    .rating-demo__label--delay3 .rating-star__ring, .rating-demo__label--delay3 .rating-star__fill, .rating-demo__label--delay3 .rating-star__lines, .rating-demo__label--delay3 .rating-star__stroke { animation-delay: 0.15s; }
+    .rating-demo__label--delay4 .rating-star__ring, .rating-demo__label--delay4 .rating-star__fill, .rating-demo__label--delay4 .rating-star__lines, .rating-demo__label--delay4 .rating-star__stroke { animation-delay: 0.2s; }
+    .rating-demo__display { margin-left: 0.5rem; font-size: 0.875rem; font-weight: 500; }
+    .rating-demo__sr { clip: rect(1px, 1px, 1px, 1px); position: absolute; width: 1px; height: 1px; overflow: hidden; }
+    @keyframes rating-ring { from, 20% { opacity: 1; r: 8px; stroke-width: 16px; transform: scale(0); } 35% { opacity: 0.5; r: 8px; stroke-width: 16px; transform: scale(1); } 50%, to { opacity: 0; r: 16px; stroke-width: 0; transform: scale(1); } }
+    @keyframes rating-stroke { from { transform: scale(1); } 20%, to { transform: scale(0); } }
+    @keyframes rating-fill { from, 40% { transform: scale(0); } 60% { transform: scale(1.2); } 80% { transform: scale(0.9); } to { transform: scale(1); } }
+    @keyframes rating-lines { from, 40% { stroke-dasharray: 1 23; stroke-dashoffset: 1; } 60%, to { stroke-dasharray: 12 13; stroke-dashoffset: -13; } }
+    @media (prefers-reduced-motion: reduce) {
+      .rating-demo__input:checked ~ .rating-demo__label .rating-star__ring,
+      .rating-demo__input:checked ~ .rating-demo__label .rating-star__stroke,
+      .rating-demo__input:checked ~ .rating-demo__label .rating-star__fill,
+      .rating-demo__input:checked ~ .rating-demo__label .rating-star__lines { animation: none; }
+      .rating-demo__input:checked ~ .rating-demo__label .rating-star__fill { transform: scale(1); }
+    }
+  `,
 })
 export class SkillDetailPage {
   slug = input.required<string>();
@@ -197,6 +332,10 @@ export class SkillDetailPage {
   busy = signal(false);
   deprecating = signal(false);
   replacement = '';
+  ratingStars = [1, 2, 3, 4, 5];
+  selectedRating = signal(0);
+  ratingDelays = signal([0, 0, 0, 0, 0]);
+  ratingComment = '';
 
   basePath = computed(() => this.section() === 'plugins' ? '/plugins' : this.section() === 'contracts' ? '/contracts' : '/skills');
   sectionLabel = computed(() => {
@@ -237,6 +376,39 @@ export class SkillDetailPage {
     } finally {
       this.busy.set(false);
     }
+  }
+
+  async submitRating(): Promise<void> {
+    if (!this.ratingComment.trim()) return;
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      await this.skills.rate(this.slug(), this.selectedRating(), this.ratingComment.trim());
+      this.ratingComment = '';
+      await this.load();
+    } catch (e) {
+      this.error.set(apiError(e));
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  selectRating(rating: number): void {
+    const previous = this.selectedRating();
+    this.ratingDelays.set(this.ratingStars.map((star) =>
+      star > previous + 1 && star <= rating ? star - previous : 0,
+    ));
+    this.selectedRating.set(rating);
+  }
+
+  ratingLabel(rating: number): string {
+    const es = ['', 'Terrible', 'Mala', 'Aceptable', 'Buena', 'Excelente'];
+    const en = ['', 'Terrible', 'Bad', 'OK', 'Good', 'Excellent'];
+    return (this.i18n.locale() === 'es' ? es : en)[rating] ?? '';
+  }
+
+  stars(rating: number): string {
+    return '★'.repeat(rating) + '☆'.repeat(5 - rating);
   }
 
   artifactUrl(version: number): string {

@@ -13,6 +13,7 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { I18n } from '../../core/i18n/i18n';
 import { SkillService } from '../../core/skills';
+import { TEAM_OPTIONS } from '../../core/teams';
 import type { DuplicateCandidate, LanguageFlag, SkillFormValues, Stack, SkillType } from '../../core/models';
 import { UI } from '../../shared/ui';
 
@@ -128,6 +129,14 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
             <input uiInput name="tags" [(ngModel)]="tagsCsv" (ngModelChange)="onTitle()" />
           </ui-field>
         </div>
+        <ui-field [label]="t().form.equipoDueno">
+          <select uiSelect name="ownerTeam" [(ngModel)]="v.ownerTeam" class="w-full">
+            <option [ngValue]="null">{{ t().catalogo.sinEquipo }}</option>
+            @for (option of teams; track option) {
+              <option [ngValue]="option">{{ option }}</option>
+            }
+          </select>
+        </ui-field>
         <ui-field [label]="t().form.contenido" [hint]="t().form.contenidoHint">
           <textarea uiTextarea name="content" rows="16" class="font-mono text-[13px]" [(ngModel)]="v.content" (ngModelChange)="onLangField()"></textarea>
         </ui-field>
@@ -204,6 +213,7 @@ export class SkillForm {
     duplicateJustification: null,
   };
   tagsCsv = '';
+  teams = TEAM_OPTIONS;
   slugTouched = false;
 
   busy = signal(false);

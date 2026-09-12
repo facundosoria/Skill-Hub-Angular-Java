@@ -40,12 +40,18 @@ public class InsightsController {
                 GROUP BY s.slug, s.title ORDER BY hits DESC LIMIT 10
                 """);
         var teams = jdbc.queryForList("""
-                SELECT COALESCE(NULLIF(ud.team, ''), 'sin equipo') AS team,
+                SELECT t.team,
                        COALESCE(SUM(ud.hits), 0)::int AS hits,
                        COUNT(DISTINCT ud.skill_id)::int AS skills
-                FROM usage_daily ud
-                WHERE ud.day >= CURRENT_DATE - 90 * INTERVAL '1 day'
-                GROUP BY 1 ORDER BY hits DESC
+                FROM (
+                    SELECT DISTINCT team FROM users WHERE team IS NOT NULL AND team <> ''
+                    UNION
+                    SELECT DISTINCT COALESCE(NULLIF(team, ''), 'sin equipo') AS team FROM usage_daily
+                ) t
+                LEFT JOIN usage_daily ud ON COALESCE(NULLIF(ud.team, ''), 'sin equipo') = t.team
+                                        AND ud.day >= CURRENT_DATE - 90 * INTERVAL '1 day'
+                GROUP BY t.team
+                ORDER BY hits DESC, t.team ASC
                 """);
         var missed = jdbc.queryForList("""
                 SELECT query_text, COUNT(*)::int AS veces

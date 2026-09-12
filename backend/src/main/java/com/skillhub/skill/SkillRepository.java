@@ -179,15 +179,22 @@ public class SkillRepository {
                    COALESCE(u.usos, 0) AS "usos90d", COALESCE(u.personas, 0) AS "personas",
                    COALESCE(a.serie, ARRAY[0,0,0,0,0,0,0,0]) AS actividad,
                    COALESCE(array_agg(t.tag) FILTER (WHERE t.tag IS NOT NULL), '{}') AS tags,
-                   cu.name AS "creatorName", s.created_by::text AS "creatorId"
+                   cu.name AS "creatorName", s.created_by::text AS "creatorId",
+                   COALESCE(ratings.average, 0)::float8 AS "ratingAverage",
+                   COALESCE(ratings.count, 0)::int AS "ratingCount"
             FROM skills s
             LEFT JOIN usage u ON u.skill_id = s.id
             LEFT JOIN actividad a ON a.skill_id = s.id
             LEFT JOIN skill_versions v ON v.id = s.current_version_id
             LEFT JOIN skill_tags t ON t.skill_id = s.id
             LEFT JOIN users cu ON cu.id = s.created_by
+            LEFT JOIN LATERAL (
+              SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 AS average, COUNT(*)::int AS count
+              FROM skill_ratings r
+              WHERE r.skill_id = s.id
+            ) ratings ON TRUE
             WHERE %s
-            GROUP BY s.id, v.version, v.preview, u.usos, u.personas, a.serie, cu.name
+            GROUP BY s.id, v.version, v.preview, u.usos, u.personas, a.serie, cu.name, ratings.average, ratings.count
             ORDER BY COALESCE(u.usos, 0) DESC, s.updated_at DESC
             """.formatted(String.join(" AND ", conditions));
         return jdbc.query(sql, p, (rs, i) -> {
@@ -209,6 +216,8 @@ public class SkillRepository {
             m.put("tags", strArray(rs.getArray("tags")));
             m.put("creatorName", rs.getString("creatorName"));
             m.put("creatorId", rs.getString("creatorId"));
+            m.put("ratingAverage", rs.getDouble("ratingAverage"));
+            m.put("ratingCount", rs.getInt("ratingCount"));
             return m;
         });
     }
@@ -242,6 +251,23 @@ public class SkillRepository {
                 """, new MapSqlParameterSource("id", skillId), (rs, i) -> Map.of(
                 "slug", rs.getString("slug"), "title", rs.getString("title"),
                 "stack", rs.getString("stack")));
+    }
+
+    public List<Map<String, Object>> getRatings(String skillId) {
+        return jdbc.query("""
+                SELECT r.rating, r.comment, r.updated_at AS "updatedAt", u.name AS "voterName"
+                FROM skill_ratings r
+                JOIN users u ON u.id = r.voter_id
+                WHERE r.skill_id = :id::uuid
+                ORDER BY r.updated_at DESC
+                """, new MapSqlParameterSource("id", skillId), (rs, i) -> {
+            Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("rating", rs.getInt("rating"));
+            m.put("comment", rs.getString("comment"));
+            m.put("updatedAt", String.valueOf(rs.getObject("updatedAt")));
+            m.put("voterName", rs.getString("voterName"));
+            return m;
+        });
     }
 
     /** Contenido de dos versiones, para el diff de la UI. */

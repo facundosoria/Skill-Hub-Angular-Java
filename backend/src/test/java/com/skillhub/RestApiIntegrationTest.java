@@ -115,7 +115,7 @@ class RestApiIntegrationTest {
     @Test @Order(1)
     void primerUsuarioEsAdminYRecibeSesion() {
         var r = post("/api/auth/register", Map.of(
-                "username", "Facu", "password", "unlargopassword", "team", "platform"), null);
+                "username", "Facu", "password", "unlargopassword", "team", "Backoffice"), null);
         assertThat(r.status).isEqualTo(200);
         assertThat(r.body.path("user").path("role").asText()).isEqualTo("admin");
         assertThat(r.body.path("user").path("username").asText()).isEqualTo("facu"); // normalizado
@@ -132,10 +132,18 @@ class RestApiIntegrationTest {
         assertThat(get("/api/auth/me", null).status).isEqualTo(401);
     }
 
+    @Test @Order(2)
+    void registroRechazaUnEquipoQueNoEstaEnElEnum() {
+        var r = post("/api/auth/register", Map.of(
+                "username", "team-invalido", "password", "unlargopassword", "team", "platform"), null);
+        assertThat(r.status).isEqualTo(400);
+        assertThat(r.body.path("error").asText()).contains("equipo valido");
+    }
+
     @Test @Order(3)
     void segundoUsuarioQuedaPendienteHastaQueAdminLoAprueba() {
         var reg = post("/api/auth/register", Map.of(
-                "username", "member1", "password", "otrolargopass", "team", "checkout"), null);
+                "username", "member1", "password", "otrolargopass", "team", "Mercado"), null);
         assertThat(reg.status).isEqualTo(200);
         assertThat(reg.body.has("info")).isTrue();
         assertThat(reg.cookie).isNull();
@@ -201,6 +209,34 @@ class RestApiIntegrationTest {
         assertThat(one.body.path("history").get(0).path("version").asInt()).isEqualTo(1);
     }
 
+    @Test @Order(15)
+    void usuarioPuedeCalificarYActualizarSuComentario() {
+        var created = post("/api/skills/buttons/ratings", Map.of(
+                "rating", 4, "comment", "Useful shared component guidance."), memberCookie);
+        assertThat(created.status).isEqualTo(200);
+
+        var updated = post("/api/skills/buttons/ratings", Map.of(
+                "rating", 5, "comment", "Clear and useful guidance."), memberCookie);
+        assertThat(updated.status).isEqualTo(200);
+
+        var detail = get("/api/skills/buttons", adminCookie);
+        assertThat(detail.body.path("ratings")).hasSize(1);
+        assertThat(detail.body.path("ratings").get(0).path("rating").asInt()).isEqualTo(5);
+        assertThat(detail.body.path("ratings").get(0).path("voterName").asText()).isEqualTo("member1");
+        assertThat(detail.body.path("ratings").get(0).path("comment").asText())
+                .isEqualTo("Clear and useful guidance.");
+
+        var list = get("/api/skills", adminCookie);
+        var buttons = list.body.path("skills").findValue("slug");
+        assertThat(buttons).isNotNull();
+        list.body.path("skills").forEach(skill -> {
+            if ("buttons".equals(skill.path("slug").asText())) {
+                assertThat(skill.path("ratingAverage").asDouble()).isEqualTo(5.0);
+                assertThat(skill.path("ratingCount").asInt()).isEqualTo(1);
+            }
+        });
+    }
+
     @Test @Order(11)
     void exponePluginYContratoComoTiposDeCatalogo() {
         var pluginPayload = Map.of(
@@ -222,13 +258,13 @@ class RestApiIntegrationTest {
                 "content", "## Rule\n\nKeep API consumers compatible with the published contract."), adminCookie);
         assertThat(contract.status).isEqualTo(200);
 
-        var plugins = get("/api/skills?type=plugin", adminCookie);
+        var plugins = get("/api/skills?type=plugin&status=draft", adminCookie);
         assertThat(plugins.body.path("skills")).anySatisfy(skill -> {
             assertThat(skill.path("slug").asText()).isEqualTo("catalog-plugin");
             assertThat(skill.path("type").asText()).isEqualTo("plugin");
         });
 
-        var contracts = get("/api/skills?type=contract", adminCookie);
+        var contracts = get("/api/skills?type=contract&status=draft", adminCookie);
         assertThat(contracts.body.path("skills")).anySatisfy(skill -> {
             assertThat(skill.path("slug").asText()).isEqualTo("catalog-contract");
             assertThat(skill.path("type").asText()).isEqualTo("contract");
@@ -297,7 +333,7 @@ class RestApiIntegrationTest {
         // 3 members mas (distintos del autor), aprobados
         for (int i = 2; i <= 4; i++) {
             post("/api/auth/register", Map.of(
-                    "username", "voter" + i, "password", "votpasslargo" + i, "team", "checkout"), null);
+                    "username", "voter" + i, "password", "votpasslargo" + i, "team", "Mercado"), null);
             String id = jdbc.queryForObject(
                     "SELECT id::text FROM users WHERE username = 'voter" + i + "'", String.class);
             post("/api/admin/users/" + id + "/approve", null, adminCookie);
@@ -512,7 +548,7 @@ class RestApiIntegrationTest {
         assertThat(before.body.path("locale").asText()).isEqualTo("es");
 
         var upd = put("/api/profile", Map.of(
-                "name", "Member Uno", "team", "checkout", "theme", "dark", "locale", "en"), memberCookie);
+                "name", "Member Uno", "team", "Mercado", "theme", "dark", "locale", "en"), memberCookie);
         assertThat(upd.status).isEqualTo(200);
         assertThat(get("/api/profile", memberCookie).body.path("theme").asText()).isEqualTo("dark");
     }
@@ -521,5 +557,17 @@ class RestApiIntegrationTest {
     void adminUsersLista() {
         var r = get("/api/admin/users", adminCookie);
         assertThat(r.body.path("active").size()).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test @Order(37)
+    void insightsEndpointAdminYMember() {
+        assertThat(get("/api/insights", memberCookie).status).isEqualTo(403);
+
+        var r = get("/api/insights", adminCookie);
+        assertThat(r.status).isEqualTo(200);
+        assertThat(r.body.has("top")).isTrue();
+        assertThat(r.body.has("teams")).isTrue();
+        assertThat(r.body.has("missed")).isTrue();
+        assertThat(r.body.path("teams").size()).isGreaterThanOrEqualTo(1);
     }
 }

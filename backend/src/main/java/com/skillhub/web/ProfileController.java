@@ -2,6 +2,7 @@ package com.skillhub.web;
 
 import com.skillhub.session.AuthPrincipal;
 import com.skillhub.session.CurrentUser;
+import com.skillhub.team.Team;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.web.bind.annotation.*;
@@ -40,11 +41,16 @@ public class ProfileController {
     @PutMapping
     public Map<String, Object> update(@AuthPrincipal CurrentUser user, @RequestBody Map<String, String> body) {
         String name = body.getOrDefault("name", "").trim();
-        String team = body.get("team") != null && !body.get("team").isBlank() ? body.get("team").trim() : null;
+        String rawTeam = body.get("team");
+        String team = Team.canonicalOrNull(rawTeam);
+        String currentTeam = jdbc.queryForObject("SELECT team FROM users WHERE id = :id::uuid",
+                new MapSqlParameterSource("id", user.id()), String.class);
+        boolean keepsLegacyTeam = rawTeam != null && rawTeam.trim().equals(currentTeam);
         String theme = body.getOrDefault("theme", "system");
         String locale = body.getOrDefault("locale", "es");
         if (name.length() < 2 || name.length() > 120) throw new DomainException("El nombre necesita entre 2 y 120 caracteres");
-        if (team != null && team.length() > 80) throw new DomainException("El equipo: maximo 80 caracteres");
+        if (rawTeam != null && !rawTeam.isBlank() && team == null && !keepsLegacyTeam)
+            throw new DomainException("Selecciona un equipo valido");
         if (!THEMES.contains(theme)) throw new DomainException("Tema invalido");
         if (!LOCALES.contains(locale)) throw new DomainException("Idioma invalido");
 
@@ -53,7 +59,7 @@ public class ProfileController {
                        theme = :theme::theme, locale = :locale::locale
                 WHERE id = :id::uuid
                 """, new MapSqlParameterSource()
-                .addValue("name", name).addValue("team", team)
+                .addValue("name", name).addValue("team", team != null ? team : (keepsLegacyTeam ? currentTeam : null))
                 .addValue("theme", theme).addValue("locale", locale)
                 .addValue("id", user.id()));
         return Map.of("ok", true);

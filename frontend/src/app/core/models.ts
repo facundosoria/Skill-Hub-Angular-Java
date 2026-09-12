@@ -1,5 +1,7 @@
 /** Tipos de la API REST del backend Spring Boot (com.skillhub.web.*). */
 
+import type { Team } from './teams';
+
 export type Role = 'admin' | 'member';
 export type Theme = 'system' | 'light' | 'dark';
 export type Locale = 'es' | 'en';
@@ -11,7 +13,7 @@ export interface User {
   id: string;
   username: string;
   name: string;
-  team: string | null;
+  team: Team | null;
   role: Role;
 }
 
@@ -23,7 +25,7 @@ export interface SkillListItem {
   stack: Stack;
   type: SkillType;
   status: SkillStatus;
-  ownerTeam: string | null;
+  ownerTeam: Team | null;
   updatedAt: string;
   version: number;
   preview: string | null;
@@ -33,6 +35,8 @@ export interface SkillListItem {
   tags: string[];
   creatorName: string | null;
   creatorId: string | null;
+  ratingAverage: number;
+  ratingCount: number;
 }
 
 export interface SkillVersion {
@@ -58,7 +62,7 @@ export interface Skill {
   stack: Stack;
   type: SkillType;
   status: SkillStatus;
-  ownerTeam: string | null;
+  ownerTeam: Team | null;
   origin: string;
   pendingVersionId: string | null;
   supersededBySlug: string | null;
@@ -88,10 +92,18 @@ export interface RelatedSkill {
   stack: Stack;
 }
 
+export interface SkillRating {
+  rating: number;
+  comment: string;
+  updatedAt: string;
+  voterName: string;
+}
+
 export interface SkillDetail {
   skill: Skill;
   history: HistoryEntry[];
   related: RelatedSkill[];
+  ratings: SkillRating[];
   voteStatus: VoteStatus | null;
 }
 
@@ -101,7 +113,7 @@ export interface DuplicateCandidate {
   description: string;
   stack: string;
   status: string;
-  ownerTeam: string | null;
+  ownerTeam: Team | null;
   version: number;
   supersededBySlug: string | null;
   usos90d: number;
@@ -131,7 +143,7 @@ export interface SkillFormValues {
   whenToUse: string;
   stack: Stack;
   type: SkillType;
-  ownerTeam: string | null;
+  ownerTeam: Team | null;
   tags: string[];
   content: string;
   changelog?: string | null;
@@ -153,7 +165,7 @@ export interface Proposal {
   description: string;
   whenToUse: string;
   stack: string;
-  ownerTeam: string | null;
+  ownerTeam: Team | null;
   proposedFromQuery: string | null;
   createdAt: string;
   changelog: string | null;
@@ -167,7 +179,7 @@ export interface RevisionProposal {
   slug: string;
   title: string;
   stack: string;
-  ownerTeam: string | null;
+  ownerTeam: Team | null;
   currentVersion: number | null;
   currentContent: string | null;
   proposedVersion: number;
@@ -184,7 +196,7 @@ export interface PendingUser {
   id: string;
   name: string;
   username: string;
-  team: string | null;
+  team: Team | null;
   legajo: string | null;
   createdAt: string;
 }

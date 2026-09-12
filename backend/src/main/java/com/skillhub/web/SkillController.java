@@ -34,17 +34,19 @@ public class SkillController {
     private final SkillRepository repo;
     private final SkillWriteService write;
     private final VoteService votes;
+    private final SkillRatingService ratings;
     private final DuplicatesRepository duplicates;
     private final ObjectMapper json;
     private final CatalogArtifactService artifacts;
     private final ApiKeyService apiKeys;
 
     public SkillController(SkillRepository repo, SkillWriteService write,
-                           VoteService votes, DuplicatesRepository duplicates, ObjectMapper json,
+                           VoteService votes, SkillRatingService ratings, DuplicatesRepository duplicates, ObjectMapper json,
                            CatalogArtifactService artifacts, ApiKeyService apiKeys) {
         this.repo = repo;
         this.write = write;
         this.votes = votes;
+        this.ratings = ratings;
         this.duplicates = duplicates;
         this.json = json;
         this.artifacts = artifacts;
@@ -72,6 +74,7 @@ public class SkillController {
         out.put("skill", skill);
         out.put("history", repo.getHistory(slug));
         out.put("related", repo.getRelated(skill.id()));
+        out.put("ratings", repo.getRatings(skill.id()));
         out.put("voteStatus", skill.pendingVersionId() != null
                 ? votes.getVoteStatus(skill.id(), user.id()) : null);
         return out;
@@ -227,6 +230,17 @@ public class SkillController {
         String id = repo.skillId(slug);
         if (id == null) throw new DomainException("No existe el skill \"" + slug + "\"");
         return votes.castVote(id, user.id());
+    }
+
+    public record SkillRatingRequest(int rating, String comment) {}
+
+    @PostMapping("/{slug}/ratings")
+    public Map<String, Object> rate(@AuthPrincipal CurrentUser user, @PathVariable String slug,
+                                    @RequestBody SkillRatingRequest body) {
+        String id = repo.skillId(slug);
+        if (id == null) throw new DomainException("No existe el skill \"" + slug + "\"");
+        ratings.rate(id, user.id(), body.rating(), body.comment());
+        return Map.of("ok", true);
     }
 
     @PostMapping("/{slug}/apply-edit")
