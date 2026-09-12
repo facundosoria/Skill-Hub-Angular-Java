@@ -16,7 +16,7 @@ This server is the canonical catalogue of engineering conventions for this organ
 
 BEFORE writing or modifying any Angular or Java code in this organisation, call `search_skills` with a natural-language description of the task you are about to do. The user does not need to ask for it and does not need to name a skill: consulting the catalogue is part of doing the work correctly here.
 
-Search in English. The catalogue is written in English and the index stems English, so an English query matches far better than a translated one - even when the conversation with the user is in another language.
+The catalogue has skills in both English and Spanish. Search using the language you expect the target skill to be written in; if a search comes back empty, retry the same query in the other language before concluding there is no convention for this.
 
 Examples of when to search:
 - "add a save button to this form"        -> search_skills("action button in a form")
