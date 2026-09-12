@@ -10,7 +10,30 @@ import { I18n } from '../core/i18n/i18n';
 @Component({
   selector: 'app-shell',
   imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  styles: `
+    .logout-fade {
+      position: fixed;
+      z-index: 100;
+      inset: 0;
+      visibility: hidden;
+      pointer-events: none;
+      background: #000;
+      opacity: 0;
+      transition: opacity 360ms var(--ease), visibility 0s linear 360ms;
+    }
+
+    .logout-fade--active {
+      visibility: visible;
+      opacity: 1;
+      transition-delay: 0s;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .logout-fade { transition: none; }
+    }
+  `,
   template: `
+    <div class="logout-fade" [class.logout-fade--active]="loggingOut()" aria-hidden="true"></div>
     <div class="mx-auto flex min-h-screen max-w-6xl flex-col px-4 sm:px-6">
       <header
         class="relative sticky top-0 z-30 -mx-4 flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3.5 sm:-mx-6 sm:px-6"
@@ -64,7 +87,8 @@ import { I18n } from '../core/i18n/i18n';
           >
           <button
             (click)="logout()"
-            class="cursor-pointer rounded-full px-3 py-1.5 text-text-muted transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-text"
+            [disabled]="loggingOut()"
+            class="cursor-pointer rounded-full px-3 py-1.5 text-text-muted transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-text disabled:cursor-default disabled:opacity-60"
           >
             {{ t().nav.salir }}
           </button>
@@ -87,6 +111,7 @@ export class Shell {
   t = this.i18n.t;
   isAdmin = computed(() => this.auth.user()?.role === 'admin');
   catalogOpen = signal(false);
+  loggingOut = signal(false);
 
   catalogLinks = computed(() => {
     const n = this.t().nav;
@@ -131,7 +156,11 @@ export class Shell {
   }
 
   async logout(): Promise<void> {
+    if (this.loggingOut()) return;
     await this.auth.logout();
+    this.loggingOut.set(true);
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reducedMotion) await new Promise(resolve => setTimeout(resolve, 360));
     this.router.navigate(['/login']);
   }
 }
