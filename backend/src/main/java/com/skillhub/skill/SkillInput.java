@@ -31,7 +31,8 @@ public record SkillInput(
 
     private static final Pattern SLUG_RE = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
     private static final List<String> STACKS = List.of("angular", "java", "shared", "infra");
-    private static final List<String> TYPES = List.of("skill", "convention", "reference");
+    private static final List<String> TYPES = List.of(
+            "skill", "convention", "reference", "plugin", "contract");
 
     /** Mismo criterio que validate(): 3-64 chars, solo minusculas, numeros y guiones. */
     public static boolean isValidSlug(String slug) {

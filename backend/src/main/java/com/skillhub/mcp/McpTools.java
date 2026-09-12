@@ -94,7 +94,7 @@ public class McpTools {
             + "kept as a redirect, so local copies and links reconcile on the next sync_skills. Write in English.";
 
     private static final String STACK_ENUM = "[\"angular\",\"java\",\"shared\",\"infra\"]";
-    private static final String TYPE_ENUM = "[\"skill\",\"convention\",\"reference\"]";
+    private static final String TYPE_ENUM = "[\"skill\",\"convention\",\"reference\",\"plugin\",\"contract\"]";
 
     private static final String SEARCH_SKILLS_SCHEMA = ("""
         {"type":"object","properties":{\
@@ -320,6 +320,17 @@ public class McpTools {
         }
         out.put("file", local.file());
         out.put("save_as", local.saveAs());
+        if (skill.version() != null && skill.version().artifact() != null) {
+            var artifact = skill.version().artifact();
+            ObjectNode packageInfo = json.createObjectNode();
+            packageInfo.put("file_name", artifact.fileName());
+            packageInfo.put("content_type", artifact.contentType());
+            packageInfo.put("size_bytes", artifact.sizeBytes());
+            packageInfo.put("sha256", artifact.sha256());
+            packageInfo.put("download_url", "/api/skills/" + skill.slug() + "/artifact?v=" + local.version());
+            packageInfo.put("download_instruction", "Fetch download_url with the same Authorization: Bearer API key used for MCP.");
+            out.set("artifact", packageInfo);
+        }
         return out;
     }
 

@@ -10,6 +10,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.*;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -80,6 +83,32 @@ class RestApiIntegrationTest {
     private Res post(String path, Object body, String cookie) { return call(HttpMethod.POST, path, body, cookie); }
     private Res put(String path, Object body, String cookie) { return call(HttpMethod.PUT, path, body, cookie); }
     private Res del(String path, String cookie) { return call(HttpMethod.DELETE, path, null, cookie); }
+
+    private Res multipart(HttpMethod method, String path, Object metadata, byte[] file,
+                          String filename, String contentType, String cookie) {
+        HttpHeaders jsonHeaders = new HttpHeaders();
+        jsonHeaders.setContentType(MediaType.APPLICATION_JSON);
+        MultiValueMap<String, Object> parts = new LinkedMultiValueMap<>();
+        try {
+            parts.add("metadata", new HttpEntity<>(json.writeValueAsString(metadata), jsonHeaders));
+        } catch (Exception e) { throw new RuntimeException(e); }
+        if (file != null) {
+            ByteArrayResource resource = new ByteArrayResource(file) {
+                @Override public String getFilename() { return filename; }
+            };
+            HttpHeaders fileHeaders = new HttpHeaders();
+            fileHeaders.setContentType(MediaType.parseMediaType(contentType));
+            parts.add("file", new HttpEntity<>(resource, fileHeaders));
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        if (cookie != null) headers.add(HttpHeaders.COOKIE, cookie);
+        var resp = rest.exchange("http://localhost:" + port + path, method,
+                new HttpEntity<>(parts, headers), String.class);
+        JsonNode node = null;
+        try { if (resp.getBody() != null) node = json.readTree(resp.getBody()); } catch (Exception ignored) {}
+        return new Res(resp.getStatusCode().value(), node, null);
+    }
 
     // --- auth -------------------------------------------------------
 
@@ -170,6 +199,52 @@ class RestApiIntegrationTest {
         var one = get("/api/skills/buttons", adminCookie);
         assertThat(one.body.path("skill").path("title").asText()).isEqualTo("Buttons");
         assertThat(one.body.path("history").get(0).path("version").asInt()).isEqualTo(1);
+    }
+
+    @Test @Order(11)
+    void exponePluginYContratoComoTiposDeCatalogo() {
+        var pluginPayload = Map.of(
+                "slug", "catalog-plugin", "title", "Catalog Plugin",
+                "description", "A package distributed through the internal catalogue.",
+                "whenToUse", "Use when installing or configuring the catalogue plugin package.",
+                "stack", "shared", "type", "plugin",
+                "content", "## Rule\n\nInstall the plugin through its documented package manifest.");
+        var plugin = multipart(HttpMethod.POST, "/api/skills", pluginPayload,
+                "{\"name\":\"catalog\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                "plugin.json", "application/json", adminCookie);
+        assertThat(plugin.status).isEqualTo(200);
+
+        var contract = post("/api/skills", Map.of(
+                "slug", "catalog-contract", "title", "Catalog Contract",
+                "description", "An API agreement published through the internal catalogue.",
+                "whenToUse", "Use when implementing or consuming the documented API agreement.",
+                "stack", "shared", "type", "contract",
+                "content", "## Rule\n\nKeep API consumers compatible with the published contract."), adminCookie);
+        assertThat(contract.status).isEqualTo(200);
+
+        var plugins = get("/api/skills?type=plugin", adminCookie);
+        assertThat(plugins.body.path("skills")).anySatisfy(skill -> {
+            assertThat(skill.path("slug").asText()).isEqualTo("catalog-plugin");
+            assertThat(skill.path("type").asText()).isEqualTo("plugin");
+        });
+
+        var contracts = get("/api/skills?type=contract", adminCookie);
+        assertThat(contracts.body.path("skills")).anySatisfy(skill -> {
+            assertThat(skill.path("slug").asText()).isEqualTo("catalog-contract");
+            assertThat(skill.path("type").asText()).isEqualTo("contract");
+        });
+
+        var detail = get("/api/skills/catalog-plugin", adminCookie);
+        assertThat(detail.body.path("skill").path("version").path("artifact").path("fileName").asText())
+                .isEqualTo("plugin.json");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.COOKIE, adminCookie);
+        var download = rest.exchange("http://localhost:" + port + "/api/skills/catalog-plugin/artifact?v=1",
+                HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
+        assertThat(download.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(download.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).contains("attachment");
+        assertThat(download.getBody()).isEqualTo("{\"name\":\"catalog\"}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
 
     @Test @Order(12)

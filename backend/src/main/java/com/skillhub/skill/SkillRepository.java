@@ -16,9 +16,11 @@ import java.util.Map;
 public class SkillRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final CatalogArtifactService artifacts;
 
-    public SkillRepository(NamedParameterJdbcTemplate jdbc) {
+    public SkillRepository(NamedParameterJdbcTemplate jdbc, CatalogArtifactService artifacts) {
         this.jdbc = jdbc;
+        this.artifacts = artifacts;
     }
 
     /**
@@ -82,9 +84,13 @@ public class SkillRepository {
                   WHERE skill_id = :skillId::uuid ORDER BY version DESC LIMIT 1
                   """;
         }
-        var rows = jdbc.query(sql, p, (rs, i) ->
-                new Skill.SkillVersion(rs.getInt("version"), rs.getString("content"), rs.getString("preview")));
-        return rows.isEmpty() ? null : rows.get(0);
+        var rows = jdbc.query(sql, p, (rs, i) -> new Object[]{
+                rs.getInt("version"), rs.getString("content"), rs.getString("preview")});
+        if (rows.isEmpty()) return null;
+        Object[] row = rows.get(0);
+        int versionNumber = (Integer) row[0];
+        return new Skill.SkillVersion(versionNumber, (String) row[1], (String) row[2],
+                artifacts.findSummary(skillId, versionNumber));
     }
 
     /**
