@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <!-- Document background -->
+  <rect x="28" y="20" width="56" height="74" rx="6" fill="#10B981"/>
+  <rect x="36" y="32" width="28" height="5" rx="2" fill="#D1FAE5"/>
+  <rect x="36" y="44" width="40" height="5" rx="2" fill="#D1FAE5"/>
+  <rect x="36" y="56" width="36" height="5" rx="2" fill="#D1FAE5"/>
+  <!-- Download arrow badge -->
+  <circle cx="86" cy="86" r="24" fill="#059669"/>
+  <path d="M86 74v16m0 0l-7-7m7 7l7-7" stroke="#FFF" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
