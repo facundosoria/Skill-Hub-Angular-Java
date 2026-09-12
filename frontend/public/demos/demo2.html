@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo 2 - Timeline Tracker & Secciones Modulares | Skill Hub</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollToPlugin.min.js"></script>
+  <style>
+    :root {
+      --bg: #131311;
+      --surface: #1c1c1a;
+      --surface-2: #242422;
+      --border: #33322e;
+      --border-strong: #4a4844;
+      --text: #f2f0ea;
+      --text-muted: #a3a099;
+      --text-faint: #78756e;
+      --accent: #a9a2f0;
+      --accent-soft: #262346;
+      --radius: 0.75rem;
+      --radius-lg: 1.1rem;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Demo Switcher Bar */
+    .demo-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: #0d0d0c;
+      border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+    }
+    .demo-bar__badge {
+      background: #1e382b;
+      color: #34d399;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 0.75rem;
+    }
+    .demo-bar__tabs { display: flex; gap: 0.4rem; }
+    .demo-bar__tab {
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 0.3rem 0.75rem;
+      border-radius: 0.5rem;
+      transition: all 0.2s;
+    }
+    .demo-bar__tab:hover { color: var(--text); background: var(--surface-2); }
+    .demo-bar__tab.active {
+      color: var(--text);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-weight: 600;
+    }
+
+    /* App Header Mockup */
+    .app-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    .app-header__logo {
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .app-header__nav { display: flex; align-items: center; gap: 0.3rem; }
+    .app-header__link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.88rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 0.5rem;
+      transition: all 0.15s;
+    }
+    .app-header__link:hover { color: var(--text); }
+    .app-header__link.active {
+      background: var(--surface-2);
+      color: var(--text);
+      font-weight: 600;
+    }
+    .app-header__user { margin-left: auto; font-size: 0.84rem; color: var(--text-muted); }
+
+    /* Main Container */
+    .main-container {
+      max-width: 1200px;
+      margin: 2rem auto;
+      padding: 0 1.5rem 5rem;
+    }
+
+    /* Hero Banner */
+    .catalog-hero {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.2rem;
+      margin-bottom: 2.5rem;
+      background: linear-gradient(130deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface) 65%), var(--surface);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.25);
+    }
+    .catalog-hero__eyebrow {
+      color: var(--accent);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+    .catalog-hero__title {
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+    .catalog-hero__subtitle {
+      color: var(--text-muted);
+      font-size: 0.98rem;
+      max-width: 44rem;
+      line-height: 1.5;
+    }
+    .reading-stat {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* Layout Grid */
+    .docs-layout {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 2.5rem;
+      align-items: start;
+    }
+
+    /* Timeline Tracker Sidebar */
+    .timeline-card {
+      position: sticky;
+      top: 4.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.5rem 1.25rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .timeline-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-faint);
+      margin-bottom: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .timeline-container {
+      position: relative;
+      padding-left: 1.5rem;
+    }
+    /* Static track line */
+    .timeline-line {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      bottom: 10px;
+      width: 2px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    /* Animated fill line (GSAP) */
+    .timeline-line-fill {
+      position: absolute;
+      left: 6px;
+      top: 6px;
+      width: 2px;
+      height: 0%;
+      background: linear-gradient(180deg, var(--accent), #c4b5fd);
+      border-radius: 2px;
+      box-shadow: 0 0 8px var(--accent);
+      will-change: height;
+    }
+    .timeline-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .timeline-item {
+      position: relative;
+    }
+    /* The circular node dot */
+    .timeline-dot {
+      position: absolute;
+      left: -1.5rem;
+      top: 50%;
+      transform: translateY(-50%) scale(1);
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 2px solid var(--border-strong);
+      transition: border-color 0.2s, background-color 0.2s;
+      z-index: 3;
+    }
+    .timeline-link {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.85rem;
+      padding: 0.25rem 0.4rem;
+      border-radius: 0.4rem;
+      transition: color 0.2s, transform 0.2s;
+    }
+    .timeline-link:hover {
+      color: var(--text);
+      transform: translateX(3px);
+    }
+    .timeline-item.active .timeline-dot {
+      background: var(--accent);
+      border-color: #fff;
+      box-shadow: 0 0 10px var(--accent);
+    }
+    .timeline-item.active .timeline-link {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    /* Modular Section Cards */
+    .modular-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+    .module-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 2.2rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+      transition: border-color 0.3s, box-shadow 0.3s;
+      position: relative;
+    }
+    .module-card.focused {
+      border-color: color-mix(in srgb, var(--accent) 50%, var(--border));
+      box-shadow: 0 4px 20px rgba(169, 162, 240, 0.08);
+    }
+    .module-card__tag {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--accent);
+      background: var(--accent-soft);
+      padding: 0.2rem 0.55rem;
+      border-radius: 0.35rem;
+      margin-bottom: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .module-card h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    .module-card p {
+      color: var(--text-muted);
+      margin-bottom: 0.9rem;
+      font-size: 0.96rem;
+    }
+    .module-card ul {
+      margin: 0.8rem 0 1rem 1.4rem;
+      color: var(--text-muted);
+    }
+    .module-card li { margin-bottom: 0.4rem; }
+    .module-card li strong { color: var(--text); }
+    code {
+      font-family: var(--font-mono);
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      font-size: 0.85em;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Demo Switcher Header -->
+  <aside class="demo-bar">
+    <div style="display: flex; align-items: center; gap: 0.75rem;">
+      <span class="demo-bar__badge">Propuesta 2</span>
+      <strong>Línea de Progreso Continua & Secciones Modulares</strong>
+    </div>
+    <nav class="demo-bar__tabs">
+      <a href="demo1.html" class="demo-bar__tab">Demo 1</a>
+      <a href="demo2.html" class="demo-bar__tab active">Demo 2</a>
+      <a href="demo3.html" class="demo-bar__tab">Demo 3</a>
+    </nav>
+  </aside>
+
+  <!-- App Header Mockup -->
+  <header class="app-header">
+    <div class="app-header__logo">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+      Skill Hub
+    </div>
+    <nav class="app-header__nav">
+      <a href="#" class="app-header__link">Catálogo</a>
+      <a href="#" class="app-header__link">Mi key</a>
+      <a href="#" class="app-header__link active">Cómo funciona</a>
+      <a href="#" class="app-header__link">Revisar</a>
+      <a href="#" class="app-header__link">Uso</a>
+    </nav>
+    <div class="app-header__user">admin_test · Salir</div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    
+    <header class="catalog-hero">
+      <div>
+        <p class="catalog-hero__eyebrow">ARQUITECTURA & FILOSOFÍA</p>
+        <h1 class="catalog-hero__title">Cómo funciona Skill Hub</h1>
+        <p class="catalog-hero__subtitle">
+          Qué es esto, para qué sirve, cómo se conecta tu IDE y qué hace la IA con las convenciones.
+        </p>
+      </div>
+      <div class="reading-stat">⏱️ ~4 min de lectura</div>
+    </header>
+
+    <div class="docs-layout">
+      
+      <!-- Timeline Sidebar -->
+      <aside class="timeline-card">
+        <div class="timeline-title">
+          <span>Ruta de Lectura</span>
+          <span id="percentLabel" style="color: var(--accent); font-weight: normal;">0%</span>
+        </div>
+        <div class="timeline-container">
+          <div class="timeline-line"></div>
+          <div class="timeline-line-fill" id="lineFill"></div>
+          <ul class="timeline-list" id="timelineList">
+            <li class="timeline-item active" data-target="el-problema">
+              <span class="timeline-dot"></span>
+              <a href="#el-problema" class="timeline-link">El problema</a>
+            </li>
+            <li class="timeline-item" data-target="la-idea">
+              <span class="timeline-dot"></span>
+              <a href="#la-idea" class="timeline-link">La idea</a>
+            </li>
+            <li class="timeline-item" data-target="por-que-no-es-un-marketplace">
+              <span class="timeline-dot"></span>
+              <a href="#por-que-no-es-un-marketplace" class="timeline-link">Sin Marketplace</a>
+            </li>
+            <li class="timeline-item" data-target="que-es-un-skill">
+              <span class="timeline-dot"></span>
+              <a href="#que-es-un-skill" class="timeline-link">Qué es un skill</a>
+            </li>
+            <li class="timeline-item" data-target="que-es-mcp">
+              <span class="timeline-dot"></span>
+              <a href="#que-es-mcp" class="timeline-link">Qué es MCP</a>
+            </li>
+            <li class="timeline-item" data-target="como-esta-implementado">
+              <span class="timeline-dot"></span>
+              <a href="#como-esta-implementado" class="timeline-link">Implementación</a>
+            </li>
+            <li class="timeline-item" data-target="que-es-tu-api-key">
+              <span class="timeline-dot"></span>
+              <a href="#que-es-tu-api-key" class="timeline-link">Tu API key</a>
+            </li>
+            <li class="timeline-item" data-target="conectar-tu-ide">
+              <span class="timeline-dot"></span>
+              <a href="#conectar-tu-ide" class="timeline-link">Conectar IDE</a>
+            </li>
+            <li class="timeline-item" data-target="como-lo-usa-la-ia">
+              <span class="timeline-dot"></span>
+              <a href="#como-lo-usa-la-ia" class="timeline-link">Uso de la IA</a>
+            </li>
+            <li class="timeline-item" data-target="las-tools">
+              <span class="timeline-dot"></span>
+              <a href="#las-tools" class="timeline-link">Las 7 tools MCP</a>
+            </li>
+          </ul>
+        </div>
+      </aside>
+
+      <!-- Modular Sections -->
+      <div class="modular-sections">
+        
+        <section id="el-problema" class="module-card">
+          <span class="module-card__tag">Punto de partida</span>
+          <h2>El problema</h2>
+          <p>
+            Somos once equipos trabajando en paralelo sobre el mismo sistema. Sin una fuente única, cada equipo inventa su forma de manejar errores, de nombrar endpoints, de armar un formulario. A los seis meses hay once dialectos y nadie puede moverse entre equipos sin reaprender todo.
+          </p>
+          <p>
+            Los documentos de Confluence no lo resuelven, porque nadie los abre en el momento exacto en que está escribiendo el código.
+          </p>
+        </section>
+
+        <section id="la-idea" class="module-card">
+          <span class="module-card__tag">Propuesta de valor</span>
+          <h2>La idea</h2>
+          <p>Un solo catálogo de convenciones, con <strong>dos caras sobre los mismos datos</strong>:</p>
+          <ul>
+            <li><strong>Para personas:</strong> esta web. Buscás, leés, proponés cambios. Todo queda versionado y auditado.</li>
+            <li><strong>Para agentes:</strong> un endpoint MCP. Tu IDE se conecta con tu key y el agente consulta el catálogo solo, antes de escribir código.</li>
+          </ul>
+          <p>
+            Las dos leen la misma base. Lo que se aprueba acá es lo que el agente lee un segundo después: no hay <code>git pull</code> ni versiones desfasadas entre equipos.
+          </p>
+        </section>
+
+        <section id="por-que-no-es-un-marketplace" class="module-card">
+          <span class="module-card__tag">Filosofía</span>
+          <h2>Por qué no es un marketplace</h2>
+          <p>
+            La palabra aparece seguido y conviene sacarla del medio, porque el modelo mental equivocado lleva a decisiones equivocadas.
+          </p>
+          <p>
+            En un marketplace hay muchos oferentes compitiendo y quien consume elige entre opciones. Acá pasa exactamente lo contrario: si aparecen seis versiones distintas del skill de botones, eso no es variedad — es el fracaso del proyecto.
+          </p>
+        </section>
+
+        <section id="que-es-un-skill" class="module-card">
+          <span class="module-card__tag">Conceptos</span>
+          <h2>Qué es un skill</h2>
+          <p>
+            Un archivo Markdown con un frontmatter determinista y un cuerpo estructurado con la regla <code>## Rule</code> y ejemplos concretos.
+          </p>
+        </section>
+
+        <section id="que-es-mcp" class="module-card">
+          <span class="module-card__tag">Protocolo</span>
+          <h2>Qué es MCP</h2>
+          <p>
+            <strong>Model Context Protocol</strong>: estándar abierto para conectar asistentes de IA de manera estandarizada y segura con servidores de herramientas y contexto.
+          </p>
+        </section>
+
+        <section id="como-esta-implementado" class="module-card">
+          <span class="module-card__tag">Stack Técnico</span>
+          <h2>Cómo está implementado</h2>
+          <p>
+            Backend en <strong>Spring Boot 3.4 (Java 21)</strong> con PostgreSQL y búsqueda vectorial/full-text. Frontend en <strong>Angular 22</strong> standalone, signals y Tailwind CSS.
+          </p>
+        </section>
+
+        <section id="que-es-tu-api-key" class="module-card">
+          <span class="module-card__tag">Seguridad</span>
+          <h2>Qué es tu API key</h2>
+          <p>
+            Tu identidad como desarrollador: autentica las consultas de tus agentes de IA e imputa auditoría al equipo correcto.
+          </p>
+        </section>
+
+        <section id="conectar-tu-ide" class="module-card">
+          <span class="module-card__tag">Integración</span>
+          <h2>Conectar tu IDE</h2>
+          <p>
+            Configuración directa en Cursor, Claude Code o Windsurf agregando el endpoint <code>/api/mcp</code> con tu Bearer token.
+          </p>
+        </section>
+
+        <section id="como-lo-usa-la-ia" class="module-card">
+          <span class="module-card__tag">Automatización</span>
+          <h2>Cómo lo usa la IA</h2>
+          <p>
+            El agente busca proactivamente en el catálogo antes de editar o crear código. No requiere que le indiques el skill por nombre.
+          </p>
+        </section>
+
+        <section id="las-tools" class="module-card">
+          <span class="module-card__tag">Capacidades</span>
+          <h2>Las 7 tools MCP</h2>
+          <p>
+            Lectura (<code>search_skills</code>, <code>get_skill</code>, <code>sync_skills</code>, <code>list_skills</code>, <code>get_port_registry</code>) y escritura auditada (<code>propose_skill</code>, <code>propose_revision</code>).
+          </p>
+        </section>
+
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    gsap.registerPlugin(ScrollToPlugin);
+
+    const items = Array.from(document.querySelectorAll('.timeline-item'));
+    const sections = items.map(it => document.getElementById(it.dataset.target));
+    const lineFill = document.getElementById('lineFill');
+    const percentLabel = document.getElementById('percentLabel');
+    let isClickScrolling = false;
+
+    function activateItem(item, index) {
+      items.forEach(it => it.classList.remove('active'));
+      item.classList.add('active');
+
+      const dot = item.querySelector('.timeline-dot');
+      gsap.fromTo(dot, { scale: 1.5 }, { scale: 1.15, duration: 0.35, ease: "back.out(2)", overwrite: "auto" });
+
+      // Calculate fill line height percentage
+      const total = items.length - 1;
+      const pct = Math.round((index / total) * 100);
+      gsap.to(lineFill, { height: `${pct}%`, duration: 0.3, ease: "power2.out", overwrite: "auto" });
+      percentLabel.textContent = `${pct}%`;
+
+      // Highlight corresponding card
+      document.querySelectorAll('.module-card').forEach(c => c.classList.remove('focused'));
+      const targetCard = document.getElementById(item.dataset.target);
+      if (targetCard) targetCard.classList.add('focused');
+    }
+
+    items.forEach((item, idx) => {
+      const link = item.querySelector('.timeline-link');
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetId = item.dataset.target;
+        const targetEl = document.getElementById(targetId);
+        if (!targetEl) return;
+
+        isClickScrolling = true;
+        activateItem(item, idx);
+
+        gsap.to(window, {
+          duration: 0.85,
+          scrollTo: { y: targetEl, offsetY: 84 },
+          ease: "expo.out",
+          overwrite: "auto",
+          onComplete: () => {
+            setTimeout(() => { isClickScrolling = false; }, 50);
+          }
+        });
+      });
+    });
+
+    window.addEventListener('scroll', () => {
+      if (isClickScrolling) return;
+      const scrollPos = window.scrollY + 140;
+      let activeIdx = 0;
+
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].offsetTop <= scrollPos) {
+          activeIdx = i;
+        } else {
+          break;
+        }
+      }
+
+      if (items[activeIdx] && !items[activeIdx].classList.contains('active')) {
+        activateItem(items[activeIdx], activeIdx);
+      }
+    }, { passive: true });
+  </script>
+</body>
+</html>
