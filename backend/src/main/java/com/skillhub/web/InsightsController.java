@@ -37,7 +37,7 @@ public class InsightsController {
                        COALESCE(MAX(ud.distinct_users), 0)::int AS personas
                 FROM usage_daily ud JOIN skills s ON s.id = ud.skill_id
                 WHERE ud.day >= CURRENT_DATE - 90 * INTERVAL '1 day'
-                GROUP BY s.slug, s.title ORDER BY hits DESC LIMIT 10
+                GROUP BY s.slug, s.title ORDER BY hits DESC LIMIT 5
                 """);
         var teams = jdbc.queryForList("""
                 SELECT t.team,

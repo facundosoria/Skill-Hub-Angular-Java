@@ -24,7 +24,6 @@ type Miss = { query_text: string; veces: number };
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-pulse" aria-label="Cargando telemetría">
           <div class="lg:col-span-7 h-72 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
           <div class="lg:col-span-5 h-72 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
-          <div class="lg:col-span-12 h-48 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
         </div>
       } @else {
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -37,18 +36,18 @@ type Miss = { query_text: string; veces: number };
                 </svg>
                 <span>{{ t().insights.masConsultados }}</span>
               </h2>
-              @if (top().length > 0) {
-                <span uiBadge tone="accent">{{ top().length }}</span>
+              @if (topSkills().length > 0) {
+                <span uiBadge tone="accent">{{ topSkills().length }}</span>
               }
             </div>
 
-            @if (top().length === 0) {
+            @if (topSkills().length === 0) {
               <div class="p-6">
                 <ui-empty-state [title]="t().insights.sinConsultas" [hint]="t().insights.sinConsultasHint" />
               </div>
             } @else {
               <div class="divide-y divide-border">
-                @for (r of top(); track r.slug; let i = $index) {
+                @for (r of topSkills(); track r.slug; let i = $index) {
                   <div class="flex items-center justify-between gap-4 p-4 hover:bg-surface-2/60 transition-colors">
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-2">
@@ -128,55 +127,6 @@ type Miss = { query_text: string; veces: number };
                 >
                   {{ t().insights.verTodas }} ({{ missed().length }})
                 </button>
-              </div>
-            }
-          </section>
-
-          <!-- Panel 3: Adopción por equipo (12 columnas) -->
-          <section uiCard class="lg:col-span-12">
-            <div class="p-4 border-b border-border bg-surface-2/40 flex items-center justify-between">
-              <div>
-                <h2 class="text-sm font-semibold text-text flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" class="h-4 w-4 text-accent" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                  </svg>
-                  <span>{{ t().insights.adopcion }}</span>
-                </h2>
-                <p class="mt-0.5 text-xs text-text-faint">{{ t().insights.adopcionSubtitulo }}</p>
-              </div>
-              @if (teams().length > 0) {
-                <span uiBadge tone="neutral">{{ teams().length }}</span>
-              }
-            </div>
-
-            @if (teams().length === 0) {
-              <div class="p-6">
-                <ui-empty-state [title]="t().insights.adopcionVacio" />
-              </div>
-            } @else {
-              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
-                @for (row of teams(); track row.team) {
-                  <div class="p-3.5 rounded-[var(--radius)] bg-surface-2 border border-border flex flex-col justify-between transition-[border-color,box-shadow,transform] duration-[var(--dur-fast)] hover:border-border-strong hover:bg-surface-2/80">
-                    <span class="font-semibold text-sm truncate" [title]="row.team">{{ row.team }}</span>
-                    <div class="mt-3 flex items-baseline justify-between">
-                      <span class="font-mono text-xl font-bold" [class.text-text]="row.hits > 0" [class.text-text-faint]="row.hits === 0">
-                        {{ row.hits }}
-                      </span>
-                      <span class="text-xs text-text-faint">
-                        {{ row.hits === 1 ? t().insights.consulta : t().insights.consultas }}
-                      </span>
-                    </div>
-                    <div class="mt-2 pt-2 border-t border-border text-xs text-text-faint flex items-center justify-between">
-                      <span>{{ t().insights.sobre }} {{ row.skills }} {{ t().insights.skills }}</span>
-                      @if (row.hits === 0) {
-                        <span uiBadge tone="warning" class="text-[10px] py-0 px-1.5">0 {{ t().insights.consultas }}</span>
-                      }
-                    </div>
-                  </div>
-                }
               </div>
             }
           </section>
@@ -274,10 +224,11 @@ export class Insights {
   missed = signal<Miss[]>([]);
   loading = signal(true);
 
+  topSkills = computed(() => this.top().slice(0, 5));
   topMissed = computed(() => this.missed().slice(0, 5));
   modalMissedOpen = signal(false);
 
-  maxHits = computed(() => Math.max(...this.top().map((t) => t.hits), 1));
+  maxHits = computed(() => Math.max(...this.topSkills().map((t) => t.hits), 1));
 
   @HostListener('window:keydown.escape')
   onEscape(): void {
