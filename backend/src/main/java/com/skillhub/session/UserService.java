@@ -43,7 +43,9 @@ public class UserService {
         }
         Map<String, Object> user = one("""
                 SELECT id::text AS id, username, name, team, role::text AS role,
-                       status::text AS status, password_hash AS hash
+                       status::text AS status, password_hash AS hash,
+                       must_change_password AS "mustChangePassword",
+                       password_change_nonce::text AS "passwordChangeNonce"
                 FROM users WHERE username = :u LIMIT 1
                 """, new MapSqlParameterSource("u", username));
 
@@ -54,11 +56,14 @@ public class UserService {
         if ("pending".equals(status)) throw new DomainException("Tu cuenta todavia no fue aprobada por un administrador.");
         if ("rejected".equals(status)) throw new DomainException("Tu solicitud de acceso fue rechazada.");
 
+        boolean mustChangePassword = Boolean.TRUE.equals(user.get("mustChangePassword"));
+        String passwordChangeNonce = mustChangePassword ? (String) user.get("passwordChangeNonce") : null;
         return new LoginResult(
                 new CurrentUser((String) user.get("id"), (String) user.get("username"),
-                        (String) user.get("name"), (String) user.get("team"), (String) user.get("role")),
+                        (String) user.get("name"), (String) user.get("team"), (String) user.get("role"),
+                        mustChangePassword),
                 new SessionService.SessionPayload((String) user.get("id"),
-                        (String) user.get("username"), (String) user.get("role")));
+                        (String) user.get("username"), (String) user.get("role"), passwordChangeNonce));
     }
 
     public record RegisterResult(String info, LoginResult session) {}
@@ -109,8 +114,8 @@ public class UserService {
                     "Cuenta creada. Un administrador tiene que aprobarla antes de que puedas entrar.", null);
         }
         return new RegisterResult(null, new LoginResult(
-                new CurrentUser(id, username, username, canonicalTeam, "admin"),
-                new SessionService.SessionPayload(id, username, "admin")));
+                new CurrentUser(id, username, username, canonicalTeam, "admin", false),
+                new SessionService.SessionPayload(id, username, "admin", null)));
     }
 
     // --- admin: aprobar / rechazar / reset ---------------------------
@@ -134,16 +139,70 @@ public class UserService {
     @Transactional
     public void resetPassword(String adminId, String userId, String newPassword) {
         if (newPassword == null || newPassword.length() < 10) throw new DomainException("Al menos 10 caracteres");
-        Map<String, Object> t = targetSnapshot(userId);
-        if (t == null) throw new DomainException("Usuario inexistente");
-        jdbc.update("UPDATE users SET password_hash = :hash WHERE id = :id::uuid",
-                new MapSqlParameterSource().addValue("hash", passwords.hash(newPassword)).addValue("id", userId));
-        audit.logAudit(adminId, "user.password_reset", "user", userId, t);
+        if (adminId.equals(userId)) throw new DomainException("No podes restablecer tu propia contrasena");
+        Map<String, Object> target = one(
+                "SELECT name, username, role::text AS role, status::text AS status FROM users WHERE id = :id::uuid LIMIT 1",
+                new MapSqlParameterSource("id", userId));
+        if (target == null) throw new DomainException("Usuario inexistente");
+        if (!"active".equals(target.get("status"))) {
+            throw new DomainException("Solo se puede restablecer una cuenta activa");
+        }
+        jdbc.update("""
+                UPDATE users
+                SET password_hash = :hash, must_change_password = true,
+                    password_change_nonce = gen_random_uuid()
+                WHERE id = :id::uuid
+                """, new MapSqlParameterSource()
+                .addValue("hash", passwords.hash(newPassword))
+                .addValue("id", userId));
+        audit.logAudit(adminId, "user.password_reset", "user", userId, target);
+    }
+
+    @Transactional
+    public LoginResult changeRequiredPassword(String userId, String passwordChangeNonce, String newPassword) {
+        if (passwordChangeNonce == null || passwordChangeNonce.isBlank()) {
+            throw new DomainException("No hay un cambio de contrasena pendiente");
+        }
+        if (newPassword == null || newPassword.length() < 10) throw new DomainException("Al menos 10 caracteres");
+
+        Map<String, Object> user = one("""
+                SELECT id::text AS id, username, name, team, role::text AS role,
+                       status::text AS status, password_hash AS hash,
+                       must_change_password AS "mustChangePassword",
+                       password_change_nonce::text AS "passwordChangeNonce"
+                FROM users WHERE id = :id::uuid LIMIT 1
+                """, new MapSqlParameterSource("id", userId));
+        if (user == null || !"active".equals(user.get("status"))) throw new DomainException("Usuario inexistente");
+        if (!Boolean.TRUE.equals(user.get("mustChangePassword"))
+                || !passwordChangeNonce.equals(user.get("passwordChangeNonce"))) {
+            throw new DomainException("La contrasena temporal fue reemplazada; inicia sesion nuevamente");
+        }
+        if (passwords.verify(newPassword, (String) user.get("hash"))) {
+            throw new DomainException("La nueva contrasena debe ser diferente de la temporal");
+        }
+
+        int updated = jdbc.update("""
+                UPDATE users
+                SET password_hash = :hash, must_change_password = false, password_change_nonce = null
+                WHERE id = :id::uuid AND password_change_nonce = :nonce::uuid
+                """, new MapSqlParameterSource()
+                .addValue("hash", passwords.hash(newPassword))
+                .addValue("id", userId)
+                .addValue("nonce", passwordChangeNonce));
+        if (updated != 1) throw new DomainException("La contrasena temporal fue reemplazada; inicia sesion nuevamente");
+
+        audit.logAudit(userId, "user.password_changed", "user", userId, Map.of("forced", true));
+        CurrentUser currentUser = new CurrentUser((String) user.get("id"), (String) user.get("username"),
+                (String) user.get("name"), (String) user.get("team"), (String) user.get("role"), false);
+        return new LoginResult(currentUser, new SessionService.SessionPayload(
+                currentUser.id(), currentUser.username(), currentUser.role(), null));
     }
 
     public List<Map<String, Object>> listByStatus(String status) {
         return jdbc.query("""
-                SELECT id::text AS id, name, username, team, legajo, created_at AS "createdAt"
+                SELECT id::text AS id, name, username, team, legajo, role::text AS role,
+                       status::text AS status, must_change_password AS "mustChangePassword",
+                       created_at AS "createdAt"
                 FROM users WHERE status = :s::account_status ORDER BY created_at ASC
                 """, new MapSqlParameterSource("s", status), (rs, i) -> {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -152,6 +211,9 @@ public class UserService {
             m.put("username", rs.getString("username"));
             m.put("team", rs.getString("team"));
             m.put("legajo", rs.getString("legajo"));
+            m.put("role", rs.getString("role"));
+            m.put("status", rs.getString("status"));
+            m.put("mustChangePassword", rs.getBoolean("mustChangePassword"));
             m.put("createdAt", String.valueOf(rs.getObject("createdAt")));
             return m;
         });

@@ -542,6 +542,10 @@ export class Login {
     try {
       if (this.mode() === 'login') {
         const user = await this.auth.login(this.username, this.password);
+        if (user.mustChangePassword) {
+          await this.router.navigate(['/change-password']);
+          return;
+        }
         await this.handleSuccessTransition(user.name || user.username);
         this.router.navigate(['/']);
       } else {

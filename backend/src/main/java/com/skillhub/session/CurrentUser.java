@@ -6,7 +6,8 @@ public record CurrentUser(
         String username,
         String name,
         String team,
-        String role
+        String role,
+        boolean mustChangePassword
 ) {
     public boolean isAdmin() {
         return "admin".equals(role);

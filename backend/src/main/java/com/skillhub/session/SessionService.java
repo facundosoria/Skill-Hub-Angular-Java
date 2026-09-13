@@ -22,7 +22,7 @@ import java.util.List;
  * Puerto de src/server/auth/session.ts + la parte de sesion de auth/index.ts.
  *
  * Cookie httpOnly `skillhub_session` con un JWT HS256 firmado con SESSION_SECRET,
- * 7 dias. Payload { userId, username, role }. El estado de la cuenta se
+ * 7 dias. Payload { userId, username, role, passwordChangeNonce }. El estado de la cuenta se
  * re-chequea en CADA request (getCurrentUser): si un admin pausa o rechaza a
  * alguien con sesion viva, se corta en la proxima llamada sin esperar los 7 dias.
  */
@@ -48,7 +48,7 @@ public class SessionService {
         this.jdbc = jdbc;
     }
 
-    public record SessionPayload(String userId, String username, String role) {}
+    public record SessionPayload(String userId, String username, String role, String passwordChangeNonce) {}
 
     // --- emision / borrado de la cookie ---------------------------------
 
@@ -58,6 +58,7 @@ public class SessionService {
                 .claim("userId", payload.userId())
                 .claim("username", payload.username())
                 .claim("role", payload.role())
+                .claim("passwordChangeNonce", payload.passwordChangeNonce())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(MAX_AGE_SECONDS, ChronoUnit.SECONDS)))
                 .signWith(key)
@@ -90,7 +91,8 @@ public class SessionService {
         try {
             Claims c = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
             return new SessionPayload(c.get("userId", String.class),
-                    c.get("username", String.class), c.get("role", String.class));
+                    c.get("username", String.class), c.get("role", String.class),
+                    c.get("passwordChangeNonce", String.class));
         } catch (JwtException | IllegalArgumentException e) {
             return null;
         }
@@ -105,14 +107,19 @@ public class SessionService {
         if (session == null) return null;
         List<CurrentUser> rows = jdbc.query(
                 """
-                SELECT id::text AS id, username, name, team, role::text AS role, status::text AS status
+                SELECT id::text AS id, username, name, team, role::text AS role, status::text AS status,
+                       password_change_nonce::text AS password_change_nonce
                 FROM users WHERE id = :id::uuid LIMIT 1
                 """,
                 new MapSqlParameterSource("id", session.userId()),
                 (rs, i) -> {
                     if (!"active".equals(rs.getString("status"))) return null;
+                    String sessionNonce = session.passwordChangeNonce();
+                    String currentNonce = rs.getString("password_change_nonce");
+                    if (sessionNonce != null && !sessionNonce.equals(currentNonce)) return null;
                     return new CurrentUser(rs.getString("id"), rs.getString("username"),
-                            rs.getString("name"), rs.getString("team"), rs.getString("role"));
+                            rs.getString("name"), rs.getString("team"), rs.getString("role"),
+                            sessionNonce != null);
                 });
         return rows.isEmpty() ? null : rows.get(0);
     }

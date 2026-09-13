@@ -46,6 +46,21 @@ public class AuthController {
         return Map.of("ok", true);
     }
 
+    @PostMapping("/change-password")
+    public Map<String, Object> changePassword(@AuthPrincipal CurrentUser user,
+                                              @RequestBody Map<String, String> body,
+                                              HttpServletRequest req,
+                                              HttpServletResponse res) {
+        if (!user.mustChangePassword()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PASSWORD_CHANGE_NOT_REQUIRED");
+        }
+        SessionService.SessionPayload session = sessions.readSession(req);
+        var changed = users.changeRequiredPassword(
+                user.id(), session == null ? null : session.passwordChangeNonce(), body.get("password"));
+        sessions.createSession(res, changed.payload());
+        return Map.of("user", changed.user());
+    }
+
     @GetMapping("/me")
     public Map<String, Object> me(HttpServletRequest req) {
         CurrentUser user = sessions.getCurrentUser(req);

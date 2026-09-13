@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { adminGuard, authGuard, guestGuard } from './core/guards';
+import { adminGuard, authGuard, guestGuard, passwordChangeGuard } from './core/guards';
 
 /**
  * Puerto del ruteo de src/app. Todo lo de `(app)` cuelga del Shell (nav + outlet)
@@ -10,6 +10,11 @@ export const routes: Routes = [
     path: 'login',
     canActivate: [guestGuard],
     loadComponent: () => import('./features/auth/login').then((m) => m.Login),
+  },
+  {
+    path: 'change-password',
+    canActivate: [passwordChangeGuard],
+    loadComponent: () => import('./features/auth/change-password').then((m) => m.ChangePassword),
   },
   {
     path: '',

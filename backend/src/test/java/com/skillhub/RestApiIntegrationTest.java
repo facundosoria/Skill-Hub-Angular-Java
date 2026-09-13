@@ -119,6 +119,7 @@ class RestApiIntegrationTest {
         assertThat(r.status).isEqualTo(200);
         assertThat(r.body.path("user").path("role").asText()).isEqualTo("admin");
         assertThat(r.body.path("user").path("username").asText()).isEqualTo("facu"); // normalizado
+        assertThat(r.body.path("user").path("mustChangePassword").asBoolean()).isFalse();
         assertThat(r.cookie).startsWith("skillhub_session=");
         adminCookie = r.cookie;
 
@@ -586,6 +587,84 @@ class RestApiIntegrationTest {
     void adminUsersLista() {
         var r = get("/api/admin/users", adminCookie);
         assertThat(r.body.path("active").size()).isGreaterThanOrEqualTo(2);
+        assertThat(r.body.path("active").get(0).has("role")).isTrue();
+        assertThat(r.body.path("active").get(0).has("mustChangePassword")).isTrue();
+    }
+
+    @Test @Order(34)
+    void resetAdminFuerzaCambioEnProximoLogin() {
+        var registration = post("/api/auth/register", Map.of(
+                "username", "reset-user", "password", "password-original", "team", "Backoffice"), null);
+        assertThat(registration.status).isEqualTo(200);
+        String userId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'reset-user'", String.class);
+        assertThat(post("/api/admin/users/" + userId + "/approve", null, adminCookie).status).isEqualTo(200);
+
+        var originalLogin = post("/api/auth/login", Map.of(
+                "username", "reset-user", "password", "password-original"), null);
+        assertThat(originalLogin.status).isEqualTo(200);
+        assertThat(originalLogin.body.path("user").path("mustChangePassword").asBoolean()).isFalse();
+
+        var reset = post("/api/admin/users/" + userId + "/reset-password",
+                Map.of("password", "password-temporal"), adminCookie);
+        assertThat(reset.status).isEqualTo(200);
+        assertThat(jdbc.queryForObject(
+                "SELECT must_change_password FROM users WHERE id = ?::uuid", Boolean.class, userId)).isTrue();
+
+        // La decision de producto conserva las sesiones que ya estaban abiertas.
+        assertThat(get("/api/profile", originalLogin.cookie).status).isEqualTo(200);
+        assertThat(post("/api/auth/login", Map.of(
+                "username", "reset-user", "password", "password-original"), null).status).isEqualTo(400);
+
+        var temporaryLogin = post("/api/auth/login", Map.of(
+                "username", "reset-user", "password", "password-temporal"), null);
+        assertThat(temporaryLogin.status).isEqualTo(200);
+        assertThat(temporaryLogin.body.path("user").path("mustChangePassword").asBoolean()).isTrue();
+        assertThat(get("/api/auth/me", temporaryLogin.cookie).status).isEqualTo(200);
+        var blocked = get("/api/profile", temporaryLogin.cookie);
+        assertThat(blocked.status).isEqualTo(403);
+        assertThat(blocked.body.path("error").asText()).isEqualTo("PASSWORD_CHANGE_REQUIRED");
+
+        assertThat(post("/api/auth/change-password", Map.of("password", "corta"), temporaryLogin.cookie).status)
+                .isEqualTo(400);
+        assertThat(post("/api/auth/change-password",
+                Map.of("password", "password-temporal"), temporaryLogin.cookie).status).isEqualTo(400);
+
+        var changed = post("/api/auth/change-password",
+                Map.of("password", "password-personal"), temporaryLogin.cookie);
+        assertThat(changed.status).isEqualTo(200);
+        assertThat(changed.body.path("user").path("mustChangePassword").asBoolean()).isFalse();
+        assertThat(changed.cookie).startsWith("skillhub_session=");
+        assertThat(get("/api/profile", changed.cookie).status).isEqualTo(200);
+        assertThat(post("/api/auth/login", Map.of(
+                "username", "reset-user", "password", "password-temporal"), null).status).isEqualTo(400);
+        assertThat(post("/api/auth/login", Map.of(
+                "username", "reset-user", "password", "password-personal"), null).status).isEqualTo(200);
+
+        Integer auditCount = jdbc.queryForObject("""
+                SELECT COUNT(*)::int FROM audit_events
+                WHERE target_id = ?::uuid AND action IN ('user.password_reset', 'user.password_changed')
+                """, Integer.class, userId);
+        assertThat(auditCount).isEqualTo(2);
+    }
+
+    @Test @Order(35)
+    void resetPasswordRespetaPermisosYEstado() {
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'facu'", String.class);
+        assertThat(post("/api/admin/users/" + adminId + "/reset-password",
+                Map.of("password", "otra-password-segura"), adminCookie).status).isEqualTo(400);
+
+        assertThat(post("/api/admin/users/" + adminId + "/reset-password",
+                Map.of("password", "otra-password-segura"), memberCookie).status).isEqualTo(403);
+
+        var pending = post("/api/auth/register", Map.of(
+                "username", "reset-pending", "password", "password-original", "team", "Mercado"), null);
+        assertThat(pending.status).isEqualTo(200);
+        String pendingId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'reset-pending'", String.class);
+        assertThat(post("/api/admin/users/" + pendingId + "/reset-password",
+                Map.of("password", "otra-password-segura"), adminCookie).status).isEqualTo(400);
     }
 
     @Test @Order(37)

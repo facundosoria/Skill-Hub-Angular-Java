@@ -61,4 +61,12 @@ export class AuthService {
     await firstValueFrom(this.api.post('/auth/logout'));
     this._user.set(null);
   }
+
+  async changeRequiredPassword(password: string): Promise<User> {
+    const { user } = await firstValueFrom(
+      this.api.post<{ user: User }>('/auth/change-password', { password }),
+    );
+    this._user.set(user);
+    return user;
+  }
 }

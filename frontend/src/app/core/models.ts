@@ -15,6 +15,7 @@ export interface User {
   name: string;
   team: Team | null;
   role: Role;
+  mustChangePassword: boolean;
 }
 
 export interface SkillListItem {
@@ -206,6 +207,12 @@ export interface PendingUser {
   team: Team | null;
   legajo: string | null;
   createdAt: string;
+}
+
+export interface AdminUser extends PendingUser {
+  role: Role;
+  status: 'pending' | 'active' | 'rejected';
+  mustChangePassword: boolean;
 }
 
 export interface AuditEvent {
