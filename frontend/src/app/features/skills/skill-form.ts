@@ -365,6 +365,10 @@ export class SkillForm {
     return map[campo] ?? campo;
   }
 
+  camposLabel(campos: string[]): string {
+    return campos.map((campo) => this.campoLabel(campo)).join(', ');
+  }
+
   onFileSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.item(0) ?? null;
     this.fileError.set(null);
