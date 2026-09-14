@@ -19,6 +19,10 @@ export const en: Dict = {
     usuarios: "Users",
     perfil: "Profile",
     salir: "Sign out",
+    recursosCanonicos: "Canonical resources",
+    skillsDesc: "Conventions, prompts, and code directives",
+    pluginsDesc: "MCP tools, Git hooks, and CLI runners",
+    contratosDesc: "OpenAPI specifications and data schemas",
   },
   login: {
     subtitulo: "The canonical catalogue of engineering conventions.",

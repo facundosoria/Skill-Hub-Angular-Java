@@ -17,6 +17,10 @@ export const es = {
     usuarios: "Usuarios",
     perfil: "Perfil",
     salir: "Salir",
+    recursosCanonicos: "Recursos canónicos",
+    skillsDesc: "Convenciones, prompts y directivas de código",
+    pluginsDesc: "Herramientas MCP, hooks de Git y CLI runners",
+    contratosDesc: "Especificaciones OpenAPI y schemas de datos",
   },
   login: {
     subtitulo: "El catálogo canónico de convenciones de la organización.",
