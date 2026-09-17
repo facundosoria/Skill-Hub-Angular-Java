@@ -49,7 +49,7 @@ public final class LanguageDetector {
 
     private static final Set<String> PALABRAS_EN = Set.of(
             "the","a","an","of","to","in","on","for","with","without","about",
-            "and","or","but","if","not","when","where","how","why","because",
+            "and","or","but","if","not","no","when","where","how","why","because",
             "is","are","be","was","were","has","have","does","do",
             "it","its","this","that","these","those","there",
             "use","uses","used","should","must","can","never","always",

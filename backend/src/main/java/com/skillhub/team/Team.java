@@ -15,7 +15,8 @@ public enum Team {
     MARKET("Mercado"),
     ROADMAP_AND_PROGRESS("Roadmap y Progreso"),
     SOCIAL_AND_NOTIFICATIONS("Social y Notificaciones"),
-    BACKOFFICE("Backoffice");
+    BACKOFFICE("Backoffice"),
+    PROFESOR("Profesor");
 
     private final String label;
 

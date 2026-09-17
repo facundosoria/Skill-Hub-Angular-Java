@@ -12,6 +12,7 @@ export const TEAM_OPTIONS = [
   'Roadmap y Progreso',
   'Social y Notificaciones',
   'Backoffice',
+  'Profesor',
 ] as const;
 
 export type Team = (typeof TEAM_OPTIONS)[number];

@@ -230,7 +230,7 @@ public class SkillController {
         return votes.castVote(id, user.id());
     }
 
-    public record SkillRatingRequest(int rating, String comment) {}
+    public record SkillRatingRequest(Integer rating, String comment) {}
 
     @PostMapping("/{slug}/ratings")
     public Map<String, Object> rate(@AuthPrincipal CurrentUser user, @PathVariable String slug,

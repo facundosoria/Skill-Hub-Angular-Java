@@ -105,58 +105,64 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
         <skill-markdown [content]="d.skill.version?.content ?? ''" />
       </article>
 
-      <section uiCard class="mt-8 p-4" [attr.aria-label]="t().skill.calificaciones">
-        <h2 class="text-[13px] text-text-muted">{{ t().skill.calificaciones }}</h2>
+      <section uiCard class="mt-8 p-4" [attr.aria-label]="isContract() ? t().skill.comentarios : t().skill.calificaciones">
+        <h2 class="text-[13px] text-text-muted">{{ isContract() ? t().skill.comentarios : t().skill.calificaciones }}</h2>
 
         @if (user()) {
           <form class="mt-3 border-b border-border pb-4" (ngSubmit)="submitRating()">
-            <p class="text-sm font-medium">{{ t().skill.puntuar }}</p>
-            <div class="rating-demo mt-2" role="radiogroup" [attr.aria-label]="t().skill.puntuar">
-              @for (star of ratingStars; track star) {
-                <input [class]="'rating-demo__input rating-demo__input-' + star" [id]="'rating-' + star" type="radio" name="skill-rating"
-                       [value]="star" [checked]="selectedRating() === star" [disabled]="busy()"
-                       (change)="selectRating(star)" />
-              }
-              @for (star of ratingStars; track star) {
-                <label class="rating-demo__label" [for]="'rating-' + star"
-                       [class.rating-demo__label--delay1]="ratingDelays()[star - 1] === 1"
-                       [class.rating-demo__label--delay2]="ratingDelays()[star - 1] === 2"
-                       [class.rating-demo__label--delay3]="ratingDelays()[star - 1] === 3"
-                       [class.rating-demo__label--delay4]="ratingDelays()[star - 1] === 4">
-                  <svg class="rating-star" viewBox="0 0 32 32" aria-hidden="true">
-                    <g transform="translate(16,16)">
-                      <circle class="rating-star__ring" fill="none" stroke-width="16" r="8" transform="scale(0)" />
-                    </g>
-                    <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <g transform="translate(16,16) rotate(180)">
-                        <polygon class="rating-star__stroke" points="0,15 4.41,6.07 14.27,4.64 7.13,-2.32 8.82,-12.14 0,-7.5 -8.82,-12.14 -7.13,-2.32 -14.27,4.64 -4.41,6.07" fill="none" />
-                        <polygon class="rating-star__fill" points="0,15 4.41,6.07 14.27,4.64 7.13,-2.32 8.82,-12.14 0,-7.5 -8.82,-12.14 -7.13,-2.32 -14.27,4.64 -4.41,6.07" />
+            <p class="text-sm font-medium">
+              {{ isContract() ? t().skill.dejarComentario : isPlugin() ? t().skill.puntuarPlugin : t().skill.puntuar }}
+            </p>
+            @if (!isContract()) {
+              <div class="rating-demo mt-2" role="radiogroup" [attr.aria-label]="isPlugin() ? t().skill.puntuarPlugin : t().skill.puntuar">
+                @for (star of ratingStars; track star) {
+                  <input [class]="'rating-demo__input rating-demo__input-' + star" [id]="'rating-' + star" type="radio" name="skill-rating"
+                         [value]="star" [checked]="selectedRating() === star" [disabled]="busy()"
+                         (change)="selectRating(star)" />
+                }
+                @for (star of ratingStars; track star) {
+                  <label class="rating-demo__label" [for]="'rating-' + star"
+                         [class.rating-demo__label--delay1]="ratingDelays()[star - 1] === 1"
+                         [class.rating-demo__label--delay2]="ratingDelays()[star - 1] === 2"
+                         [class.rating-demo__label--delay3]="ratingDelays()[star - 1] === 3"
+                         [class.rating-demo__label--delay4]="ratingDelays()[star - 1] === 4">
+                    <svg class="rating-star" viewBox="0 0 32 32" aria-hidden="true">
+                      <g transform="translate(16,16)">
+                        <circle class="rating-star__ring" fill="none" stroke-width="16" r="8" transform="scale(0)" />
                       </g>
-                      <g class="rating-star__lines" transform="translate(16,16)">
-                        <polyline transform="rotate(0)" points="0 4,0 16" />
-                        <polyline transform="rotate(72)" points="0 4,0 16" />
-                        <polyline transform="rotate(144)" points="0 4,0 16" />
-                        <polyline transform="rotate(216)" points="0 4,0 16" />
-                        <polyline transform="rotate(288)" points="0 4,0 16" />
+                      <g stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <g transform="translate(16,16) rotate(180)">
+                          <polygon class="rating-star__stroke" points="0,15 4.41,6.07 14.27,4.64 7.13,-2.32 8.82,-12.14 0,-7.5 -8.82,-12.14 -7.13,-2.32 -14.27,4.64 -4.41,6.07" fill="none" />
+                          <polygon class="rating-star__fill" points="0,15 4.41,6.07 14.27,4.64 7.13,-2.32 8.82,-12.14 0,-7.5 -8.82,-12.14 -7.13,-2.32 -14.27,4.64 -4.41,6.07" />
+                        </g>
+                        <g class="rating-star__lines" transform="translate(16,16)">
+                          <polyline transform="rotate(0)" points="0 4,0 16" />
+                          <polyline transform="rotate(72)" points="0 4,0 16" />
+                          <polyline transform="rotate(144)" points="0 4,0 16" />
+                          <polyline transform="rotate(216)" points="0 4,0 16" />
+                          <polyline transform="rotate(288)" points="0 4,0 16" />
+                        </g>
                       </g>
-                    </g>
-                  </svg>
-                  <span class="rating-demo__sr">{{ star }} {{ ratingLabel(star) }}</span>
-                </label>
-              }
-              @if (selectedRating()) {
-                <p class="rating-demo__display" aria-live="polite">{{ ratingLabel(selectedRating()) }}</p>
-              }
-            </div>
+                    </svg>
+                    <span class="rating-demo__sr">{{ star }} {{ ratingLabel(star) }}</span>
+                  </label>
+                }
+                @if (selectedRating()) {
+                  <p class="rating-demo__display" aria-live="polite">{{ ratingLabel(selectedRating()) }}</p>
+                }
+              </div>
+            }
             <label class="mt-3 block text-[13px] font-medium text-text-muted" for="rating-comment">
               {{ t().skill.comentario }}
             </label>
             <textarea id="rating-comment" uiTextarea class="mt-1.5 min-h-24" name="rating-comment"
                       [(ngModel)]="ratingComment" [disabled]="busy()" maxlength="2000"
-                      [placeholder]="t().skill.comentarioPlaceholder" required></textarea>
+                      [placeholder]="isContract() ? t().skill.comentarioContratoPlaceholder : isPlugin() ? t().skill.comentarioPluginPlaceholder : t().skill.comentarioPlaceholder" required></textarea>
             <div class="mt-3 flex items-center gap-3">
-              <button uiButton size="sm" type="submit" [disabled]="busy() || !selectedRating() || !ratingComment.trim()">
-                {{ busy() ? t().skill.enviandoCalificacion : t().skill.enviarCalificacion }}
+              <button uiButton size="sm" type="submit" [disabled]="busy() || (!isContract() && !selectedRating()) || !ratingComment.trim()">
+                {{ busy()
+                     ? t().skill.enviandoCalificacion
+                     : (isContract() ? t().skill.enviarComentario : t().skill.enviarCalificacion) }}
               </button>
               @if (error()) { <p class="text-xs text-danger">{{ error() }}</p> }
             </div>
@@ -167,16 +173,20 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
           <ol class="mt-4 space-y-4">
             @for (rating of d.ratings; track rating.voterName + rating.updatedAt) {
               <li class="border-b border-border pb-4 last:border-0 last:pb-0">
-                <div class="text-lg leading-none text-warning" role="img" [attr.aria-label]="rating.rating + ' / 5'">
-                  {{ stars(rating.rating) }}
-                </div>
+                @if (rating.rating) {
+                  <div class="text-lg leading-none text-warning" role="img" [attr.aria-label]="rating.rating + ' / 5'">
+                    {{ stars(rating.rating) }}
+                  </div>
+                }
                 <p class="mt-2 text-sm font-medium">{{ rating.voterName }}</p>
                 <p class="mt-1 whitespace-pre-wrap text-sm text-text-muted">{{ rating.comment }}</p>
               </li>
             }
           </ol>
         } @else {
-          <p class="mt-3 text-sm text-text-faint">{{ t().skill.sinCalificaciones }}</p>
+          <p class="mt-3 text-sm text-text-faint">
+            {{ isContract() ? t().skill.sinComentarios : t().skill.sinCalificaciones }}
+          </p>
         }
       </section>
 
@@ -338,6 +348,8 @@ export class SkillDetailPage {
   ratingComment = '';
 
   basePath = computed(() => this.section() === 'plugins' ? '/plugins' : this.section() === 'contracts' ? '/contracts' : '/skills');
+  isContract = computed(() => this.section() === 'contracts' || this.data()?.skill.type === 'contract');
+  isPlugin = computed(() => this.section() === 'plugins' || this.data()?.skill.type === 'plugin');
   sectionLabel = computed(() => {
     const c = this.t().catalogo;
     return this.section() === 'plugins' ? c.plugins : this.section() === 'contracts' ? c.contratos : c.skills;
@@ -380,11 +392,16 @@ export class SkillDetailPage {
 
   async submitRating(): Promise<void> {
     if (!this.ratingComment.trim()) return;
+    if (!this.isContract() && (!this.selectedRating() || this.selectedRating() < 1)) return;
     this.busy.set(true);
     this.error.set(null);
     try {
-      await this.skills.rate(this.slug(), this.selectedRating(), this.ratingComment.trim());
+      const rating = this.isContract() ? null : this.selectedRating();
+      await this.skills.rate(this.slug(), rating, this.ratingComment.trim());
       this.ratingComment = '';
+      if (!this.isContract()) {
+        this.selectedRating.set(0);
+      }
       await this.load();
     } catch (e) {
       this.error.set(apiError(e));
@@ -407,7 +424,8 @@ export class SkillDetailPage {
     return (this.i18n.locale() === 'es' ? es : en)[rating] ?? '';
   }
 
-  stars(rating: number): string {
+  stars(rating: number | null): string {
+    if (!rating) return '';
     return '★'.repeat(rating) + '☆'.repeat(5 - rating);
   }
 

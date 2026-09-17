@@ -68,7 +68,7 @@ public class ApiKeyService {
                        u.role::text AS role
                 FROM api_keys k
                 JOIN users u ON u.id = k.user_id
-                WHERE k.key_hash = :hash AND k.revoked_at IS NULL
+                WHERE k.key_hash = :hash AND k.revoked_at IS NULL AND u.status = 'active'
                 LIMIT 1
                 """,
                 new MapSqlParameterSource("hash", hash),

@@ -189,7 +189,7 @@ public class SkillRepository {
             LEFT JOIN skill_tags t ON t.skill_id = s.id
             LEFT JOIN users cu ON cu.id = s.created_by
             LEFT JOIN LATERAL (
-              SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 AS average, COUNT(*)::int AS count
+              SELECT ROUND(AVG(r.rating)::numeric, 1)::float8 AS average, COUNT(r.rating)::int AS count
               FROM skill_ratings r
               WHERE r.skill_id = s.id
             ) ratings ON TRUE
@@ -262,7 +262,7 @@ public class SkillRepository {
                 ORDER BY r.updated_at DESC
                 """, new MapSqlParameterSource("id", skillId), (rs, i) -> {
             Map<String, Object> m = new java.util.LinkedHashMap<>();
-            m.put("rating", rs.getInt("rating"));
+            m.put("rating", rs.getObject("rating") != null ? rs.getInt("rating") : null);
             m.put("comment", rs.getString("comment"));
             m.put("updatedAt", String.valueOf(rs.getObject("updatedAt")));
             m.put("voterName", rs.getString("voterName"));

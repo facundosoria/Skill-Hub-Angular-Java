@@ -55,6 +55,7 @@ public class UserService {
         String status = (String) user.get("status");
         if ("pending".equals(status)) throw new DomainException("Tu cuenta todavia no fue aprobada por un administrador.");
         if ("rejected".equals(status)) throw new DomainException("Tu solicitud de acceso fue rechazada.");
+        if ("inactive".equals(status)) throw new DomainException("Tu cuenta se encuentra desactivada.");
 
         boolean mustChangePassword = Boolean.TRUE.equals(user.get("mustChangePassword"));
         String passwordChangeNonce = mustChangePassword ? (String) user.get("passwordChangeNonce") : null;
@@ -134,6 +135,54 @@ public class UserService {
         jdbc.update("UPDATE users SET status = 'rejected' WHERE id = :id::uuid",
                 new MapSqlParameterSource("id", userId));
         audit.logAudit(adminId, "user.rejected", "user", userId, t);
+    }
+
+    @Transactional
+    public void updateTeam(String adminId, String userId, String newTeam) {
+        String canonicalTeam = Team.canonicalOrNull(newTeam);
+        if (canonicalTeam == null) throw new DomainException("Selecciona un equipo valido");
+        Map<String, Object> target = targetSnapshot(userId);
+        if (target == null) throw new DomainException("Usuario inexistente");
+
+        jdbc.update("UPDATE users SET team = :team WHERE id = :id::uuid",
+                new MapSqlParameterSource("id", userId).addValue("team", canonicalTeam));
+        audit.logAudit(adminId, "user.team_updated", "user", userId,
+                Map.of("previousTeam", target.get("team") != null ? target.get("team") : "",
+                        "newTeam", canonicalTeam));
+    }
+
+    @Transactional
+    public void deactivate(String adminId, String userId) {
+        if (adminId.equals(userId)) {
+            throw new DomainException("No podes dar de baja tu propia cuenta");
+        }
+        Map<String, Object> target = targetSnapshot(userId);
+        if (target == null) throw new DomainException("Usuario inexistente");
+        if ("inactive".equals(target.get("status"))) {
+            throw new DomainException("La cuenta ya se encuentra desactivada");
+        }
+
+        jdbc.update("UPDATE users SET status = 'inactive'::account_status WHERE id = :id::uuid",
+                new MapSqlParameterSource("id", userId));
+
+        jdbc.update("UPDATE api_keys SET revoked_at = now() WHERE user_id = :id::uuid AND revoked_at IS NULL",
+                new MapSqlParameterSource("id", userId));
+
+        audit.logAudit(adminId, "user.deactivated", "user", userId, target);
+    }
+
+    @Transactional
+    public void reactivate(String adminId, String userId) {
+        Map<String, Object> target = targetSnapshot(userId);
+        if (target == null) throw new DomainException("Usuario inexistente");
+        if ("active".equals(target.get("status"))) {
+            throw new DomainException("La cuenta ya se encuentra activa");
+        }
+
+        jdbc.update("UPDATE users SET status = 'active'::account_status WHERE id = :id::uuid",
+                new MapSqlParameterSource("id", userId));
+
+        audit.logAudit(adminId, "user.reactivated", "user", userId, target);
     }
 
     @Transactional
@@ -240,7 +289,7 @@ public class UserService {
     }
 
     private Map<String, Object> targetSnapshot(String userId) {
-        return one("SELECT name, username FROM users WHERE id = :id::uuid LIMIT 1",
+        return one("SELECT name, username, team, status::text AS status FROM users WHERE id = :id::uuid LIMIT 1",
                 new MapSqlParameterSource("id", userId));
     }
 

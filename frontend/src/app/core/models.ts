@@ -94,7 +94,7 @@ export interface RelatedSkill {
 }
 
 export interface SkillRating {
-  rating: number;
+  rating: number | null;
   comment: string;
   updatedAt: string;
   voterName: string;
@@ -211,7 +211,7 @@ export interface PendingUser {
 
 export interface AdminUser extends PendingUser {
   role: Role;
-  status: 'pending' | 'active' | 'rejected';
+  status: 'pending' | 'active' | 'rejected' | 'inactive';
   mustChangePassword: boolean;
 }
 

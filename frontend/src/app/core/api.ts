@@ -28,6 +28,10 @@ export class Api {
     return this.http.put<T>(this.base + path, body ?? {}, { withCredentials: true });
   }
 
+  patch<T>(path: string, body?: unknown): Observable<T> {
+    return this.http.patch<T>(this.base + path, body ?? {}, { withCredentials: true });
+  }
+
   postForm<T>(path: string, body: FormData): Observable<T> {
     return this.http.post<T>(this.base + path, body, { withCredentials: true });
   }

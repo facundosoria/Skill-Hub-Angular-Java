@@ -23,7 +23,10 @@ public class AdminUserController {
     @GetMapping
     public Map<String, Object> list(@AuthPrincipal CurrentUser user) {
         requireAdmin(user);
-        return Map.of("pending", users.listByStatus("pending"), "active", users.listByStatus("active"));
+        return Map.of(
+                "pending", users.listByStatus("pending"),
+                "active", users.listByStatus("active"),
+                "inactive", users.listByStatus("inactive"));
     }
 
     @PostMapping("/{id}/approve")
@@ -37,6 +40,28 @@ public class AdminUserController {
     public Map<String, Object> reject(@AuthPrincipal CurrentUser user, @PathVariable String id) {
         requireAdmin(user);
         users.reject(user.id(), id);
+        return Map.of("ok", true);
+    }
+
+    @PatchMapping("/{id}/team")
+    public Map<String, Object> updateTeam(@AuthPrincipal CurrentUser user, @PathVariable String id,
+                                          @RequestBody Map<String, String> body) {
+        requireAdmin(user);
+        users.updateTeam(user.id(), id, body.get("team"));
+        return Map.of("ok", true);
+    }
+
+    @PostMapping("/{id}/deactivate")
+    public Map<String, Object> deactivate(@AuthPrincipal CurrentUser user, @PathVariable String id) {
+        requireAdmin(user);
+        users.deactivate(user.id(), id);
+        return Map.of("ok", true);
+    }
+
+    @PostMapping("/{id}/reactivate")
+    public Map<String, Object> reactivate(@AuthPrincipal CurrentUser user, @PathVariable String id) {
+        requireAdmin(user);
+        users.reactivate(user.id(), id);
         return Map.of("ok", true);
     }
 

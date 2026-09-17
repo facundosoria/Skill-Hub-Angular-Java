@@ -49,7 +49,7 @@ export class SkillService {
     return firstValueFrom(this.api.post(`/skills/${slug}/vote`));
   }
 
-  rate(slug: string, rating: number, comment: string): Promise<unknown> {
+  rate(slug: string, rating: number | null, comment: string): Promise<unknown> {
     return firstValueFrom(this.api.post(`/skills/${slug}/ratings`, { rating, comment }));
   }
 

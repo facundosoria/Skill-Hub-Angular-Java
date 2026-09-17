@@ -82,6 +82,7 @@ class RestApiIntegrationTest {
     private Res get(String path, String cookie) { return call(HttpMethod.GET, path, null, cookie); }
     private Res post(String path, Object body, String cookie) { return call(HttpMethod.POST, path, body, cookie); }
     private Res put(String path, Object body, String cookie) { return call(HttpMethod.PUT, path, body, cookie); }
+    private Res patch(String path, Object body, String cookie) { return call(HttpMethod.PATCH, path, body, cookie); }
     private Res del(String path, String cookie) { return call(HttpMethod.DELETE, path, null, cookie); }
 
     private Res multipart(HttpMethod method, String path, Object metadata, byte[] file,
@@ -251,6 +252,36 @@ class RestApiIntegrationTest {
             if ("buttons".equals(skill.path("slug").asText())) {
                 assertThat(skill.path("ratingAverage").asDouble()).isEqualTo(5.0);
                 assertThat(skill.path("ratingCount").asInt()).isEqualTo(1);
+            }
+        });
+
+        var invalidSkillRating = post("/api/skills/buttons/ratings", Map.of(
+                "rating", 0, "comment", "Should fail with zero stars"), memberCookie);
+        assertThat(invalidSkillRating.status).isEqualTo(400);
+
+        var invalidPluginRating = post("/api/skills/catalog-plugin/ratings", Map.of(
+                "rating", 0, "comment", "Should fail with zero stars"), memberCookie);
+        assertThat(invalidPluginRating.status).isEqualTo(400);
+
+        var pluginRated = post("/api/skills/catalog-plugin/ratings", Map.of(
+                "rating", 4, "comment", "Excelente plugin para el catalogo"), memberCookie);
+        assertThat(pluginRated.status).isEqualTo(200);
+
+        var contractComment = post("/api/skills/catalog-contract/ratings", Map.of(
+                "comment", "Buen contrato para la API"), memberCookie);
+        assertThat(contractComment.status).isEqualTo(200);
+
+        var contractDetail = get("/api/skills/catalog-contract", adminCookie);
+        assertThat(contractDetail.body.path("ratings")).hasSize(1);
+        assertThat(contractDetail.body.path("ratings").get(0).path("rating").isNull()).isTrue();
+        assertThat(contractDetail.body.path("ratings").get(0).path("comment").asText())
+                .isEqualTo("Buen contrato para la API");
+
+        var contractsList = get("/api/skills?type=contract&status=draft", adminCookie);
+        contractsList.body.path("skills").forEach(skill -> {
+            if ("catalog-contract".equals(skill.path("slug").asText())) {
+                assertThat(skill.path("ratingAverage").asDouble()).isEqualTo(0.0);
+                assertThat(skill.path("ratingCount").asInt()).isEqualTo(0);
             }
         });
     }
@@ -677,5 +708,80 @@ class RestApiIntegrationTest {
         assertThat(r.body.has("teams")).isTrue();
         assertThat(r.body.has("missed")).isTrue();
         assertThat(r.body.path("teams").size()).isGreaterThanOrEqualTo(1);
+    }
+
+    @Test @Order(38)
+    void adminCambiaEquipoYDaDeBajaYReactivaUsuario() {
+        var registration = post("/api/auth/register", Map.of(
+                "username", "profesor-user", "password", "password-segura-123", "team", "Banco"), null);
+        assertThat(registration.status).isEqualTo(200);
+        String userId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'profesor-user'", String.class);
+        assertThat(post("/api/admin/users/" + userId + "/approve", null, adminCookie).status).isEqualTo(200);
+
+        var userLogin = post("/api/auth/login", Map.of(
+                "username", "profesor-user", "password", "password-segura-123"), null);
+        assertThat(userLogin.status).isEqualTo(200);
+        String userCookie = userLogin.cookie;
+
+        // Intentar cambiar equipo sin ser admin -> 403
+        var nonAdminChange = patch("/api/admin/users/" + userId + "/team",
+                Map.of("team", "Profesor"), userCookie);
+        assertThat(nonAdminChange.status).isEqualTo(403);
+
+        // Admin cambia equipo a "Profesor"
+        var adminChange = patch("/api/admin/users/" + userId + "/team",
+                Map.of("team", "Profesor"), adminCookie);
+        assertThat(adminChange.status).isEqualTo(200);
+        String updatedTeam = jdbc.queryForObject(
+                "SELECT team FROM users WHERE id = ?::uuid", String.class, userId);
+        assertThat(updatedTeam).isEqualTo("Profesor");
+
+        // Admin intenta darse de baja a si mismo -> 400
+        String adminId = jdbc.queryForObject(
+                "SELECT id::text FROM users WHERE username = 'facu'", String.class);
+        var selfDeactivate = post("/api/admin/users/" + adminId + "/deactivate", null, adminCookie);
+        assertThat(selfDeactivate.status).isEqualTo(400);
+
+        // Admin da de baja al usuario
+        var deactivate = post("/api/admin/users/" + userId + "/deactivate", null, adminCookie);
+        assertThat(deactivate.status).isEqualTo(200);
+        String statusAfterDeactivate = jdbc.queryForObject(
+                "SELECT status::text FROM users WHERE id = ?::uuid", String.class, userId);
+        assertThat(statusAfterDeactivate).isEqualTo("inactive");
+
+        // La sesion viva previa queda cortada en el proximo request
+        assertThat(get("/api/profile", userCookie).status).isEqualTo(401);
+
+        // Intento de login de usuario desactivado -> 400
+        var loginBlocked = post("/api/auth/login", Map.of(
+                "username", "profesor-user", "password", "password-segura-123"), null);
+        assertThat(loginBlocked.status).isEqualTo(400);
+        assertThat(loginBlocked.body.path("error").asText()).contains("desactivada");
+
+        // Listar usuarios incluye la seccion inactive
+        var adminList = get("/api/admin/users", adminCookie);
+        assertThat(adminList.status).isEqualTo(200);
+        assertThat(adminList.body.has("inactive")).isTrue();
+        boolean foundInInactive = false;
+        for (var item : adminList.body.path("inactive")) {
+            if ("profesor-user".equals(item.path("username").asText())) {
+                foundInInactive = true;
+                break;
+            }
+        }
+        assertThat(foundInInactive).isTrue();
+
+        // Admin reactiva la cuenta
+        var reactivate = post("/api/admin/users/" + userId + "/reactivate", null, adminCookie);
+        assertThat(reactivate.status).isEqualTo(200);
+        String statusAfterReactivate = jdbc.queryForObject(
+                "SELECT status::text FROM users WHERE id = ?::uuid", String.class, userId);
+        assertThat(statusAfterReactivate).isEqualTo("active");
+
+        // Ahora el usuario puede volver a iniciar sesion
+        var loginRestored = post("/api/auth/login", Map.of(
+                "username", "profesor-user", "password", "password-segura-123"), null);
+        assertThat(loginRestored.status).isEqualTo(200);
     }
 }
