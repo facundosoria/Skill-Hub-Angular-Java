@@ -15,10 +15,13 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final SessionService sessions;
     private final PasswordChangeInterceptor passwordChanges;
+    private final OriginCheckInterceptor originCheck;
 
-    public WebConfig(SessionService sessions, PasswordChangeInterceptor passwordChanges) {
+    public WebConfig(SessionService sessions, PasswordChangeInterceptor passwordChanges,
+                     OriginCheckInterceptor originCheck) {
         this.sessions = sessions;
         this.passwordChanges = passwordChanges;
+        this.originCheck = originCheck;
     }
 
     @Override
@@ -28,6 +31,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(originCheck).addPathPatterns("/api/**");
         registry.addInterceptor(passwordChanges).addPathPatterns("/api/**");
     }
 }

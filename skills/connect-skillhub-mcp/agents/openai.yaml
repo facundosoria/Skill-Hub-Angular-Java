@@ -1,0 +1,4 @@
+interface:
+  display_name: "Connect Skillhub MCP"
+  short_description: "Connect Skill Hub MCP without exposing keys"
+  default_prompt: "Use $connect-skillhub-mcp to connect Skill Hub MCP using my local key file."

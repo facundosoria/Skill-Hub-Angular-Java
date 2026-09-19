@@ -59,7 +59,7 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
-            <version>1.79</version>
+            <version>1.86</version>
         </dependency>
 
         <!-- JWT HS256 de la cookie de sesion (jose en el original) -->

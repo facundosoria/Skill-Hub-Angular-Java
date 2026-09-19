@@ -29,8 +29,15 @@ public class PasswordChangeInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         CurrentUser user = sessions.getCurrentUser(request);
-        if (user != null && user.mustChangePassword() && !ALLOWED_PATHS.contains(request.getRequestURI())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PASSWORD_CHANGE_REQUIRED");
+        if (user != null && user.mustChangePassword()) {
+            // getServletPath() devuelve el path sin path-params (;jsessionid=...) y decodificado.
+            String path = request.getServletPath();
+            if (path.endsWith("/") && path.length() > 1) {
+                path = path.substring(0, path.length() - 1);
+            }
+            if (!ALLOWED_PATHS.contains(path)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "PASSWORD_CHANGE_REQUIRED");
+            }
         }
         return true;
     }

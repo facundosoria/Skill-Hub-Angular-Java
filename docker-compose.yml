@@ -1,10 +1,10 @@
 # Stack de produccion de Skill Hub (Angular + Spring Boot).
-# Reemplaza al stack Next.js. El nginx del host sigue apuntando a 127.0.0.1:3000.
+# Reemplaza al stack Next.js. El túnel/proxy del host apunta a 127.0.0.1:8087.
 #
 #   db      -> postgres:16-alpine, mismo volumen que el stack viejo (datos intactos)
 #   backend -> Spring Boot :8080 (solo red interna). Flyway con baseline en V12.
 #   web     -> Caddy: sirve el bundle Angular y proxea /api -> backend:8080.
-#              Unico puerto publicado: 127.0.0.1:3000.
+#              Único puerto publicado: 127.0.0.1:8087.
 
 services:
   db:
@@ -36,7 +36,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
       SESSION_SECRET: ${SESSION_SECRET:?falta SESSION_SECRET, ver .env.example}
       APP_TZ: ${APP_TZ:-America/Argentina/Cordoba}
-      COOKIE_SECURE: "false"
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       USAGE_RETENTION_DAYS: ${USAGE_RETENTION_DAYS:-90}
       # Base de prod: ya tiene el schema de Drizzle (== V1..V12) sin
       # flyway_schema_history. Se marca la linea base en V12 y no se aplica nada.
@@ -56,7 +56,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8087:80"
+      - "127.0.0.1:8087:8080"
 
 volumes:
   pgdata:

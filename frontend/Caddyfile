@@ -1,7 +1,18 @@
 # Sirve el SPA Angular y proxea /api al backend Spring Boot.
-# El TLS y el dominio los pone el nginx del host; aca solo HTTP en :80.
-:80 {
+# El TLS y el dominio los pone el nginx del host; aca solo HTTP en :8080.
+:8080 {
 	encode gzip
+
+	header {
+		X-Frame-Options "DENY"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		# Angular activa su stylesheet optimizado con este handler inline. El hash
+		# permite solamente ese handler, sin habilitar scripts inline arbitrarios.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-hashes' 'sha256-MhtPZXr7+LpJUY5qtMutB+qWfQtMaPccfe7QXtCcEYc='; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'"
+		-Server
+	}
 
 	# API -> backend. handle {} garantiza exclusion mutua con el bloque del SPA.
 	handle /api/* {

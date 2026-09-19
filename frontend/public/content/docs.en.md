@@ -159,7 +159,9 @@ Since the key cannot publish, who changed what is recorded by the audit log of t
 2. Paste the snippet for your IDE. It is ready to copy on that same page.
 3. Work normally. You do not need to mention the catalogue: on connecting, the server hands the agent the instruction to search before writing code.
 
-> **How to tell it is working.** Open a clean session and ask *"add a save button to this form"* without naming any skill. The agent should call `search_skills` on its own and bring back the buttons skill.
+> **How to tell it is working.** Open a clean session and ask *"List the skills available in the marketplace"*. The agent should call `list_skills` and return the catalogue.
+
+[Open the connection tutorial →](/keys?tab=tutorial)
 
 ## The order of things
 

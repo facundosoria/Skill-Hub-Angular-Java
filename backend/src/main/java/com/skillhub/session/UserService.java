@@ -34,11 +34,15 @@ public class UserService {
         this.audit = audit;
     }
 
+    // Hash dummy para mitigar timing attacks en login cuando el usuario no existe (SEC-02).
+    private static final String DUMMY_HASH =
+            "scrypt$16384$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
+
     public record LoginResult(CurrentUser user, SessionService.SessionPayload payload) {}
 
     public LoginResult login(String rawUsername, String password) {
         String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase();
-        if (username.isEmpty() || password == null || password.isEmpty()) {
+        if (username.isEmpty() || username.length() > 64 || password == null || password.isEmpty()) {
             throw new DomainException("Ingresa tu usuario y contrasena");
         }
         Map<String, Object> user = one("""
@@ -49,7 +53,8 @@ public class UserService {
                 FROM users WHERE username = :u LIMIT 1
                 """, new MapSqlParameterSource("u", username));
 
-        boolean ok = user != null && passwords.verify(password, (String) user.get("hash"));
+        String storedHash = user != null ? (String) user.get("hash") : DUMMY_HASH;
+        boolean ok = passwords.verify(password, storedHash);
         if (user == null || !ok) throw new DomainException("Usuario o contrasena incorrectos");
 
         String status = (String) user.get("status");
@@ -73,10 +78,12 @@ public class UserService {
     public RegisterResult register(String rawUsername, String password, String team, String legajo) {
         String username = rawUsername == null ? "" : rawUsername.trim().toLowerCase();
         if (username.isEmpty()) throw new DomainException("Ingresa tu usuario");
+        if (username.length() > 64) throw new DomainException("El usuario no puede superar 64 caracteres");
         String canonicalTeam = Team.canonicalOrNull(team);
         if (canonicalTeam == null) throw new DomainException("Selecciona un equipo valido");
-        if (password == null || password.length() < 10) throw new DomainException("Al menos 10 caracteres");
+        validatePassword(password);
         String legajoClean = legajo != null && !legajo.isBlank() ? legajo.trim() : null;
+        if (legajoClean != null && legajoClean.length() > 32) throw new DomainException("El legajo no puede superar 32 caracteres");
 
         Map<String, Object> existing = one(
                 "SELECT id::text AS id, status::text AS status FROM users WHERE username = :u LIMIT 1",
@@ -187,7 +194,7 @@ public class UserService {
 
     @Transactional
     public void resetPassword(String adminId, String userId, String newPassword) {
-        if (newPassword == null || newPassword.length() < 10) throw new DomainException("Al menos 10 caracteres");
+        validatePassword(newPassword);
         if (adminId.equals(userId)) throw new DomainException("No podes restablecer tu propia contrasena");
         Map<String, Object> target = one(
                 "SELECT name, username, role::text AS role, status::text AS status FROM users WHERE id = :id::uuid LIMIT 1",
@@ -212,7 +219,7 @@ public class UserService {
         if (passwordChangeNonce == null || passwordChangeNonce.isBlank()) {
             throw new DomainException("No hay un cambio de contrasena pendiente");
         }
-        if (newPassword == null || newPassword.length() < 10) throw new DomainException("Al menos 10 caracteres");
+        validatePassword(newPassword);
 
         Map<String, Object> user = one("""
                 SELECT id::text AS id, username, name, team, role::text AS role,
@@ -269,6 +276,16 @@ public class UserService {
     }
 
     // --- helpers ----------------------------------------------------
+
+    private void validatePassword(String password) {
+        if (password == null || password.length() < 10) {
+            throw new DomainException("Al menos 10 caracteres");
+        }
+        if (password.chars().distinct().count() < 3) {
+            throw new DomainException("La contrasena es demasiado simple");
+        }
+    }
+
 
     private MapSqlParameterSource base(String username, String team, String legajo, String password) {
         return new MapSqlParameterSource()

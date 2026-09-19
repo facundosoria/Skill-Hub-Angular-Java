@@ -1,5 +1,7 @@
 package com.skillhub.web;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -12,6 +14,8 @@ import java.util.Map;
 /** Todo error de la API sale como JSON {"error": "..."} para que el front lo lea igual. */
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
 
     @ExceptionHandler(DomainException.class)
     public ResponseEntity<Map<String, Object>> domain(DomainException e) {
@@ -26,12 +30,21 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> illegal(IllegalArgumentException e) {
-        return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        log.warn("[api] argumento invalido", e);
+        return ResponseEntity.badRequest().body(Map.of("error", "Datos invalidos"));
     }
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> uploadTooLarge(MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", "El archivo supera el limite de 25 MB"));
+    }
+
+    /** Catch-all: cualquier excepcion no prevista devuelve 500 generico sin leak. */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> fallback(Exception e) {
+        log.error("[api] error no manejado", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("error", "Error interno del servidor"));
     }
 }

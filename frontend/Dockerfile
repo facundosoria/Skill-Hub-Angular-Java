@@ -13,4 +13,8 @@ RUN npm run build
 FROM caddy:2-alpine AS runtime
 COPY --from=build /app/dist/skill-hub-web/browser /srv
 COPY Caddyfile /etc/caddy/Caddyfile
-EXPOSE 80
+# Correr como non-root. Puerto 8080 para evitar bind a :80 sin permisos.
+RUN adduser -D -u 1001 caddy \
+ && chown -R caddy:caddy /srv /etc/caddy /data /config
+USER caddy
+EXPOSE 8080

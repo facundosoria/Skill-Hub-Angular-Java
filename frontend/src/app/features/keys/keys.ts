@@ -1,11 +1,13 @@
 import { Component, computed, HostListener, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { Api } from '../../core/api';
 import { I18n } from '../../core/i18n/i18n';
 import type { ApiKey } from '../../core/models';
 import { UI } from '../../shared/ui';
 import { firstValueFrom } from 'rxjs';
 import { apiError } from '../auth/login';
+import { McpTutorial } from './mcp-tutorial';
 
 /**
  * Copia al portapapeles con fallback para contextos no seguros (http sin
@@ -150,7 +152,7 @@ export class CopyRow {
 /** Puerto de src/app/(app)/keys/keys-manager.tsx. */
 @Component({
   selector: 'app-keys',
-  imports: [FormsModule, CopyRow, ...UI],
+  imports: [FormsModule, CopyRow, McpTutorial, ...UI],
   template: `
     <div class="space-y-8">
       <div>
@@ -158,6 +160,28 @@ export class CopyRow {
         <p class="mt-1 text-sm text-text-muted">{{ t().keys.subtitulo }}</p>
       </div>
 
+      <nav class="flex w-fit rounded-[var(--radius)] border border-border bg-surface-2 p-1" [attr.aria-label]="t().keys.titulo">
+        <button
+          type="button"
+          class="rounded-[calc(var(--radius)-2px)] px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer focus-visible:shadow-[var(--ring)] focus-visible:outline-none"
+          [class.bg-surface]="activeTab() === 'keys'"
+          [class.text-text]="activeTab() === 'keys'"
+          [class.text-text-muted]="activeTab() !== 'keys'"
+          [attr.aria-pressed]="activeTab() === 'keys'"
+          (click)="selectTab('keys')"
+        >{{ i18n.locale() === 'es' ? 'Mis keys' : 'My keys' }}</button>
+        <button
+          type="button"
+          class="rounded-[calc(var(--radius)-2px)] px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer focus-visible:shadow-[var(--ring)] focus-visible:outline-none"
+          [class.bg-surface]="activeTab() === 'tutorial'"
+          [class.text-text]="activeTab() === 'tutorial'"
+          [class.text-text-muted]="activeTab() !== 'tutorial'"
+          [attr.aria-pressed]="activeTab() === 'tutorial'"
+          (click)="selectTab('tutorial')"
+        >{{ i18n.locale() === 'es' ? 'Tutorial conexión MCP' : 'MCP connection tutorial' }}</button>
+      </nav>
+
+      @if (activeTab() === 'keys') {
       <!-- Grid principal en 2 columnas -->
       <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
         <!-- Columna izquierda: Generador + Tus Keys -->
@@ -302,7 +326,18 @@ export class CopyRow {
 
         <!-- Columna derecha: Configuración por IDE -->
         <div uiCard class="p-5 sm:p-6 space-y-5 flex flex-col h-full">
-          <h2 class="text-sm font-semibold tracking-tight text-text">{{ t().keys.configPorIde }}</h2>
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold tracking-tight text-text">{{ t().keys.configPorIde }}</h2>
+            <button
+              uiButton
+              variant="secondary"
+              size="sm"
+              type="button"
+              (click)="selectTab('tutorial')"
+            >
+              {{ i18n.locale() === 'es' ? 'Ir a tutorial' : 'Go to tutorial' }}
+            </button>
+          </div>
           <div class="space-y-4">
             <div>
               <p class="mb-1.5 text-xs text-text-faint">Claude Code</p>
@@ -462,13 +497,20 @@ export class CopyRow {
           </div>
         </div>
       }
+      } @else {
+        <app-mcp-tutorial (showKeys)="selectTab('keys')" />
+      }
     </div>
   `,
 })
 export class Keys {
   private api = inject(Api);
-  private i18n = inject(I18n);
+  readonly i18n = inject(I18n);
+  private router = inject(Router);
   t = this.i18n.t;
+  /** El acceso desde Cómo funciona usa /keys?tab=tutorial. */
+  tab = input<string | undefined>();
+  activeTab = computed<'keys' | 'tutorial'>(() => this.tab() === 'tutorial' ? 'tutorial' : 'keys');
 
   name = '';
   keys = signal<ApiKey[]>([]);
@@ -516,6 +558,13 @@ export class Keys {
 
   constructor() {
     this.load();
+  }
+
+  selectTab(tab: 'keys' | 'tutorial'): void {
+    void this.router.navigate([], {
+      queryParams: { tab: tab === 'tutorial' ? 'tutorial' : null },
+      queryParamsHandling: 'merge',
+    });
   }
 
   private load(): void {

@@ -28,6 +28,11 @@ spring:
 
 server:
   port: ${PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
 
 # Zona de la organizacion: las lecturas de telemetria usan CURRENT_DATE y tienen
 # que dar el dia local, no el del servidor. Equivale a connection.TimeZone del

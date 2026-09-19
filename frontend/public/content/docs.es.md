@@ -159,7 +159,9 @@ Como la key no puede publicar, quién cambió qué lo registra la auditoría de 
 2. Pegá el snippet de tu IDE. Está listo para copiar en esa misma página.
 3. Trabajá normal. No hace falta que menciones el catálogo: al conectarse, el servidor le da al agente la instrucción de buscar antes de escribir código.
 
-> **La prueba de que funciona.** Abrí una sesión limpia y pedí *"hacé un botón de guardar en este formulario"* sin nombrar ningún skill. El agente debería llamar a `search_skills` por su cuenta y traer el skill de botones.
+> **La prueba de que funciona.** Abrí una sesión limpia y pedí *"Listame las skills disponibles en el marketplace"*. El agente debería llamar a `list_skills` y devolverte el catálogo.
+
+[Abrir el tutorial de conexión →](/keys?tab=tutorial)
 
 ## El orden de todo
 
