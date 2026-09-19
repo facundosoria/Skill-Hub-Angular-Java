@@ -150,7 +150,8 @@ interface Provider {
                   [attr.aria-checked]="terminalOs() === 'unix'"
                   (click)="terminalOs.set('unix')"
                 >
-                  <span>◐</span>{{ text().macLinux }}
+                  <img class="h-4 w-4 shrink-0 object-contain" src="/icons/unix.svg" alt="" />
+                  {{ text().macLinux }}
                 </button>
                 <button
                   type="button"
@@ -163,7 +164,8 @@ interface Provider {
                   [attr.aria-checked]="terminalOs() === 'windows'"
                   (click)="terminalOs.set('windows')"
                 >
-                  <span>⊞</span>{{ text().windows }}
+                  <img class="h-4 w-4 shrink-0 object-contain" src="/icons/windows11.svg" alt="" />
+                  {{ text().windows }}
                 </button>
               </div>
             </div>
