@@ -541,32 +541,24 @@ export class McpTutorial {
   readonly activeKey = signal<string | null>(null);
 
   private readonly mcpUrl = 'https://marketplace-utn.tech/api/mcp';
+  private readonly apiKeyPlaceholder = 'PEGAR_API_KEY_AQUI';
   private readonly es = computed(() => this.i18n.locale() === 'es');
+  readonly configSourcePath = computed(() => this.terminalOs() === 'windows'
+    ? '$HOME\\.config\\skillhub\\mcp-config.json'
+    : '$HOME/.config/skillhub/mcp-config.json');
 
-  readonly keyFile = computed(() => this.terminalOs() === 'windows' ? '%USERPROFILE%\\.config\\skillhub\\api-key' : '~/.config/skillhub/api-key');
-  readonly keyDirectoryCommand = computed(() => this.terminalOs() === 'windows'
-    ? 'New-Item -ItemType Directory -Force "$HOME\\.config\\skillhub"'
-    : 'mkdir -p ~/.config/skillhub');
-  readonly keyEditorCommand = computed(() => this.terminalOs() === 'windows'
-    ? 'notepad "$HOME\\.config\\skillhub\\api-key"'
-    : 'nano ~/.config/skillhub/api-key');
-  readonly keyPermissionCommand = computed(() => this.terminalOs() === 'windows' ? '' : 'chmod 600 ~/.config/skillhub/api-key');
-  readonly envCommand = computed(() => this.terminalOs() === 'windows'
-    ? '$env:SKILL_HUB_API_KEY = (Get-Content "$HOME\\.config\\skillhub\\api-key" -Raw).Trim()'
-    : 'export SKILL_HUB_API_KEY="$(tr -d \'\\r\\n\' < ~/.config/skillhub/api-key)"');
-  readonly envCheckCommand = computed(() => this.terminalOs() === 'windows'
-    ? 'if ($env:SKILL_HUB_API_KEY) { "Variable lista" } else { "Variable vacía" }'
-    : '[ -n "$SKILL_HUB_API_KEY" ] && echo "Variable lista" || echo "Variable vacía"');
-  readonly claudeMcpCommand = computed(() => 'claude mcp add --scope user --transport http skillhub ' + this.mcpUrl + ' --header \'Authorization: Bearer ${SKILL_HUB_API_KEY}\'');
+  readonly claudeMcpCommand = computed(() => this.terminalOs() === 'windows'
+    ? `claude mcp add --scope user --transport http skillhub ${this.mcpUrl} --header "Authorization: Bearer ${this.apiKeyPlaceholder}"`
+    : `claude mcp add --scope user --transport http skillhub ${this.mcpUrl} --header 'Authorization: Bearer ${this.apiKeyPlaceholder}'`);
   readonly securePrompt = computed(() => this.es()
-    ? `Configurá Skill Hub como servidor MCP en el cliente de IA que estoy usando.\n\nURL MCP: ${this.mcpUrl}\nLa key ya fue cargada por el usuario en SKILL_HUB_API_KEY. El archivo original es ${this.keyFile()}.\n\nReglas obligatorias:\n1. No leas, abras ni muestres ese archivo. No uses cat, Get-Content ni herramientas de lectura sobre él.\n2. Nunca muestres la key en chat, respuestas, logs ni comandos visibles.\n3. No me pidas pegar la key en el chat.\n4. Usá sólo SKILL_HUB_API_KEY mediante la referencia segura documentada por el cliente.\n5. Detectá el cliente y su archivo oficial de configuración; no inventes rutas ni menús.\n6. Si no soporta una referencia segura a la variable, detenete y explicá la limitación. No escribas una key literal.\n7. Antes de modificar algo, hacé un respaldo, informá el archivo y esperá confirmación.\n8. Configurá un servidor remoto Streamable HTTP llamado skillhub con autenticación Bearer.\n9. Verificá la conexión sin revelar la key.\n10. Informá sólo cliente, archivo, estado y cómo probarlo.`
-    : `Configure Skill Hub as an MCP server in the AI client I am using.\n\nMCP URL: ${this.mcpUrl}\nThe user has loaded the key into SKILL_HUB_API_KEY. The source file is ${this.keyFile()}.\n\nMandatory rules:\n1. Do not read, open, or show that file. Do not use cat, Get-Content, or file-reading tools on it.\n2. Never show the key in chat, responses, logs, or visible commands.\n3. Do not ask me to paste the key into chat.\n4. Use only SKILL_HUB_API_KEY through the client’s documented secure reference.\n5. Detect the client and official configuration file; do not invent paths or menus.\n6. If it cannot securely reference the variable, stop and explain. Never write a literal key.\n7. Before editing, make a backup, report the file, and wait for confirmation.\n8. Configure a remote Streamable HTTP server named skillhub with Bearer authentication.\n9. Verify without revealing the key.\n10. Report only client, file, status, and how to test.`);
+    ? `Configurá Skill Hub como servidor MCP en el cliente de IA que estoy usando.\n\nUsá como fuente el archivo local ${this.configSourcePath()}. Ese archivo contiene la URL y el header Authorization con la API key.\n\nReglas obligatorias:\n1. Leé el archivo local para usar sus valores, pero nunca muestres su contenido ni la API key en chat, respuestas o logs.\n2. No me pidas pegar la API key en el chat.\n3. Detectá el cliente y su archivo oficial de configuración; no inventes rutas ni menús.\n4. Antes de modificar algo, hacé un respaldo, informá el archivo y esperá confirmación.\n5. Configurá un servidor remoto Streamable HTTP llamado skillhub con OAuth desactivado.\n6. Copiá los valores del archivo fuente al formato oficial del cliente.\n7. Verificá la conexión sin revelar la key.\n8. Informá sólo cliente, archivo, estado y cómo probarlo.`
+    : `Configure Skill Hub as an MCP server in the AI client I am using.\n\nUse the local file ${this.configSourcePath()} as the source. It contains the URL and the Authorization header with the API key.\n\nMandatory rules:\n1. Read the local file to use its values, but never show its contents or the API key in chat, responses, or logs.\n2. Do not ask me to paste the API key into chat.\n3. Detect the client and official configuration file; do not invent paths or menus.\n4. Before editing, make a backup, report the file, and wait for confirmation.\n5. Configure a remote Streamable HTTP server named skillhub with OAuth disabled.\n6. Copy the source file values into the client’s official format.\n7. Verify without revealing the key.\n8. Report only the client, file, status, and how to test.`);
 
   readonly text = computed(() => this.es() ? {
     titleCli: 'Conectá el marketplace desde tu terminal (CLI)',
     subtitleCli: 'Tutorial paso a paso por línea de comandos para registrar el servidor MCP.',
     titlePrompt: 'Conectá el marketplace mediante un Prompt a tu IA',
-    subtitlePrompt: 'Copiá y pegá estas instrucciones en el chat de tu IA para que se auto-configure.',
+    subtitlePrompt: 'Guardá la configuración en un archivo local y usá el prompt para que tu IA la aplique.',
     chooseMode: '1. ¿Cómo querés conectar?',
     modeCli: 'Terminal (CLI)',
     modePrompt: 'Vía Prompt',
@@ -598,20 +590,20 @@ export class McpTutorial {
     finalExpected: 'debe indicar que usó list_skills y devolver el total junto con los títulos de las primeras 3 skills. Si no puede usar la herramienta, volvé al paso anterior y revisá la conexión.',
     testPrompt: 'Usá ahora la herramienta MCP list_skills de Skill Hub, sin responder de memoria. Decime cuántas skills devolvió y los títulos de las primeras 3.',
     createKeyTitle: 'Crear API Key personal',
-    createKeyDesc: 'Esta clave permitirá a tu cliente de IA autenticarse contra el marketplace. El tutorial nunca la inserta automáticamente: primero vas a guardarla en un archivo privado.',
+    createKeyDesc: 'Esta clave permitirá a tu cliente de IA autenticarse contra el marketplace. Después vas a pegarla en el archivo fuente local de configuración.',
     keyNameLabel: 'Nombre de la clave',
     cancel: 'Cancelar',
     close: 'Cerrar',
     generating: 'Generando...',
     generateAndApply: 'Generar y aplicar',
     keyGeneratedSuccess: '¡Key generada y copiada al portapapeles!',
-    keyAppliedHint: 'La key se mostró una sola vez y se copió al portapapeles. Guardala en el archivo privado indicado: nunca se inserta en prompts ni archivos del proyecto.',
+    keyAppliedHint: 'La key se mostró una sola vez y se copió al portapapeles. Pegala en lugar de PEGAR_API_KEY_AQUI dentro del archivo fuente local.',
     continueTutorial: 'Continuar tutorial',
     createKeyActionTitle: '¿Tenés tu API Key?',
     createKeyActionDesc: 'Creala ahora mismo en una ventana emergente sin abandonar este tutorial.',
     createKeyBtn: '+ Crear Key sin salir',
     keyActiveLabel: 'Key activa:',
-    keyActiveDesc: 'Tu key está creada. Usala sólo desde el archivo privado y la variable de entorno; nunca la pegues en el chat.',
+    keyActiveDesc: 'Tu key está creada. Pegala sólo en la configuración local del proveedor; nunca la pegues en el chat.',
     createAnotherKeyBtn: 'Crear otra key',
     manualCommandBadge: 'Escribir comando',
     manualCommandHint: 'Este comando debe ejecutarse manualmente en tu terminal.',
@@ -620,7 +612,7 @@ export class McpTutorial {
     titleCli: 'Connect the marketplace from your terminal (CLI)',
     subtitleCli: 'Step-by-step command line tutorial to register the MCP server.',
     titlePrompt: 'Connect the marketplace using a Prompt to your AI',
-    subtitlePrompt: 'Copy and paste these instructions into your AI chat to self-configure.',
+    subtitlePrompt: 'Save the configuration in a local file and use the prompt to apply it through your AI client.',
     chooseMode: '1. How do you want to connect?',
     modeCli: 'Terminal (CLI)',
     modePrompt: 'Via Prompt',
@@ -652,20 +644,20 @@ export class McpTutorial {
     finalExpected: 'it must state that it used list_skills and return the total along with the titles of the first 3 skills. If it cannot use the tool, go back one step and check the connection.',
     testPrompt: 'Use the Skill Hub MCP tool list_skills now; do not answer from memory. Tell me how many skills it returned and the titles of the first 3.',
     createKeyTitle: 'Create personal API Key',
-    createKeyDesc: 'This key allows your AI client to authenticate against the marketplace. The tutorial never inserts it automatically: you will first save it in a private file.',
+    createKeyDesc: 'This key allows your AI client to authenticate against the marketplace. You will paste it into the local configuration source file.',
     keyNameLabel: 'Key name',
     cancel: 'Cancel',
     close: 'Close',
     generating: 'Generating...',
     generateAndApply: 'Generate and apply',
     keyGeneratedSuccess: 'Key generated and copied to clipboard!',
-    keyAppliedHint: 'The key was shown once and copied to the clipboard. Save it in the indicated private file: it is never inserted into prompts or project files.',
+    keyAppliedHint: 'The key was shown once and copied to the clipboard. Paste it in place of PEGAR_API_KEY_AQUI inside the local source file.',
     continueTutorial: 'Continue tutorial',
     createKeyActionTitle: 'Do you have your API Key?',
     createKeyActionDesc: 'Create it right now in a popup without leaving this tutorial.',
     createKeyBtn: '+ Create Key without leaving',
     keyActiveLabel: 'Active key:',
-    keyActiveDesc: 'Your key is created. Use it only from the private file and environment variable; never paste it into chat.',
+    keyActiveDesc: 'Your key is created. Paste it only into the provider’s local configuration; never paste it into chat.',
     createAnotherKeyBtn: 'Create another key',
     manualCommandBadge: 'Type command',
     manualCommandHint: 'This command must be run manually in your terminal.',
@@ -680,51 +672,29 @@ export class McpTutorial {
       instruction: tx('Creá una key con un nombre como “mi-notebook”. Podés generarla directamente acá sin salir.', 'Create a key named something like “my-notebook”. You can generate it right here without leaving.'),
       keyAction: true,
     };
-    const promptPreparation: GuideStep[] = [
-      {
-        title: tx('Abrí una terminal', 'Open a terminal'),
-        instruction: tx('Usá Terminal en macOS/Linux o PowerShell en Windows. Estos comandos se ejecutan en tu computadora, no en el chat.', 'Use Terminal on macOS/Linux or PowerShell on Windows. These commands run on your computer, not in chat.'),
-        detailsByOs: {
-          unix: [
-            tx('macOS: ⌘ + Espacio → escribí Terminal → Enter.', 'macOS: ⌘ + Space → type Terminal → Enter.'),
-            tx('Linux: abrí Terminal desde Aplicaciones o presioná Ctrl + Alt + T.', 'Linux: open Terminal from Applications or press Ctrl + Alt + T.'),
-          ],
-          windows: [
-            tx('Windows: Inicio → escribí PowerShell → abrí Windows PowerShell.', 'Windows: Start → type PowerShell → open Windows PowerShell.'),
-          ],
-        },
-        detailsAreAlternatives: true,
+    const authorizationHeader = `Bearer ${this.apiKeyPlaceholder}`;
+    const codexConfig = `[mcp_servers.skillhub]\nurl = "${this.mcpUrl}"\nhttp_headers = { Authorization = "${authorizationHeader}" }`;
+    const opencodeConfig = JSON.stringify({ $schema: 'https://opencode.ai/config.json', mcp: { servers: { skillhub: { type: 'remote', url: this.mcpUrl, oauth: false, headers: { Authorization: authorizationHeader } } } } }, null, 2);
+    const promptConfigFile: GuideStep = {
+      title: tx('Creá el archivo fuente de configuración', 'Create the configuration source file'),
+      instruction: tx(`Seguí las instrucciones de tu sistema operativo para crear ${this.configSourcePath()} fuera del proyecto. Después pegá este JSON, reemplazá ${this.apiKeyPlaceholder} por la key copiada y guardá el archivo. El agente lo usará para configurar tu cliente.`, `Follow the instructions for your operating system to create ${this.configSourcePath()} outside the project. Then paste this JSON, replace ${this.apiKeyPlaceholder} with the copied key, and save the file. The agent will use it to configure your client.`),
+      detailsByOs: {
+        unix: [
+          tx('Abrí Terminal y ejecutá: mkdir -p ~/.config/skillhub', 'Open Terminal and run: mkdir -p ~/.config/skillhub'),
+          tx('Ejecutá: nano ~/.config/skillhub/mcp-config.json', 'Run: nano ~/.config/skillhub/mcp-config.json'),
+          tx('Pegá el JSON y reemplazá PEGAR_API_KEY_AQUI por tu key. Guardá con Ctrl + O, presioná Enter y salí con Ctrl + X.', 'Paste the JSON and replace PEGAR_API_KEY_AQUI with your key. Save with Ctrl + O, press Enter, and exit with Ctrl + X.'),
+        ],
+        windows: [
+          tx('Abrí PowerShell y ejecutá: New-Item -ItemType Directory -Force "$HOME\\.config\\skillhub"', 'Open PowerShell and run: New-Item -ItemType Directory -Force "$HOME\\.config\\skillhub"'),
+          tx('Ejecutá: notepad "$HOME\\.config\\skillhub\\mcp-config.json"', 'Run: notepad "$HOME\\.config\\skillhub\\mcp-config.json"'),
+          tx('En Bloc de notas, pegá el JSON y reemplazá PEGAR_API_KEY_AQUI por tu key. Al guardar, elegí Tipo: Todos los archivos (*.*), confirmá el nombre mcp-config.json y usá UTF-8. No lo guardes como mcp-config.json.txt.', 'In Notepad, paste the JSON and replace PEGAR_API_KEY_AQUI with your key. When saving, choose Save as type: All files (*.*), confirm the name mcp-config.json, and use UTF-8. Do not save it as mcp-config.json.txt.'),
+        ],
       },
-      {
-        title: tx('Creá la carpeta privada', 'Create the private folder'),
-        instruction: tx('Copiá este comando en la terminal, presioná Enter y esperá que termine. No lo pegues en el chat.', 'Copy this command into the terminal, press Enter, and wait for it to finish. Do not paste it into chat.'),
-        code: this.keyDirectoryCommand(),
-      },
-      {
-        title: tx('Abrí el archivo y guardá la key', 'Open the file and save the key'),
-        instruction: tx('Ejecutá el comando. Cuando se abra el editor, pegá la key, guardá el archivo y cerrá el editor.', 'Run the command. When the editor opens, paste the key, save the file, and close the editor.'),
-        code: this.keyEditorCommand(),
-        warning: tx('macOS/Linux con nano: Ctrl + O, Enter, Ctrl + X. Windows con Bloc de notas: Guardar y cerrar. No pegues la key en el chat.', 'macOS/Linux with nano: Ctrl + O, Enter, Ctrl + X. Windows with Notepad: Save and close. Do not paste the key into chat.'),
-      },
-      {
-        title: tx('Protegé el archivo', 'Protect the file'),
-        instruction: tx('En macOS/Linux ejecutá el comando. En Windows este paso no requiere comando: simplemente seguí con Siguiente.', 'On macOS/Linux run the command. On Windows this step needs no command: just continue with Next.'),
-        code: this.keyPermissionCommand(),
-      },
-      {
-        title: tx('Cargá la key en esta terminal', 'Load the key into this terminal'),
-        instruction: tx('Ejecutá el comando en la misma terminal desde la que vas a iniciar el cliente. No muestra la key.', 'Run the command in the same terminal from which you will start the client. It does not print the key.'),
-        code: this.envCommand(),
-        warning: tx('No cierres esta terminal. Si el cliente ya estaba abierto, cerralo y reinicialo desde esta terminal.', 'Do not close this terminal. If the client was already open, close it and restart it from this terminal.'),
-      },
-      {
-        title: tx('Verificá que la variable esté lista', 'Verify the variable is ready'),
-        instruction: tx('Ejecutá el comando. Debe decir “Variable lista”. Si dice “Variable vacía”, volvé al paso anterior.', 'Run the command. It must say “Variable lista”. If it says “Variable vacía”, go back one step.'),
-        code: this.envCheckCommand(),
-      },
-    ];
-    const codexConfig = '[mcp_servers.skillhub]\nurl = \"' + this.mcpUrl + '\"\nbearer_token_env_var = \"SKILL_HUB_API_KEY\"';
-    const opencodeConfig = JSON.stringify({ $schema: 'https://opencode.ai/config.json', mcp: { servers: { skillhub: { type: 'remote', url: this.mcpUrl, oauth: false, headers: { Authorization: 'Bearer {env:SKILL_HUB_API_KEY}' } } } } }, null, 2);
+      code: JSON.stringify({ url: this.mcpUrl, headers: { Authorization: authorizationHeader } }, null, 2),
+      codeIsFile: true,
+      codeLabel: tx('Archivo fuente local', 'Local source file'),
+      warning: tx('Este archivo contiene tu API key. No lo subas al repositorio ni lo compartas. El agente leerá el archivo, pero no debe mostrar su contenido.', 'This file contains your API key. Do not commit or share it. The agent will read the file, but must not display its contents.'),
+    };
 
     const providers: Provider[] = [
       {
@@ -744,9 +714,9 @@ export class McpTutorial {
               common,
               {
                 title: tx('Agregá Skill Hub a tu usuario', 'Add Skill Hub for your user'),
-                instruction: tx('Pegá el comando. El scope user evita crear un archivo local dentro del proyecto.', 'Paste the command. User scope avoids creating a local project file.'),
+                instruction: tx('Abrí Terminal, pegá este comando y presioná Enter. El scope user evita crear un archivo local dentro del proyecto.', 'Open Terminal, paste this command, and press Enter. User scope avoids creating a local project file.'),
                 code: this.claudeMcpCommand(),
-                warning: tx('Las comillas simples impiden que la terminal expanda la key. Claude debe guardar la referencia ${SKILL_HUB_API_KEY}; si guarda un valor literal o falla, detenete y usá el método Prompt seguro.', 'The single quotes prevent the shell from expanding the key. Claude must store the ${SKILL_HUB_API_KEY} reference; if it stores a literal value or fails, stop and use the secure Prompt method.'),
+                warning: tx(`Reemplazá ${this.apiKeyPlaceholder} por la key copiada antes de ejecutar el comando. La key quedará guardada en la configuración de usuario de Claude.`, `Replace ${this.apiKeyPlaceholder} with the copied key before running the command. The key will be stored in Claude's user configuration.`),
               },
               {
                 title: tx('Verificá la conexión', 'Verify the connection'),
@@ -765,6 +735,7 @@ export class McpTutorial {
             officialDocs: 'https://docs.anthropic.com/en/docs/claude-code/mcp',
             steps: [
               common,
+              promptConfigFile,
               {
                 title: tx('Copiá el prompt para Claude', 'Copy the prompt for Claude'),
                 instruction: tx('Copiá estas instrucciones completas. Indican a Claude cómo registrar el servidor MCP de Skill Hub en su configuración de usuario.', 'Copy these complete instructions. They tell Claude how to register the Skill Hub MCP server in user configuration.'),
@@ -811,9 +782,9 @@ export class McpTutorial {
                     tx('Pegá el JSON dentro del archivo, guardá, cerrá el editor y recién después volvé a Antigravity.', 'Paste the JSON inside the file, save, close the editor, and only then return to Antigravity.'),
                   ],
                 },
-                code: JSON.stringify({ mcpServers: { skillhub: { serverUrl: this.mcpUrl, headers: { Authorization: 'Bearer ${SKILL_HUB_API_KEY}' } } } }, null, 2),
+                code: JSON.stringify({ mcpServers: { skillhub: { serverUrl: this.mcpUrl, headers: { Authorization: `Bearer ${this.apiKeyPlaceholder}` }, oauth: false } } }, null, 2),
                 codeIsFile: true,
-                warning: tx('Antigravity no documenta sustitución de variables en este archivo. Si muestra ${SKILL_HUB_API_KEY} literalmente, no pegues la key: detenete y usá el método Prompt seguro.', 'Antigravity does not document variable substitution in this file. If it shows ${SKILL_HUB_API_KEY} literally, do not paste the key: stop and use the secure Prompt method.'),
+                warning: tx(`Reemplazá ${this.apiKeyPlaceholder} por la key copiada antes de guardar el archivo.`, `Replace ${this.apiKeyPlaceholder} with the copied key before saving the file.`),
               },
               {
                 title: tx('Recargá desde /mcp', 'Reload from /mcp'),
@@ -831,6 +802,7 @@ export class McpTutorial {
             officialDocs: 'https://antigravity.google/docs/ide-mcp',
             steps: [
               common,
+              promptConfigFile,
               {
                 title: tx('Copiá el prompt para el Agente Antigravity', 'Copy the prompt for Antigravity Agent'),
                 instruction: tx('Copiá esta directiva para el agente de Antigravity.', 'Copy this directive for the Antigravity agent.'),
@@ -865,14 +837,8 @@ export class McpTutorial {
               },
               common,
               {
-                title: tx('Decile a esta terminal cuál es tu key', 'Tell this terminal which key is yours'),
-                instruction: tx('Pegá este comando en la terminal. Esto crea una etiqueta temporal que Codex puede leer; no la copia al archivo de configuración.', 'Paste this command in the terminal. It creates a temporary label that Codex can read; it does not copy it into the configuration file.'),
-                code: this.envCommand(),
-                warning: tx('Esta etiqueta desaparece al cerrar la terminal. Por eso hacé toda la prueba sin cerrarla.', 'This label disappears when you close the terminal. That is why you must complete the test without closing it.'),
-              },
-              {
                 title: tx('Abrí el archivo de configuración', 'Open the configuration file'),
-                instruction: tx('Abrí ~/.codex/config.toml. Si ya tiene contenido, agregá el bloque al final sin borrar lo anterior.', 'Open ~/.codex/config.toml. If it already has content, append this block without deleting existing content.'),
+                instruction: tx(`Abrí ~/.codex/config.toml. Si ya tiene contenido, agregá el bloque al final sin borrar lo anterior. Reemplazá ${this.apiKeyPlaceholder} por la key copiada.`, `Open ~/.codex/config.toml. If it already has content, append this block without deleting existing content. Replace ${this.apiKeyPlaceholder} with the copied key.`),
                 code: codexConfig,
                 codeIsFile: true,
               },
@@ -893,6 +859,7 @@ export class McpTutorial {
             officialDocs: 'https://developers.openai.com/es-419/docs/extend/mcp?surface=cli',
             steps: [
               common,
+              promptConfigFile,
               {
                 title: tx('Copiá el prompt para Codex / Cursor', 'Copy prompt for Codex / Cursor'),
                 instruction: tx('Copiá estas instrucciones para que el modelo agregue el servidor.', 'Copy these instructions for the model to add the server.'),
@@ -927,13 +894,8 @@ export class McpTutorial {
               },
               common,
               {
-                title: tx('Decile a esta terminal cuál es tu key', 'Tell this terminal which key is yours'),
-                instruction: tx('Pegá este comando en tu terminal. OpenCode leerá esta etiqueta y no una key escrita en el JSON.', 'Paste this command in your terminal. OpenCode reads this label instead of a key written in JSON.'),
-                code: this.envCommand(),
-              },
-              {
                 title: tx('Abrí la configuración global', 'Open global configuration'),
-                instruction: tx('Abrí ~/.config/opencode/opencode.jsonc. Si el archivo ya existe, agregá sólo el servidor skillhub dentro de mcp.servers.', 'Open ~/.config/opencode/opencode.jsonc. If the file already exists, add only the skillhub server inside mcp.servers.'),
+                instruction: tx(`Abrí ~/.config/opencode/opencode.jsonc. Si el archivo ya existe, agregá sólo el servidor skillhub dentro de mcp.servers y reemplazá ${this.apiKeyPlaceholder} por la key copiada.`, `Open ~/.config/opencode/opencode.jsonc. If the file already exists, add only the skillhub server inside mcp.servers and replace ${this.apiKeyPlaceholder} with the copied key.`),
                 code: opencodeConfig,
                 codeIsFile: true,
               },
@@ -944,7 +906,7 @@ export class McpTutorial {
               },
               {
                 title: tx('Probá el catálogo', 'Test the catalogue'),
-                instruction: tx('Iniciá OpenCode en esa misma terminal y pegá la prueba final. Si el estado dice needs authentication, no uses OAuth: revisá el header y la variable.', 'Start OpenCode in that same terminal and paste the final test. If status says needs authentication, do not use OAuth: check the header and environment variable.'),
+                instruction: tx('Iniciá OpenCode y pegá la prueba final. Si el estado dice needs authentication, revisá que hayas reemplazado el marcador y que oauth esté desactivado.', 'Start OpenCode and paste the final test. If status says needs authentication, check that you replaced the placeholder and that oauth is disabled.'),
               },
             ],
           },
@@ -954,6 +916,7 @@ export class McpTutorial {
             officialDocs: 'https://opencode.ai/v2/docs/mcp-servers',
             steps: [
               common,
+              promptConfigFile,
               {
                 title: tx('Copiá el prompt para OpenCode', 'Copy prompt for OpenCode'),
                 instruction: tx('Copiá este bloque para que OpenCode configure su JSON.', 'Copy this block for OpenCode to configure its JSON.'),
@@ -985,17 +948,17 @@ export class McpTutorial {
                 details: [
                   tx('Elegí un servidor remoto o HTTP.', 'Choose a remote or HTTP server.'),
                   tx('Confirmá que ofrece transporte Streamable HTTP.', 'Confirm that it offers Streamable HTTP transport.'),
-                  tx('Confirmá que permite headers HTTP personalizados y una referencia segura a variables o secretos. Si sólo admite stdio o SSE antiguo, ese cliente no es compatible.', 'Confirm that it allows custom HTTP headers and a secure reference to variables or secrets. If it only supports stdio or legacy SSE, that client is not compatible.'),
+                  tx('Confirmá que permite headers HTTP personalizados. Si sólo admite stdio o SSE antiguo, ese cliente no es compatible.', 'Confirm that it allows custom HTTP headers. If it only supports stdio or legacy SSE, that client is not compatible.'),
                 ],
               },
               common,
               {
                 title: tx('Cargá los datos de Skill Hub', 'Enter Skill Hub details'),
                 instruction: tx('Completá estos valores en el formulario o archivo que indique la documentación de tu cliente. Conservá cualquier otro servidor que ya tengas.', 'Enter these values in the form or file specified by your client’s documentation. Keep any other servers you already have.'),
-                code: tx('Nombre del servidor: skillhub\nTransporte: Streamable HTTP\nURL: ', 'Server name: skillhub\nTransport: Streamable HTTP\nURL: ') + this.mcpUrl + tx('\nNombre del header: Authorization\nValor del header: Bearer [referencia segura a SKILL_HUB_API_KEY según tu proveedor]', '\nHeader name: Authorization\nHeader value: Bearer [secure reference to SKILL_HUB_API_KEY according to your provider]'),
+                code: tx('Nombre del servidor: skillhub\nTransporte: Streamable HTTP\nURL: ', 'Server name: skillhub\nTransport: Streamable HTTP\nURL: ') + this.mcpUrl + tx(`\nNombre del header: Authorization\nValor del header: Bearer ${this.apiKeyPlaceholder}`, `\nHeader name: Authorization\nHeader value: Bearer ${this.apiKeyPlaceholder}`),
                 codeIsFile: true,
                 codeLabel: tx('Valores para cargar', 'Values to enter'),
-                warning: tx('No pegues la key literal. Cada proveedor define su propia sintaxis para leer variables o secretos. Si su documentación no ofrece una referencia segura, no es compatible con este método.', 'Do not paste the literal key. Each provider defines its own syntax for reading variables or secrets. If its documentation does not offer a secure reference, it is not compatible with this method.'),
+                warning: tx(`Reemplazá ${this.apiKeyPlaceholder} por la key copiada antes de guardar la configuración.`, `Replace ${this.apiKeyPlaceholder} with the copied key before saving the configuration.`),
               },
               {
                 title: tx('Probá el catálogo', 'Test the catalogue'),
@@ -1009,6 +972,7 @@ export class McpTutorial {
             officialDocs: 'https://modelcontextprotocol.io/docs/getting-started/intro',
             steps: [
               common,
+              promptConfigFile,
               {
                 title: tx('Copiá el prompt universal', 'Copy the universal prompt'),
                 instruction: tx('Copiá este prompt para que tu asistente se auto-configure.', 'Copy this prompt for your assistant to self-configure.'),
@@ -1033,18 +997,7 @@ export class McpTutorial {
       ...provider,
       surfaces: provider.surfaces.map((surface): Surface => ({
         ...surface,
-        steps: surface.id === 'cli'
-          ? [
-              surface.steps[0],
-              surface.steps[1],
-              ...promptPreparation,
-              ...surface.steps.slice(2).map((step) => step.prompt ? { ...step, prompt: this.securePrompt() } : step),
-            ]
-          : [
-              surface.steps[0],
-              ...promptPreparation,
-              ...surface.steps.slice(1).map((step) => step.prompt ? { ...step, prompt: this.securePrompt() } : step),
-            ],
+        steps: surface.steps.map((step) => step.prompt ? { ...step, prompt: this.securePrompt() } : step),
       })),
     }));
   });
