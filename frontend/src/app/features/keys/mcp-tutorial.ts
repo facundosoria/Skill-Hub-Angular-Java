@@ -1033,11 +1033,18 @@ export class McpTutorial {
       ...provider,
       surfaces: provider.surfaces.map((surface): Surface => ({
         ...surface,
-        steps: [
-          surface.steps[0],
-          ...promptPreparation,
-          ...surface.steps.slice(1).map((step) => step.prompt ? { ...step, prompt: this.securePrompt() } : step),
-        ],
+        steps: surface.id === 'cli'
+          ? [
+              surface.steps[0],
+              surface.steps[1],
+              ...promptPreparation,
+              ...surface.steps.slice(2).map((step) => step.prompt ? { ...step, prompt: this.securePrompt() } : step),
+            ]
+          : [
+              surface.steps[0],
+              ...promptPreparation,
+              ...surface.steps.slice(1).map((step) => step.prompt ? { ...step, prompt: this.securePrompt() } : step),
+            ],
       })),
     }));
   });
