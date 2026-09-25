@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillhub.auth.ApiKeyIdentity;
+import com.skillhub.skill.CatalogArtifactService;
 import com.skillhub.skill.LanguageDetector;
 import com.skillhub.skill.ProposeService;
 import com.skillhub.skill.Skill;
@@ -31,17 +32,21 @@ public class McpTools {
 
     private static final String PORT_REGISTRY_SLUG = "port-registry";
     private static final int SYNC_MAX = 100;
+    // Base64 inflates size ~4/3; 5MB decoded keeps the JSON-RPC response reasonable.
+    private static final long MAX_INLINE_ARTIFACT_BYTES = 5L * 1024 * 1024;
 
     private final SkillCatalog catalog;
     private final ProposeService propose;
     private final SkillWriteService write;
+    private final CatalogArtifactService artifacts;
     private final ObjectMapper json;
 
     public McpTools(SkillCatalog catalog, ProposeService propose,
-                    SkillWriteService write, ObjectMapper json) {
+                    SkillWriteService write, CatalogArtifactService artifacts, ObjectMapper json) {
         this.catalog = catalog;
         this.propose = propose;
         this.write = write;
+        this.artifacts = artifacts;
         this.json = json;
     }
 
@@ -342,7 +347,20 @@ public class McpTools {
             packageInfo.put("size_bytes", artifact.sizeBytes());
             packageInfo.put("sha256", artifact.sha256());
             packageInfo.put("download_url", "/api/skills/" + skill.slug() + "/artifact?v=" + local.version());
-            packageInfo.put("download_instruction", "Fetch download_url with the same Authorization: Bearer API key used for MCP.");
+            CatalogArtifactService.Download download = artifact.sizeBytes() <= MAX_INLINE_ARTIFACT_BYTES
+                    ? artifacts.findDownload(skill.id(), local.version())
+                    : null;
+            if (download != null) {
+                packageInfo.put("content_base64", java.util.Base64.getEncoder().encodeToString(download.content()));
+                packageInfo.put("download_instruction",
+                        "Decode content_base64 and save it alongside the skill file. download_url is an "
+                        + "alternative only if you prefer to fetch it over HTTP with your own session.");
+            } else {
+                packageInfo.put("content_too_large_for_inline", true);
+                packageInfo.put("download_instruction",
+                        "Too large to inline (over " + (MAX_INLINE_ARTIFACT_BYTES / (1024 * 1024))
+                        + "MB): fetch download_url with the same Authorization: Bearer API key used for MCP.");
+            }
             out.set("artifact", packageInfo);
         }
         return out;

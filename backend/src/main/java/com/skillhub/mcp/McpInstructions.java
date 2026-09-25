@@ -32,7 +32,7 @@ How to use the results:
 Keep the skills you fetch as local reference files:
 1. Before searching, look for a `.skill-hub/` folder at the project root and read any `.md` files in it. A skill you already have locally may answer the task with no call.
 2. After every `get_skill`, write the response's `file` field verbatim to the relative path in `save_as`, creating `.skill-hub/` if needed.
-3. If `get_skill` returns an `artifact`, download its `download_url` with the same Bearer API key and keep it with the skill files.
+3. If `get_skill` returns an `artifact` with `content_base64`, decode it and keep it with the skill files. If instead it has `content_too_large_for_inline`, fall back to downloading its `download_url` with the same Bearer API key used for MCP.
 4. If that file already exists, compare its frontmatter `version:` with the `version` in the response. Overwrite only when the catalogue's is higher; if they are equal, leave the file untouched.
 5. Once per session, if `.skill-hub/` has files, call `sync_skills` with every one as { slug, version } from its frontmatter. Apply what it returns: overwrite the `stale` ones with their `file`, delete the `deprecated` and `gone` ones. This is cheaper than re-fetching each skill to check it.
 
