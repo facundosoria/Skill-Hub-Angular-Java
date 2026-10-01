@@ -32,13 +32,13 @@ import { UI } from '../../shared/ui';
       @if (!store.state().activity.length) { <p class="empty">Todavía no hay movimientos.</p> } @else {
         <ul class="feed">@for (activity of store.state().activity.slice(0, 8); track activity.ts + activity.summary) { <li><span><b>{{ activity.by || 'Anónimo' }}</b> {{ activity.summary }}</span><time>{{ relative(activity.ts) }}</time></li> }</ul>
       }
-      <p class="add"><button uiButton variant="secondary" size="sm" type="button" (click)="addRequested.emit(selectedNodeId())">Agregar dependencia de {{ selectedNode()?.n || selectedNodeId() }}</button></p>
+      <p class="add"><button uiButton variant="secondary" size="sm" type="button" [disabled]="!store.online()" (click)="addRequested.emit(selectedNodeId())">Agregar dependencia de {{ selectedNode()?.n || selectedNodeId() }}</button></p>
     }
     <ng-template #item let-edge="edge">
       <li class="it" [class.done]="!!store.state().done[edge.id]" [class.flash]="store.flashId() === edge.id">
-        <input type="checkbox" [checked]="!!store.state().done[edge.id]" aria-label="Marcar como hecho" (change)="toggle(edge, $event)" />
+        <input type="checkbox" [checked]="!!store.state().done[edge.id]" [disabled]="!store.online()" aria-label="Marcar como hecho" (change)="toggle(edge, $event)" />
         <div><span class="chip">{{ store.state().kinds[edge.kind] || edge.kind }}</span>@if (edge.state === 'definir' && !store.state().done[edge.id]) { <span class="chip q">a definir</span> }<span class="tx">{{ edge.text }}</span></div>
-        <button type="button" class="x" title="Eliminar" aria-label="Eliminar dependencia" (click)="deleteRequested.emit(edge)">×</button>
+        <button type="button" class="x" title="Eliminar" aria-label="Eliminar dependencia" [disabled]="!store.online()" (click)="deleteRequested.emit(edge)">×</button>
       </li>
     </ng-template>
     <ng-template #groups let-list="list" let-color="color">

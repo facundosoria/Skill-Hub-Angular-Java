@@ -47,7 +47,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
             @if (entry.node.transv) {
               <text class="ct" x="14" y="41">transversal</text>
             } @else {
-              <text class="ct" x="14" y="41"><tspan class="cto">necesita {{ entry.out }}</tspan><tspan>  </tspan><tspan class="cti">lo necesitan {{ entry.in }}</tspan></text>
+              <text class="ct" x="14" y="41"><tspan class="cto">necesita {{ entry.out }}</tspan>{{ '  ' }}<tspan class="cti">lo necesitan {{ entry.in }}</tspan></text>
             }
             @if (entry.id === store.mine()) {
               <g class="mineTag" transform="translate(106,-9)"><rect width="56" height="17" rx="8.5"></rect><text x="28" y="12" text-anchor="middle">tu grupo</text></g>
@@ -76,7 +76,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     .node.sel rect { stroke:var(--text); stroke-width:2.2; } .node.out rect { stroke:var(--dep-out); stroke-width:2; }
     .node.in rect { stroke:var(--dep-in); stroke-width:2; } .node.dim { opacity:.35; }
     .node.transv rect { stroke-dasharray:5 4; } .node text.nm { font-weight:700; font-size:14px; fill:var(--text); }
-    .node text.ct { font-size:11.5px; fill:var(--text-muted); } .node .cto { fill:var(--dep-out); font-weight:600; } .node .cti { fill:var(--dep-in); font-weight:600; }
+    .node text.ct { font-size:9.5px; fill:var(--text-muted); } .node .cto { fill:var(--dep-out); font-weight:600; } .node .cti { fill:var(--dep-in); font-weight:600; }
     .mineTag rect { fill:var(--text); stroke:none; } .mineTag text { fill:var(--bg); font-size:10.5px; font-weight:600; }
     .edge path.line { fill:none; stroke:var(--border-strong); stroke-linecap:round; } .edge path.hit { fill:none; stroke:transparent; stroke-width:14; cursor:pointer; }
     .edge.out path.line { stroke:var(--dep-out); } .edge.in path.line { stroke:var(--dep-in); } .edge.sel path.line { stroke:var(--text); }

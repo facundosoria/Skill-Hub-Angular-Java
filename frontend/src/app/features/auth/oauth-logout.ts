@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../../core/api';
 import { UI } from '../../shared/ui';
 import { apiError } from './login';
+import { clearDepMapCache } from '../depmap/dep-map-cache';
 
 interface LogoutRequest {
   clientName: string;
@@ -96,14 +97,14 @@ export class OauthLogout implements OnInit {
   }
 
   async accept(): Promise<void> {
-    await this.finish('/oauth/accept-logout');
+    await this.finish('/oauth/accept-logout', true);
   }
 
   async reject(): Promise<void> {
     await this.finish('/oauth/reject-logout');
   }
 
-  private async finish(endpoint: string): Promise<void> {
+  private async finish(endpoint: string, clearCache = false): Promise<void> {
     const logoutChallenge = this.logoutChallenge();
     if (!logoutChallenge || this.busy()) return;
 
@@ -113,6 +114,7 @@ export class OauthLogout implements OnInit {
       const response = await firstValueFrom(
         this.api.post<{ redirectTo: string }>(endpoint, { logoutChallenge }),
       );
+      if (clearCache) clearDepMapCache();
       window.location.href = response.redirectTo;
     } catch (error: unknown) {
       this.serverError.set(apiError(error, 'No se pudo completar el cierre de sesión.'));

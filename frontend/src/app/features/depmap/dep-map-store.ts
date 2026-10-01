@@ -3,6 +3,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../../core/api';
 import { pairs } from './dep-map-geometry';
+import { DEP_MAP_CACHE_KEY } from './dep-map-cache';
 
 export interface DepMapNode {
   n: string;
@@ -50,7 +51,6 @@ export interface DepMapState {
 export type DepMapView = 'mapa' | 'matriz' | 'lista';
 export type DepMapStatus = 'todos' | 'pendiente' | 'definir' | 'hecho';
 
-const CACHE_KEY = 'depmap-cache-v2';
 const MINE_KEY = 'depmap-mine';
 const VIEW_KEY = 'depmap-view';
 
@@ -65,6 +65,7 @@ export class DepMapStore {
   private readonly destroyRef = inject(DestroyRef);
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
+  private flashTimer: ReturnType<typeof setTimeout> | null = null;
   private relativeTimer: ReturnType<typeof setInterval> | null = null;
   private eventSource: EventSource | null = null;
 
@@ -102,29 +103,34 @@ export class DepMapStore {
 
   constructor() {
     this.destroyRef.onDestroy(() => {
-      if (this.refreshTimer) clearTimeout(this.refreshTimer);
-      if (this.retryTimer) clearTimeout(this.retryTimer);
+      this.clearRefreshTimer();
+      this.clearRetryTimer();
+      if (this.flashTimer) clearTimeout(this.flashTimer);
       if (this.relativeTimer) clearInterval(this.relativeTimer);
-      this.eventSource?.close();
+      this.closeSse();
     });
     this.relativeTimer = setInterval(() => this.relativeTick.update((value) => value + 1), 60_000);
-    void this.refresh();
+    void this.refresh().catch(() => undefined);
   }
 
-  async refresh(silent = false): Promise<DepMapState> {
+  async refresh(): Promise<DepMapState> {
     try {
       const result = await firstValueFrom(this.api.get<DepMapState>('/depmap/state'));
       this.applyState(result);
-      this.online.set(true);
-      this.offline.set(false);
+      this.markOnline();
       this.error.set(null);
       this.writeCache(result);
       this.connectSse();
       return result;
     } catch (error) {
-      this.online.set(false);
       this.error.set(errorMessage(error));
-      if (!silent) this.goOffline();
+      if (isUnauthorized(error)) {
+        // A 401 proves that the server is reachable; session handling remains
+        // with the auth flow and must not turn the map into offline mode.
+        this.markOnline();
+      } else {
+        this.goOffline();
+      }
       throw error;
     } finally {
       this.loading.set(false);
@@ -132,8 +138,9 @@ export class DepMapStore {
   }
 
   refreshSoon(entityId?: string): void {
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.clearRefreshTimer();
     this.refreshTimer = setTimeout(async () => {
+      this.refreshTimer = null;
       try {
         await this.refresh();
         if (entityId) this.flash(entityId);
@@ -142,6 +149,7 @@ export class DepMapStore {
   }
 
   retry(): void {
+    this.clearRetryTimer();
     void this.refresh().catch(() => undefined);
   }
 
@@ -200,7 +208,11 @@ export class DepMapStore {
 
   flash(id: string): void {
     this.flashId.set(id);
-    setTimeout(() => { if (this.flashId() === id) this.flashId.set(null); }, 1_800);
+    if (this.flashTimer) clearTimeout(this.flashTimer);
+    this.flashTimer = setTimeout(() => {
+      this.flashTimer = null;
+      if (this.flashId() === id) this.flashId.set(null);
+    }, 1_800);
   }
 
   private applyState(next: DepMapState): void {
@@ -224,12 +236,17 @@ export class DepMapStore {
   private connectSse(): void {
     if (typeof EventSource === 'undefined') return;
     if (this.eventSource && this.eventSource.readyState !== EventSource.CLOSED) return;
-    this.eventSource?.close();
-    this.eventSource = new EventSource('/api/depmap/events');
+    this.closeSse();
+    try {
+      this.eventSource = new EventSource('/api/depmap/events');
+    } catch (error) {
+      this.goOffline(error);
+      return;
+    }
     this.eventSource.onopen = () => this.sseOpen.set(true);
     this.eventSource.onerror = () => {
       this.sseOpen.set(false);
-      this.scheduleRetry();
+      this.goOffline(new Error('La conexión en tiempo real se interrumpió.'));
     };
     this.eventSource.onmessage = (event) => {
       let data: { type?: string; presence?: string[]; version?: number; entity?: { id?: string } };
@@ -245,29 +262,55 @@ export class DepMapStore {
     };
   }
 
-  private goOffline(): void {
+  private goOffline(error?: unknown): void {
+    this.online.set(false);
+    this.sseOpen.set(false);
     this.offline.set(true);
+    if (error) this.error.set(errorMessage(error));
+    this.closeSse();
     this.loadCache();
     this.scheduleRetry();
   }
 
   private scheduleRetry(): void {
     if (!this.offline()) return;
-    if (this.retryTimer) clearTimeout(this.retryTimer);
+    if (this.retryTimer) return;
     this.retryTimer = setTimeout(async () => {
-      try { await this.refresh(true); } catch { this.scheduleRetry(); }
+      this.retryTimer = null;
+      try { await this.refresh(); } catch { this.scheduleRetry(); }
     }, 8_000);
+  }
+
+  private markOnline(): void {
+    this.online.set(true);
+    this.offline.set(false);
+    this.clearRetryTimer();
+  }
+
+  private closeSse(): void {
+    this.eventSource?.close();
+    this.eventSource = null;
+  }
+
+  private clearRefreshTimer(): void {
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer = null;
+  }
+
+  private clearRetryTimer(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = null;
   }
 
   private loadCache(): void {
     try {
-      const cache = localStorage.getItem(CACHE_KEY);
+      const cache = localStorage.getItem(DEP_MAP_CACHE_KEY);
       if (cache) this.applyState(JSON.parse(cache) as DepMapState);
     } catch { /* localStorage can be disabled */ }
   }
 
   private writeCache(state: DepMapState): void {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify(state)); } catch { /* localStorage can be disabled */ }
+    try { localStorage.setItem(DEP_MAP_CACHE_KEY, JSON.stringify(state)); } catch { /* localStorage can be disabled */ }
   }
 
   private readPreference(key: string, fallback: string): string {
@@ -277,6 +320,10 @@ export class DepMapStore {
   private writePreference(key: string, value: string): void {
     try { localStorage.setItem(key, value); } catch { /* localStorage can be disabled */ }
   }
+}
+
+function isUnauthorized(error: unknown): boolean {
+  return error instanceof HttpErrorResponse && error.status === 401;
 }
 
 function errorMessage(error: unknown): string {

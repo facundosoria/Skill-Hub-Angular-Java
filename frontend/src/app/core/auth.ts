@@ -1,8 +1,10 @@
 import { inject, Injectable, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Api } from './api';
 import type { User } from './models';
 import type { Team } from './teams';
+import { clearDepMapCache } from '../features/depmap/dep-map-cache';
 
 /**
  * Puerto de src/server/auth/index.ts (lado cliente). La sesion vive en la cookie
@@ -27,7 +29,8 @@ export class AuthService {
       const { user } = await firstValueFrom(this.api.get<{ user: User }>('/auth/me'));
       this._user.set(user);
       return user;
-    } catch {
+    } catch (error) {
+      if (error instanceof HttpErrorResponse && error.status === 401) clearDepMapCache();
       this._user.set(null);
       return null;
     } finally {
@@ -59,6 +62,7 @@ export class AuthService {
 
   async logout(): Promise<void> {
     await firstValueFrom(this.api.post('/auth/logout'));
+    clearDepMapCache();
     this._user.set(null);
   }
 
