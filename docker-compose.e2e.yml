@@ -9,17 +9,14 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-skillhub}
       POSTGRES_DB: ${POSTGRES_DB:-skillhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
       PGPASSWORD: ${POSTGRES_PASSWORD:-skillhub}
       HYDRA_DB_PASSWORD: ${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD}
       PGHOST: db
-    command:
-      - sh
-      - -ec
-      - |
-        psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" \
-          -c "CREATE ROLE hydra LOGIN PASSWORD '$${HYDRA_DB_PASSWORD}'"
-        psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" \
-          -c "CREATE DATABASE hydra OWNER hydra"
+      PGPORT: "5432"
+    volumes:
+      - ./scripts/db/init-hydra-db.sh:/usr/local/bin/init-hydra-db.sh:ro
+    command: ["sh", "/usr/local/bin/init-hydra-db.sh"]
 
   db:
     ports: !override
@@ -33,9 +30,14 @@ services:
         condition: service_completed_successfully
 
   hydra:
+    entrypoint: !override ["hydra"]
     command: !override ["serve", "all", "--dev"]
     ports: !override
       - "127.0.0.1:18444:4444"
+
+  hydra-keys:
+    volumes:
+      - ./scripts/provision-hydra-keys.sh:/usr/local/bin/provision-hydra-keys.sh:ro
 
   backend:
     environment:

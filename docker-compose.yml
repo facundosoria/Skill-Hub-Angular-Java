@@ -12,16 +12,10 @@
 #                    y /oauth2, /.well-known, /userinfo -> hydra:4444.
 #                    Único puerto publicado: 127.0.0.1:8087.
 #
-# La base "hydra" no se crea sola: pgdata es un volumen ya inicializado, asi
-# que /docker-entrypoint-initdb.d no vuelve a correr. Antes del primer deploy
-# con Hydra, crear a mano una sola vez (EN DOS COMANDOS SEPARADOS: CREATE
-# DATABASE no puede correr dentro de una transaccion, y psql -c "a; b" manda
-# ambas sentencias como una sola transaccion implicita - juntas, la segunda
-# hace fallar y revertir tambien a la primera, sin avisar con claridad):
-#   docker compose exec db psql -U ${POSTGRES_USER:-skillhub} -c \
-#     "CREATE ROLE hydra LOGIN PASSWORD '<HYDRA_DB_PASSWORD>';"
-#   docker compose exec db psql -U ${POSTGRES_USER:-skillhub} -c \
-#     "CREATE DATABASE hydra OWNER hydra;"
+# `db-init` reconcilia el rol, la password y la base de Hydra en cada
+# despliegue. Usa un script versionado compartido con la suite E2E, por lo que
+# funciona también cuando `pgdata` ya estaba inicializado y no se ejecutan los
+# scripts de `/docker-entrypoint-initdb.d`.
 
 services:
   db:
@@ -41,12 +35,30 @@ services:
       timeout: 5s
       retries: 10
 
-  hydra-migrate:
-    image: oryd/hydra:v2.2.0
+  db-init:
+    image: postgres:16-alpine
     restart: "no"
     depends_on:
       db:
         condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skillhub}
+      POSTGRES_DB: ${POSTGRES_DB:-skillhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      HYDRA_DB_PASSWORD: ${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD, ver .env.example}
+      PGHOST: db
+      PGPORT: "5432"
+    volumes:
+      - ./scripts/db/init-hydra-db.sh:/usr/local/bin/init-hydra-db.sh:ro
+    command: ["sh", "/usr/local/bin/init-hydra-db.sh"]
+
+  hydra-migrate:
+    image: oryd/hydra:v2.2.0
+    restart: "no"
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     environment:
       DSN: postgres://hydra:${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD, ver .env.example}@db:5432/hydra?sslmode=disable
     command: ["migrate", "sql", "-e", "--yes"]
@@ -54,6 +66,7 @@ services:
   hydra:
     image: oryd/hydra:v2.2.0
     restart: unless-stopped
+    entrypoint: ["sh", "-c"]
     depends_on:
       hydra-migrate:
         condition: service_completed_successfully
@@ -96,7 +109,7 @@ services:
       # `serve all` sin --dev. Puede forzarse true/false en el .env local.
       HYDRA_DEV_MODE: ${HYDRA_DEV_MODE:-auto}
       LOG_LEVEL: info
-    command: ["sh", "-c", "case \"$${HYDRA_DEV_MODE}:$${PUBLIC_BASE_URL}\" in true:*|auto:http://*) exec hydra serve all --dev ;; *) exec hydra serve all ;; esac"]
+    command: ["case \"$${HYDRA_DEV_MODE}:$${PUBLIC_BASE_URL}\" in true:*|auto:http://*) exec hydra serve all --dev ;; *) exec hydra serve all ;; esac"]
     ports:
       # Solo para debug local, mismo criterio que db expone 5432. El puerto
       # admin (4445) NUNCA se publica aca.
@@ -106,11 +119,26 @@ services:
       # llega a tocar el servidor -> reporta "healthy" aunque Hydra todavia no
       # este atendiendo requests. /health/ready es el endpoint real de
       # Hydra para esto; wget viene en la imagen (alpine/busybox).
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:4444/health/ready"]
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:4444/health/ready && wget --quiet --tries=1 --spider http://127.0.0.1:4445/health/ready"]
       interval: 10s
       timeout: 5s
       retries: 12
       start_period: 20s
+
+  hydra-keys:
+    image: oryd/hydra:v2.2.0
+    restart: "no"
+    depends_on:
+      hydra:
+        condition: service_healthy
+    environment:
+      HYDRA_ADMIN_URL: http://hydra:4445
+      HYDRA_PUBLIC_URL: http://hydra:4444
+      STRATEGIES_ACCESS_TOKEN: "jwt"
+      HYDRA_KEYS_HTTP_TIMEOUT_SECONDS: "120"
+    volumes:
+      - ./scripts/provision-hydra-keys.sh:/usr/local/bin/provision-hydra-keys.sh:ro
+    entrypoint: ["sh", "/usr/local/bin/provision-hydra-keys.sh"]
 
   backend:
     build: ./backend
@@ -118,8 +146,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      hydra:
-        condition: service_healthy
+      hydra-keys:
+        condition: service_completed_successfully
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-skillhub}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-skillhub}

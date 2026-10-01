@@ -72,6 +72,18 @@ no se modificaron `package.json`, tests ni el Node del sistema.
 
 ## Operación
 
+La provisión de PostgreSQL para Hydra es declarativa: `docker-compose.yml`
+ejecuta `db-init`, que comparte `scripts/db/init-hydra-db.sh` con el override
+E2E. El script espera a PostgreSQL y reconcilia rol, password, ownership y
+privilegios sin imprimir secretos; `hydra-migrate` sólo comienza si termina
+correctamente.
+
+La provisión de claves también es declarativa: `hydra-keys` materializa de
+forma idempotente `hydra.openid.id-token` y `hydra.jwt.access-token` mediante el
+Admin API antes de permitir el arranque de `backend`. `docker-compose.e2e.yml`
+hereda el mismo servicio, por lo que readiness implica que Hydra ya tiene las
+claves necesarias y no sólo que `/health/ready` responde 200.
+
 Para el flujo completo usar:
 
 ```bash

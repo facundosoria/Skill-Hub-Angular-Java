@@ -53,8 +53,17 @@ los clientes acceden a través de Caddy y `PUBLIC_BASE_URL`.
 - PostgreSQL con un único volumen Docker (`pgdata`) que contiene las bases
   `skillhub` y `hydra`.
 - Healthcheck de Hydra sobre `/health/ready`.
-- `scripts/rebuild-app.sh` espera que Hydra esté saludable antes de recrear el
-  backend.
+- `hydra-keys` hace un GET read-only al JWKS público para que Hydra v2.2.0
+  materialice `hydra.openid.id-token`; para
+  `hydra.jwt.access-token` consulta el Admin API y sólo ante un 404 explícito
+  ejecuta el POST de creación. Errores de red, timeout, 5xx y otros estados
+  terminan el one-shot sin crear ni rotar claves. Con estrategia `opaque` no
+  materializa el set de access token. El timeout de cada request es
+  120 s (`HYDRA_KEYS_HTTP_TIMEOUT_SECONDS`), holgado frente a la medición de
+  materialización bajo carga (~5,2 s), y sólo después de terminar correctamente
+  se inicia el backend; el mismo servicio se hereda en `docker-compose.e2e.yml`.
+- `scripts/rebuild-app.sh` espera que los consumidores estén disponibles luego
+  de la provisión de claves.
 
 ### Configuración
 
@@ -175,26 +184,14 @@ metadata que recibe el cliente.
 1. Crear `.env` desde `.env.example` y completar secretos generados.
 2. Para HTTP local, usar `PUBLIC_BASE_URL=http://localhost:8087` y
    `COOKIE_SECURE=false`.
-3. Levantar PostgreSQL:
+3. Levantar PostgreSQL (el servicio `db-init` crea o reconcilia de forma
+   idempotente el rol y la base de Hydra, incluso sobre un volumen existente):
 
    ```bash
    docker compose --env-file .env up -d db
    ```
 
-4. En una base nueva, crear el usuario y la base de Hydra en dos comandos
-   separados:
-
-   ```bash
-   docker compose --env-file .env exec db \
-     psql -U skillhub -d postgres \
-     -c "CREATE ROLE hydra LOGIN PASSWORD '<HYDRA_DB_PASSWORD>';"
-
-   docker compose --env-file .env exec db \
-     psql -U skillhub -d postgres \
-     -c "CREATE DATABASE hydra OWNER hydra;"
-   ```
-
-5. Ejecutar el rebuild completo:
+4. Ejecutar el rebuild completo:
 
    ```bash
    PUBLIC_BASE_URL=http://localhost:8087 \
@@ -202,7 +199,7 @@ metadata que recibe el cliente.
    ./scripts/rebuild-app.sh
    ```
 
-6. Verificar servicios:
+5. Verificar servicios:
 
    ```bash
    docker compose --env-file .env ps
@@ -214,6 +211,29 @@ metadata que recibe el cliente.
 La primera cuenta registrada en una base limpia es administradora. El volumen
 `skill-hub-angular-java_pgdata` es local a cada host y no se sube al repositorio.
 Eliminarlo borra los datos locales, pero no afecta producción.
+
+### Claves JWK y arranque
+
+Hydra 2.2 puede generar perezosamente las claves de firma: el primer discovery
+o autorización puede materializar `hydra.openid.id-token`, y la emisión de un
+access token JWT materializa `hydra.jwt.access-token`. `hydra-keys` fuerza esa
+materialización mediante el GET read-only de `/.well-known/jwks.json`. En
+Hydra v2.2.0 ese GET devuelve 200 y materializa `hydra.openid.id-token`; para
+el set de access token, el GET Admin devuelve 404 hasta que el POST de creación
+lo materializa. El POST queda reservado exclusivamente a ese 404 explícito.
+Por eso los `kid` se conservan en un `up` repetido y no se rotan en cada
+despliegue; el script no imprime la respuesta del API ni claves privadas. La
+estrategia configurada es `STRATEGIES_ACCESS_TOKEN=jwt`, por lo que ambos sets
+se preparan en este despliegue.
+
+El cliente E2E tiene un timeout de transporte de 30 segundos en
+`e2e/oauth/client.js:68-72`. Ese límite no forma parte de la corrección: la
+operación legítima debe comenzar con los key sets ya materializados. El backend
+usa `RestClient` sin timeouts explícitos para el Admin/Public API
+(`backend/src/main/java/com/skillhub/oauth/HydraAdminClient.java:28-30` y
+`OAuthController.java:42-46`), y `HydraJwtValidator.java:47-55` usa Nimbus
+`RemoteJWKSet`, que mantiene caché local de JWKS; el arranque ordenado elimina
+la generación perezosa antes de esas rutas.
 
 ## Registro dinámico y acceso
 
