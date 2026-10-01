@@ -43,6 +43,37 @@ npm run build
 
 **El frontend Angular está portado.** Todas las pantallas funcionan contra el backend.
 
+## Mapa de dependencias (`/mapa`)
+
+El mapa de dependencias es una pantalla nativa de Skill Hub, disponible en
+`/mapa` para usuarios con sesión iniciada. Permite consultar y mantener las
+dependencias entre grupos en las vistas Mapa, Matriz y Lista.
+
+Todos los usuarios autenticados pueden agregar, eliminar y tildar
+dependencias. **Aplicar JSON** y **Restaurar originales** requieren permisos de
+administrador; cada cambio se registra en `audit_events`.
+
+### API del mapa
+
+| Método | Ruta | Acceso | Uso |
+|---|---|---|---|
+| `GET` | `/api/depmap/state` | Sesión | Estado actual del mapa |
+| `GET` | `/api/depmap/events` | Sesión | Eventos SSE y presencia en vivo |
+| `POST` | `/api/depmap/edges` | Sesión | Agregar una dependencia |
+| `DELETE` | `/api/depmap/edges/{id}` | Sesión | Eliminar una dependencia |
+| `PUT` | `/api/depmap/done/{id}` | Sesión | Tildar o destildar una dependencia |
+| `POST` | `/api/depmap/import` | Admin | Aplicar JSON exportado |
+| `POST` | `/api/depmap/reset` | Admin | Restaurar los datos originales |
+
+La persistencia usa las tablas `dep_map_*`, creadas por la migración
+`V23__dependency_map.sql`. El seed de restauración está en
+`backend/src/main/resources/depmap/seed.json`.
+
+Para migrar cambios desde la app vieja, usá **Datos → Copiar** allí y luego
+**Aplicar JSON** como admin en el mapa nuevo; el contrato JSON es compatible.
+La presencia y el SSE se mantienen en memoria, por lo que asumen una sola
+instancia del backend.
+
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
 1. **Las migraciones SQL de Drizzle corren tal cual en Flyway.** Los 10 archivos de

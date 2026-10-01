@@ -1,0 +1,645 @@
+{
+  "nodes": {
+    "ux": {
+      "n": "UX/UI",
+      "s": "UX/UI",
+      "x": 95,
+      "y": 48,
+      "transv": true
+    },
+    "usr": {
+      "n": "Usuarios",
+      "s": "Usuarios",
+      "x": 300,
+      "y": 112
+    },
+    "not": {
+      "n": "Notificaciones",
+      "s": "Notific.",
+      "x": 760,
+      "y": 112
+    },
+    "cur": {
+      "n": "Cursos",
+      "s": "Cursos",
+      "x": 500,
+      "y": 255
+    },
+    "acc": {
+      "n": "Accounting",
+      "s": "Accounting",
+      "x": 315,
+      "y": 392
+    },
+    "llm": {
+      "n": "LLM",
+      "s": "LLM",
+      "x": 685,
+      "y": 392
+    },
+    "road": {
+      "n": "Roadmap",
+      "s": "Roadmap",
+      "x": 95,
+      "y": 392
+    },
+    "teo": {
+      "n": "Desafíos teóricos",
+      "s": "Teórico",
+      "x": 900,
+      "y": 290
+    },
+    "sand": {
+      "n": "Sandbox",
+      "s": "Sandbox",
+      "x": 900,
+      "y": 520
+    },
+    "bko": {
+      "n": "Backoffice",
+      "s": "Backoffice",
+      "x": 500,
+      "y": 535
+    },
+    "mkt": {
+      "n": "Market",
+      "s": "Market",
+      "x": 170,
+      "y": 650
+    },
+    "mot": {
+      "n": "Motor de desafíos",
+      "s": "Motor",
+      "x": 500,
+      "y": 705
+    },
+    "prac": {
+      "n": "Desafíos prácticos",
+      "s": "Prácticos",
+      "x": 810,
+      "y": 665
+    }
+  },
+  "kinds": {
+    "api": "API",
+    "evento": "Evento",
+    "dato": "Datos",
+    "permiso": "Permiso",
+    "ui": "Componente"
+  },
+  "info": {
+    "ux": {
+      "obj": "Optimizar la disposición de los componentes en las pantallas de la demo para una experiencia más intuitiva. Cada equipo con tareas de frontend entrega un boceto o maqueta de sus vistas, que se evalúan para dar feedback y asegurar consistencia visual. Fecha de entrega: 30 sep.",
+      "own": [
+        "Auditar y actualizar la librería de componentes y estilos",
+        "Eliminar scroll",
+        "Estandarizar paginado y lenguaje de la interfaz",
+        "Alinear tamaño de botones y modales",
+        "Estandarizar loadings y spinners (ya en proceso)"
+      ],
+      "note": "Es transversal: aplica a todos los equipos con frontend, por eso no tiene dependencias en el mapa."
+    },
+    "usr": {
+      "own": [
+        "Vinculación con Bitbucket",
+        "MinIO · foto de perfil: permisos de acceso"
+      ]
+    },
+    "not": {
+      "own": [
+        "Chat en sí y moderación de chat",
+        "Que cada micro especifique qué eventos quiere \"campanear\""
+      ]
+    },
+    "teo": {
+      "own": [
+        "Sumar más tipos de desafíos",
+        "Pulir front"
+      ]
+    },
+    "mkt": {
+      "own": [
+        "Añadir más ítems (comunitarios y algunos más complejos)",
+        "Cerrar quién maneja la tienda: ¿solo el profesor o también el gestor?",
+        "LootBoxes (hablar con Santoro) (?)",
+        "Definir familia de efectos",
+        "Mejorar UX/UI de la tienda (hoy es difícil de ver)"
+      ]
+    },
+    "mot": {
+      "own": [
+        "Añadir más configuraciones de desafíos",
+        "Cachear parámetros globales (hablar con Backoffice)",
+        "Mejorar el cálculo de recompensas (Santoro)",
+        "Re-evaluaciones / medidas compensatorias (?)"
+      ]
+    },
+    "bko": {
+      "own": [
+        "Panel del profesor con indicadores de alumnos en riesgo",
+        "Reportes dinámicos para profesor y administrador",
+        "Exportación de datos de los reportes",
+        "Idiomas (?) y corregir el front propio",
+        "Terminar de conectar los parámetros y consumirlos para reportes"
+      ]
+    },
+    "road": {
+      "obj": "Que el roadmap de cada curso-cohorte funcione con datos reales y el profesor lo pueda ajustar: las unidades salen de las secciones que gestiona en Cursos y edita cada nodo (reglas, obligatoriedad, vidas e ícono) sin que ningún alumno pierda progreso ni desbloqueos. El alumno lee el material de sus nodos de lectura y ve los ítems que compró en el Mercado, su posición en el ranking y sus insignias.",
+      "own": [
+        "Sin datos simulados en el microservicio",
+        "Mundo 3D más liviano"
+      ]
+    },
+    "prac": {
+      "own": [
+        "Spike: aplicación de escritorio (con Sandbox)",
+        "Spike: soluciones en navegador",
+        "Conseguir un requerimiento fijo de Hernán",
+        "Revisitar la organización de Git",
+        "Llegar con propuestas claras el martes para Hernán",
+        "Generar los perfiles personalizables del motor de puntuación"
+      ]
+    },
+    "sand": {
+      "own": [
+        "Spike: aplicación de escritorio (con Prácticos)",
+        "Spike: soluciones en navegador",
+        "Conseguir un requerimiento fijo de Hernán",
+        "Revisitar la organización de Git",
+        "Llegar con propuestas claras el martes para Hernán"
+      ]
+    },
+    "cur": {
+      "own": [
+        "Verificar el uso de cada rol (¿un profesor debería poder crear un curso?)",
+        "Manejar comisiones de un curso",
+        "Sanitizar errores"
+      ]
+    },
+    "acc": {
+      "own": []
+    },
+    "llm": {
+      "own": []
+    }
+  },
+  "edges": [
+    {
+      "id": "e1",
+      "from": "cur",
+      "to": "acc",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Crear la cuenta del alumno al matricularlo"
+    },
+    {
+      "id": "e2",
+      "from": "cur",
+      "to": "acc",
+      "kind": "ui",
+      "state": "pendiente",
+      "text": "Componente que lleva al inventario"
+    },
+    {
+      "id": "e3",
+      "from": "acc",
+      "to": "cur",
+      "kind": "ui",
+      "state": "pendiente",
+      "text": "Vista del alumno"
+    },
+    {
+      "id": "e4",
+      "from": "acc",
+      "to": "cur",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Ingresar a un curso respetando vidas iniciales y máximas (generales o por curso)"
+    },
+    {
+      "id": "e5",
+      "from": "acc",
+      "to": "cur",
+      "kind": "ui",
+      "state": "pendiente",
+      "text": "Pseudo vitrina del roadmap"
+    },
+    {
+      "id": "e6",
+      "from": "acc",
+      "to": "bko",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Recibir parámetros de vidas iniciales y máximas"
+    },
+    {
+      "id": "e7",
+      "from": "acc",
+      "to": "usr",
+      "kind": "permiso",
+      "state": "pendiente",
+      "text": "Permiso al bucket de MinIO para leer la foto de perfil"
+    },
+    {
+      "id": "e8",
+      "from": "usr",
+      "to": "acc",
+      "kind": "permiso",
+      "state": "definir",
+      "text": "Permiso a Bitbucket (figura bajo Accounting en la reunión: confirmar quién lo otorga)"
+    },
+    {
+      "id": "e9",
+      "from": "road",
+      "to": "acc",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "GET XP y GET niveles"
+    },
+    {
+      "id": "e10",
+      "from": "road",
+      "to": "acc",
+      "kind": "ui",
+      "state": "pendiente",
+      "text": "Componente que lleva al inventario"
+    },
+    {
+      "id": "e11",
+      "from": "road",
+      "to": "acc",
+      "kind": "dato",
+      "state": "definir",
+      "text": "Posición en el ranking e insignias del alumno (confirmar de dónde sale el dato)"
+    },
+    {
+      "id": "e12",
+      "from": "mkt",
+      "to": "acc",
+      "kind": "api",
+      "state": "definir",
+      "text": "Catálogo de ítems y flujo de compra (terminar de definirlo juntos)"
+    },
+    {
+      "id": "e13",
+      "from": "mot",
+      "to": "acc",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Confirmar que el flujo del desafío queda OK e2e (acreditación de monedas)"
+    },
+    {
+      "id": "e14",
+      "from": "bko",
+      "to": "acc",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "t08 · historial de saldos del banco"
+    },
+    {
+      "id": "e15",
+      "from": "prac",
+      "to": "llm",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Tutor: key del alumno para conectarse (hoy está hardcodeada)"
+    },
+    {
+      "id": "e16",
+      "from": "prac",
+      "to": "llm",
+      "kind": "evento",
+      "state": "pendiente",
+      "text": "Evaluador por Kafka (falta implementar)"
+    },
+    {
+      "id": "e17",
+      "from": "teo",
+      "to": "llm",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Generación de preguntas teóricas"
+    },
+    {
+      "id": "e18",
+      "from": "teo",
+      "to": "llm",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Corrección de respuestas abiertas"
+    },
+    {
+      "id": "e19",
+      "from": "cur",
+      "to": "llm",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Evaluaciones pendientes"
+    },
+    {
+      "id": "e20",
+      "from": "cur",
+      "to": "llm",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Score de uso de IA"
+    },
+    {
+      "id": "e21",
+      "from": "llm",
+      "to": "cur",
+      "kind": "evento",
+      "state": "pendiente",
+      "text": "RAG: notificar dónde está el PDF dentro de MinIO"
+    },
+    {
+      "id": "e22",
+      "from": "llm",
+      "to": "cur",
+      "kind": "dato",
+      "state": "definir",
+      "text": "PDF, videos y links: definir qué se comparte (Mini0)"
+    },
+    {
+      "id": "e23",
+      "from": "llm",
+      "to": "not",
+      "kind": "evento",
+      "state": "pendiente",
+      "text": "Moderación: notificar"
+    },
+    {
+      "id": "e24",
+      "from": "not",
+      "to": "llm",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Moderación de chat (dependencia mutua)"
+    },
+    {
+      "id": "e25",
+      "from": "llm",
+      "to": "bko",
+      "kind": "ui",
+      "state": "pendiente",
+      "text": "Calibración del golden set"
+    },
+    {
+      "id": "e26",
+      "from": "bko",
+      "to": "llm",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Gestión de modelos: ingreso de key y selección de modelo"
+    },
+    {
+      "id": "e27",
+      "from": "mot",
+      "to": "llm",
+      "kind": "api",
+      "state": "definir",
+      "text": "Bloqueo de desafío por falta de calibración: ¿quién bloquea?"
+    },
+    {
+      "id": "e28",
+      "from": "cur",
+      "to": "usr",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Crear estudiante"
+    },
+    {
+      "id": "e29",
+      "from": "cur",
+      "to": "usr",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Usuarios pertenecientes a una cohorte"
+    },
+    {
+      "id": "e30",
+      "from": "not",
+      "to": "usr",
+      "kind": "evento",
+      "state": "pendiente",
+      "text": "Eventos de usuario: password-changed, tour-completed y profile-completed"
+    },
+    {
+      "id": "e31",
+      "from": "not",
+      "to": "acc",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e32",
+      "from": "not",
+      "to": "cur",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e33",
+      "from": "not",
+      "to": "teo",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e34",
+      "from": "not",
+      "to": "mkt",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e35",
+      "from": "not",
+      "to": "mot",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e36",
+      "from": "not",
+      "to": "bko",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e37",
+      "from": "not",
+      "to": "road",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e38",
+      "from": "not",
+      "to": "prac",
+      "kind": "evento",
+      "state": "definir",
+      "text": "Especificar qué eventos quiere \"campanear\" y agregarlos al archivo de notificaciones"
+    },
+    {
+      "id": "e39",
+      "from": "bko",
+      "to": "not",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "t11 · eventos de notificaciones para configurar las notificaciones"
+    },
+    {
+      "id": "e40",
+      "from": "bko",
+      "to": "cur",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Curso y matrícula; cursos de cada profe con su lista de estudiantes (métricas, incluso roadmap)"
+    },
+    {
+      "id": "e41",
+      "from": "bko",
+      "to": "mot",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "t03 · resultado de desafíos"
+    },
+    {
+      "id": "e42",
+      "from": "bko",
+      "to": "teo",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "t05 · resultado de desafíos teóricos"
+    },
+    {
+      "id": "e43",
+      "from": "bko",
+      "to": "road",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "t10 · roadmap: XP, niveles y progreso"
+    },
+    {
+      "id": "e44",
+      "from": "mot",
+      "to": "bko",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Pulir la conexión con Backoffice"
+    },
+    {
+      "id": "e45",
+      "from": "mot",
+      "to": "road",
+      "kind": "api",
+      "state": "definir",
+      "text": "Definir asignaciones de desafíos con Roadmap"
+    },
+    {
+      "id": "e46",
+      "from": "mot",
+      "to": "cur",
+      "kind": "api",
+      "state": "definir",
+      "text": "Definir asignaciones de desafíos con Cursos"
+    },
+    {
+      "id": "e47",
+      "from": "mot",
+      "to": "prac",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Perfiles personalizables del motor de puntuación"
+    },
+    {
+      "id": "e48",
+      "from": "mot",
+      "to": "mkt",
+      "kind": "api",
+      "state": "definir",
+      "text": "Plantillas / market de desafíos (?)"
+    },
+    {
+      "id": "e49",
+      "from": "road",
+      "to": "mot",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Realizar un intento desde el Roadmap"
+    },
+    {
+      "id": "e50",
+      "from": "cur",
+      "to": "mot",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Crear un desafío desde la vista de Cursos"
+    },
+    {
+      "id": "e51",
+      "from": "prac",
+      "to": "mot",
+      "kind": "ui",
+      "state": "pendiente",
+      "text": "Integrar con el motor la vista del intento del alumno"
+    },
+    {
+      "id": "e52",
+      "from": "road",
+      "to": "cur",
+      "kind": "api",
+      "state": "pendiente",
+      "text": "Unidades a partir de las secciones que el profe gestiona en Cursos"
+    },
+    {
+      "id": "e53",
+      "from": "road",
+      "to": "cur",
+      "kind": "dato",
+      "state": "definir",
+      "text": "Archivado del curso, estado académico final, responsabilidades por rol, material teórico y grupos dentro de la cohorte (2w1, 2w2)"
+    },
+    {
+      "id": "e54",
+      "from": "road",
+      "to": "cur",
+      "kind": "dato",
+      "state": "definir",
+      "text": "Relación de los ejercicios (propios del curso o generales)"
+    },
+    {
+      "id": "e55",
+      "from": "road",
+      "to": "mkt",
+      "kind": "dato",
+      "state": "pendiente",
+      "text": "Ítems que compró el alumno en el Mercado"
+    },
+    {
+      "id": "e56",
+      "from": "prac",
+      "to": "sand",
+      "kind": "api",
+      "state": "definir",
+      "text": "Entornos aislados locales (IDE) y aplicación de escritorio vs. navegador"
+    },
+    {
+      "id": "e57",
+      "from": "sand",
+      "to": "prac",
+      "kind": "api",
+      "state": "definir",
+      "text": "Mismo spike en conjunto: entornos aislados locales (IDE)"
+    }
+  ],
+  "done": {}
+}
