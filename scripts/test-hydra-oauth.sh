@@ -3,7 +3,6 @@ set -Eeuo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "${script_dir}/.." && pwd)"
-compose=(docker compose -p skillhub-e2e --env-file "")
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/skillhub-e2e.XXXXXX")"
 env_file="${tmp_dir}/.env"
 output_file="${tmp_dir}/client-output.log"
@@ -11,21 +10,79 @@ touch "${tmp_dir}/sensitive-values"
 compose_file="${project_dir}/docker-compose.yml"
 override_file="${project_dir}/docker-compose.e2e.yml"
 cleanup_done=false
+compose_initialized=false
 started_at="$(date +%s)"
+readiness_timeout_seconds="${E2E_READINESS_TIMEOUT_SECONDS:-120}"
+readiness_interval_seconds="${E2E_READINESS_INTERVAL_SECONDS:-2}"
+readiness_required_successes="${E2E_READINESS_REQUIRED_SUCCESSES:-3}"
+readiness_url="http://127.0.0.1:18087/api/health"
+
+[[ "${readiness_timeout_seconds}" =~ ^[0-9]+$ && "${readiness_interval_seconds}" =~ ^[0-9]+$ && "${readiness_required_successes}" =~ ^[1-9][0-9]*$ ]] || {
+  echo "FAIL 5.1 configuración de readiness inválida" >&2
+  exit 1
+}
+
+capture_diagnostics() {
+  local diagnostics_file="${tmp_dir}/readiness-failure.log"
+  {
+    echo "--- docker compose ps ---"
+    "${compose[@]}" ps
+    echo "--- backend/web/hydra logs ---"
+    "${compose[@]}" logs --no-color backend web hydra
+  } >"${diagnostics_file}" 2>&1 || true
+  echo "Diagnóstico de readiness: ${diagnostics_file}" >&2
+}
+
+capture_startup_diagnostics() {
+  local diagnostics_file="${tmp_dir}/startup-failure.log"
+  {
+    echo "--- docker compose ps --all ---"
+    "${compose[@]}" ps --all
+    echo "--- docker compose logs --all ---"
+    "${compose[@]}" logs --no-color --timestamps
+  } >"${diagnostics_file}" 2>&1 || true
+  echo "Diagnóstico de startup: ${diagnostics_file}" >&2
+}
 
 cleanup() {
   local status=$?
   if [[ "${cleanup_done}" != true ]]; then
     cleanup_done=true
-    # El nombre explícito protege los contenedores/volúmenes de cualquier otro
-    # compose del host. No se imprime la salida porque puede incluir variables.
-    docker compose -p skillhub-e2e --env-file "${env_file}" \
-      -f "${compose_file}" -f "${override_file}" down -v --remove-orphans >/dev/null 2>&1 || true
+    if [[ "${compose_initialized}" == true ]]; then
+      # Usar exactamente los mismos argumentos que en up hace que Compose
+      # encuentre también los servicios one-shot y sus objetos asociados.
+      if ! "${compose[@]}" down -v --remove-orphans; then
+        echo "FAIL 5.1 teardown del proyecto skillhub-e2e" >&2
+        status=1
+      fi
+      if ! assert_project_objects_absent; then
+        echo "FAIL 5.1 teardown dejó objetos del proyecto skillhub-e2e" >&2
+        status=1
+      fi
+    fi
   fi
-  rm -rf "${tmp_dir}"
+  if [[ "${status}" -eq 0 ]]; then
+    rm -rf "${tmp_dir}"
+  else
+    echo "Logs E2E conservados en ${tmp_dir}" >&2
+  fi
   exit "${status}"
 }
 trap cleanup EXIT
+
+assert_project_objects_absent() {
+  local containers volumes networks
+  containers="$(docker ps -a --filter label=com.docker.compose.project=skillhub-e2e --format '{{.ID}} {{.Names}}' || true)"
+  volumes="$(docker volume ls --filter label=com.docker.compose.project=skillhub-e2e --format '{{.Name}}' || true)"
+  networks="$(docker network ls --filter label=com.docker.compose.project=skillhub-e2e --format '{{.Name}}' || true)"
+  if [[ -n "${containers}" || -n "${volumes}" || -n "${networks}" ]]; then
+    echo "FAIL 5.1 ya existen objetos del proyecto skillhub-e2e; no se inicia para evitar un conflicto" >&2
+    [[ -n "${containers}" ]] && printf '  contenedores:\n%s\n' "${containers}" >&2
+    [[ -n "${volumes}" ]] && printf '  volúmenes:\n%s\n' "${volumes}" >&2
+    [[ -n "${networks}" ]] && printf '  redes:\n%s\n' "${networks}" >&2
+    return 1
+  fi
+}
 
 for command_name in docker node openssl curl; do
   command -v "${command_name}" >/dev/null 2>&1 || {
@@ -54,14 +111,15 @@ EOF
 compose=(docker compose -p skillhub-e2e --env-file "${env_file}" \
   -f "${compose_file}" -f "${override_file}")
 
-if [[ -n "$("${compose[@]}" ps -q 2>/dev/null || true)" ]]; then
-  echo "FAIL 5.1 ya existe el proyecto skillhub-e2e; no se detuvo para preservar su estado" >&2
-  exit 1
-fi
+assert_project_objects_absent
 
 echo "PASS 5.1 preflight docker ps verificado; proyecto y puertos E2E aislados"
 "${compose[@]}" config --quiet
-"${compose[@]}" up -d --build
+compose_initialized=true
+if ! "${compose[@]}" up -d --build; then
+  capture_startup_diagnostics
+  exit 1
+fi
 
 for _ in {1..90}; do
   backend_status="$("${compose[@]}" ps -q backend | xargs -r docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' 2>/dev/null || true)"
@@ -79,15 +137,41 @@ if [[ "${backend_status}" != healthy || "${web_status}" != running ]]; then
   exit 1
 fi
 
-# Caddy puede estar en proceso de cargar la configuración unos segundos
-# después de que el contenedor figure como running.
-for _ in {1..30}; do
-  if curl --silent --show-error --fail --max-time 2 \
-      http://127.0.0.1:18087/.well-known/oauth-protected-resource >/dev/null 2>&1; then
-    break
+# Caddy puede estar en proceso de cargar la configuración, y su upstream DNS
+# puede tardar en estabilizarse, después de que los contenedores estén running.
+readiness_started_at="$(date +%s)"
+readiness_deadline=$(( readiness_started_at + readiness_timeout_seconds ))
+readiness_successes=0
+readiness_ready=false
+while (( $(date +%s) < readiness_deadline )); do
+  readiness_remaining=$(( readiness_deadline - $(date +%s) ))
+  readiness_curl_timeout=2
+  (( readiness_remaining < readiness_curl_timeout )) && readiness_curl_timeout=${readiness_remaining}
+  (( readiness_curl_timeout > 0 )) || break
+  if curl --silent --show-error --max-time "${readiness_curl_timeout}" --output /dev/null \
+      --write-out '%{http_code}' "${readiness_url}" 2>/dev/null | grep -qx '200'; then
+    readiness_successes=$((readiness_successes + 1))
+    if (( readiness_successes >= readiness_required_successes )); then
+      readiness_ready=true
+      break
+    fi
+  else
+    readiness_successes=0
   fi
-  sleep 1
+  readiness_remaining=$(( readiness_deadline - $(date +%s) ))
+  (( readiness_remaining > 0 )) || break
+  readiness_sleep_seconds="${readiness_interval_seconds}"
+  (( readiness_sleep_seconds > readiness_remaining )) && readiness_sleep_seconds=${readiness_remaining}
+  sleep "${readiness_sleep_seconds}"
 done
+readiness_seconds=$(( $(date +%s) - readiness_started_at ))
+echo "READINESS_SECONDS ${readiness_seconds}"
+if [[ "${readiness_ready}" != true ]]; then
+  echo "FAIL 5.1 backend no respondió HTTP 200 vía Caddy (${readiness_url}) tras ${readiness_timeout_seconds}s" >&2
+  capture_diagnostics
+  exit 1
+fi
+echo "PASS 5.1 readiness vía Caddy estable (${readiness_required_successes} respuestas HTTP 200 consecutivas)"
 
 set +e
 node "${project_dir}/e2e/oauth/client.js" \

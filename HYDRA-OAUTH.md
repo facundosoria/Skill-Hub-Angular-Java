@@ -291,6 +291,9 @@ challenges ni valores del `.env`. La ejecución verificada terminó con 15/15
 checks aprobados y código 0; el detalle de pasos está en
 [`e2e/oauth/README.md`](e2e/oauth/README.md).
 
+El caso cerrado de intermitencia bajo carga y su reproducción portable están
+documentados en [`docs/OAUTH-INTERMITENCIA-HYDRA.md`](docs/OAUTH-INTERMITENCIA-HYDRA.md).
+
 ## Diagnóstico y rollback
 
 Para un fallo de la suite, consultar primero el estado del proyecto aislado:
