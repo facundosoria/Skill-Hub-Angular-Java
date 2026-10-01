@@ -62,6 +62,16 @@
             <version>1.86</version>
         </dependency>
 
+        <!-- Validacion de JWT OAuth2 emitidos por Ory Hydra en /api/mcp. Sin
+             spring-boot-starter-oauth2-resource-server a proposito: ese starter
+             trae Spring Security completo (no usado en el resto del proyecto) de
+             forma transitiva. Esta libreria valida JWT/JWKS sin acoplarse a eso. -->
+        <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>oauth2-oidc-sdk</artifactId>
+            <version>11.26</version>
+        </dependency>
+
         <!-- JWT HS256 de la cookie de sesion (jose en el original) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

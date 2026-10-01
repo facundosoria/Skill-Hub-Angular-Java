@@ -45,6 +45,22 @@ app:
   session-secret: ${SESSION_SECRET:dev-only-session-secret-change-me-32c}
   # secure=true en la cookie solo en prod (el original mira NODE_ENV).
   cookie-secure: ${COOKIE_SECURE:false}
+  # OAuth 2.1 para /api/mcp via Ory Hydra self-hosteado (ver plan de OAuth).
+  # jwks-uri/admin-url apuntan al contenedor hydra por la red interna de
+  # docker; issuer/mcp-resource-url/protected-resource-metadata-url son las
+  # URLs publicas que ven los clientes (deben coincidir con URLS_SELF_ISSUER
+  # de Hydra y con como Caddy proxea /oauth2/* y /.well-known/*).
+  hydra:
+    issuer: ${HYDRA_ISSUER:https://marketplace-utn.tech/}
+    jwks-uri: ${HYDRA_JWKS_URI:http://hydra:4444/.well-known/jwks.json}
+    admin-url: ${HYDRA_ADMIN_URL:http://hydra:4445}
+    # Puerto publico de Hydra por la red interna de docker (no el issuer
+    # publico): lo usa el backend para pedirle su /.well-known/openid-configuration
+    # real y reenviarla en /.well-known/oauth-authorization-server, que Hydra
+    # v2 no expone directamente (confirmado corriendo el stack en local).
+    public-url: ${HYDRA_PUBLIC_URL:http://hydra:4444}
+    mcp-resource-url: ${HYDRA_MCP_RESOURCE_URL:https://marketplace-utn.tech/api/mcp}
+    protected-resource-metadata-url: ${HYDRA_PROTECTED_RESOURCE_METADATA_URL:https://marketplace-utn.tech/.well-known/oauth-protected-resource}
 
 logging:
   level:

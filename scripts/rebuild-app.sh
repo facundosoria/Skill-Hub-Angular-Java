@@ -26,6 +26,39 @@ if [[ -z "$db_id" ]] || [[ "$(docker inspect --format '{{.State.Running}}' "$db_
   exit 1
 fi
 
+echo "Aplicando la migracion de Hydra (una sola vez, sale sola)..."
+"${compose[@]}" up hydra-migrate
+
+echo "Levantando/actualizando Hydra..."
+"${compose[@]}" up -d hydra
+
+hydra_healthy=false
+for _ in {1..30}; do
+  hydra_id="$("${compose[@]}" ps -q hydra)"
+  if [[ -z "$hydra_id" ]]; then
+    break
+  fi
+
+  hydra_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$hydra_id")"
+  if [[ "$hydra_health" == "healthy" ]]; then
+    hydra_healthy=true
+    break
+  fi
+
+  hydra_state="$(docker inspect --format '{{.State.Status}}' "$hydra_id")"
+  if [[ "$hydra_state" == "exited" ]] || [[ "$hydra_state" == "dead" ]]; then
+    break
+  fi
+
+  sleep 2
+done
+
+if [[ "$hydra_healthy" != "true" ]]; then
+  echo "Hydra no quedo saludable. El backend no sera recreado (depende de Hydra)." >&2
+  "${compose[@]}" logs --tail=200 hydra >&2
+  exit 1
+fi
+
 echo "Construyendo las imagenes de backend y frontend..."
 "${compose[@]}" build --pull backend web
 

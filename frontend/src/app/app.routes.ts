@@ -17,6 +17,21 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/change-password').then((m) => m.ChangePassword),
   },
   {
+    // Sin guard: Hydra redirige aca con login_challenge cuando un cliente MCP
+    // pide OAuth. Alguien con sesion web activa tiene que poder completarlo
+    // igual (guestGuard lo sacaria de esta pantalla).
+    path: 'oauth/login',
+    data: { oauthStep: 'login' },
+    loadComponent: () => import('./features/auth/oauth-consent').then((m) => m.OauthConsent),
+  },
+  {
+    // Hydra redirige aca despues de aceptar el login cuando el cliente no usa
+    // skip_consent.
+    path: 'oauth/consent',
+    data: { oauthStep: 'consent' },
+    loadComponent: () => import('./features/auth/oauth-consent').then((m) => m.OauthConsent),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),

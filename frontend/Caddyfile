@@ -18,6 +18,29 @@
 	handle /api/* {
 		reverse_proxy backend:8080
 	}
+	handle /.well-known/oauth-protected-resource {
+		reverse_proxy backend:8080
+	}
+
+	# Superficie PUBLICA de Hydra (OAuth 2.1 para /api/mcp, ver plan de OAuth).
+	# El puerto admin (4445) nunca se proxea desde aca ni desde ningun lado.
+	handle /oauth2/* {
+		reverse_proxy hydra:4444
+	}
+	handle /.well-known/oauth-authorization-server {
+		# Hydra v2 no expone este path (solo openid-configuration, RFC 8414 vs
+		# OIDC discovery) - lo sirve el backend, que reenvia el contenido real.
+		reverse_proxy backend:8080
+	}
+	handle /.well-known/openid-configuration {
+		reverse_proxy hydra:4444
+	}
+	handle /.well-known/jwks.json {
+		reverse_proxy hydra:4444
+	}
+	handle /userinfo {
+		reverse_proxy hydra:4444
+	}
 
 	# Resto -> archivos estaticos, con fallback a index.html (rutas del router).
 	handle {

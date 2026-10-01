@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillhub.auth.ApiKeyIdentity;
 import com.skillhub.auth.ApiKeyService;
+import com.skillhub.oauth.OAuthIdentityService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -21,7 +23,10 @@ import org.springframework.web.bind.annotation.*;
  * implementa el JSON-RPC 2.0 a mano: para un server de solo lectura sin sesion
  * son ~4 metodos y evita el churn del SDK. Ver README del spike.
  *
- * La identidad sale del header `Authorization: Bearer sk_hub_...`.
+ * La identidad sale del header Authorization: o bien "Bearer sk_hub_..."
+ * (API key estatica, ApiKeyService) o un JWT emitido por Hydra (OAuth,
+ * OAuthIdentityService) - ambos metodos conviven indefinidamente, ver
+ * el plan de OAuth. Se distingue por el prefijo fijo de las API keys.
  */
 @RestController
 public class McpController {
@@ -30,25 +35,36 @@ public class McpController {
     private static final String DEFAULT_PROTOCOL = "2025-06-18";
 
     private final ApiKeyService apiKeys;
+    private final OAuthIdentityService oauthIdentities;
     private final McpTools tools;
     private final ObjectMapper json;
+    private final String resourceMetadataUrl;
 
-    public McpController(ApiKeyService apiKeys, McpTools tools, ObjectMapper json) {
+    public McpController(ApiKeyService apiKeys, OAuthIdentityService oauthIdentities, McpTools tools,
+                          ObjectMapper json,
+                          @Value("${app.hydra.protected-resource-metadata-url}") String resourceMetadataUrl) {
         this.apiKeys = apiKeys;
+        this.oauthIdentities = oauthIdentities;
         this.tools = tools;
         this.json = json;
+        this.resourceMetadataUrl = resourceMetadataUrl;
     }
 
     @PostMapping(value = "/api/mcp", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<JsonNode> handle(@RequestBody JsonNode body, HttpServletRequest req) {
-        ApiKeyIdentity identity = apiKeys.identifyByAuthHeader(req.getHeader("Authorization"));
+        String authHeader = req.getHeader("Authorization");
+        boolean isApiKey = authHeader != null && authHeader.regionMatches(7, "sk_hub_", 0, 7);
+        ApiKeyIdentity identity = isApiKey
+                ? apiKeys.identifyByAuthHeader(authHeader)
+                : oauthIdentities.identifyByAuthHeader(authHeader);
         if (identity == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .header("WWW-Authenticate", "Bearer realm=\"skill-hub\"")
+                    .header("WWW-Authenticate", "Bearer realm=\"skill-hub\", resource_metadata=\""
+                            + resourceMetadataUrl + "\"")
                     .body(rpcError(null, -32001,
-                            "API key invalida, revocada o ausente. Genera una desde tu cuenta en el hub."));
+                            "Autenticacion invalida, revocada o ausente. Genera una API key o conectate por OAuth desde tu cuenta en el hub."));
         }
-        apiKeys.touchApiKey(identity.apiKeyId());
+        if (identity.apiKeyId() != null) apiKeys.touchApiKey(identity.apiKeyId());
 
         JsonNode idNode = body.get("id");
         String method = body.path("method").asText("");

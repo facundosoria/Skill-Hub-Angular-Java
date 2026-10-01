@@ -32,7 +32,9 @@ public class McpTools {
 
     private static final String PORT_REGISTRY_SLUG = "port-registry";
     private static final int SYNC_MAX = 100;
-    // Base64 inflates size ~4/3; 5MB decoded keeps the JSON-RPC response reasonable.
+    // Limite sobre el tamano DECODIFICADO del artifact. El base64 resultante
+    // infla esto ~4/3 (hasta ~6.7MB), que es lo que termina viajando en la
+    // respuesta JSON-RPC - se considera razonable para ese tope.
     private static final long MAX_INLINE_ARTIFACT_BYTES = 5L * 1024 * 1024;
 
     private final SkillCatalog catalog;
