@@ -1,0 +1,49 @@
+# Override aislado para la suite OAuth. No se usa en producción y no modifica
+# los puertos/volúmenes definidos por docker-compose.yml.
+services:
+  db-init:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-skillhub}
+      POSTGRES_DB: ${POSTGRES_DB:-skillhub}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      HYDRA_DB_PASSWORD: ${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD}
+      PGHOST: db
+    command:
+      - sh
+      - -ec
+      - |
+        psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" \
+          -c "CREATE ROLE hydra LOGIN PASSWORD '$${HYDRA_DB_PASSWORD}'"
+        psql -v ON_ERROR_STOP=1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" \
+          -c "CREATE DATABASE hydra OWNER hydra"
+
+  db:
+    ports: !override
+      - "127.0.0.1:15432:5432"
+    volumes: !override
+      - e2e_pgdata:/var/lib/postgresql/data
+
+  hydra-migrate:
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+
+  hydra:
+    command: !override ["serve", "all", "--dev"]
+    ports: !override
+      - "127.0.0.1:18444:4444"
+
+  backend:
+    environment:
+      COOKIE_SECURE: "false"
+
+  web:
+    ports: !override
+      - "127.0.0.1:18087:8080"
+
+volumes:
+  e2e_pgdata:

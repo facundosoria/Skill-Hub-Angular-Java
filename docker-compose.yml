@@ -75,11 +75,28 @@ services:
       # contra la instancia real): esta es la que habilita DCR publica de
       # verdad, sin pedir un registration access token previo.
       OIDC_DYNAMIC_CLIENT_REGISTRATION_ENABLED: "true"
+      # Perfil esperado para DCR de clientes MCP: authorization_code +
+      # refresh_token y cliente publico sin secreto. Hydra exige PKCE para
+      # estos clientes; el cliente debe enviar token_endpoint_auth_method=none
+      # en el registro.
+      OAUTH2_PKCE_ENFORCED_FOR_PUBLIC_CLIENTS: "true"
+      OIDC_DYNAMIC_CLIENT_REGISTRATION_DEFAULT_SCOPE: "openid offline_access mcp"
+      WEBFINGER_OIDC_DISCOVERY_SUPPORTED_SCOPE: "mcp"
+      STRATEGIES_SCOPE: "exact"
+      # Hydra v2.2 defaults JWT scopes to `scp` (array); emit both forms so
+      # standard resource servers can consume the RFC 9068 `scope` string too.
+      STRATEGIES_JWT_SCOPE_CLAIM: "both"
       SERVE_PUBLIC_CORS_ENABLED: "true"
-      SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: "*"
+      # El frontend y Hydra se consumen por el mismo origen publico; no abrir
+      # CORS globalmente. PUBLIC_BASE_URL debe ser solo scheme://host[:port].
+      SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}
       SERVE_ADMIN_CORS_ENABLED: "false"
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}
+      # auto activa --dev solo para un issuer HTTP local; produccion HTTPS usa
+      # `serve all` sin --dev. Puede forzarse true/false en el .env local.
+      HYDRA_DEV_MODE: ${HYDRA_DEV_MODE:-auto}
       LOG_LEVEL: info
-    command: ["serve", "all", "--dev"]
+    command: ["sh", "-c", "case \"$${HYDRA_DEV_MODE}:$${PUBLIC_BASE_URL}\" in true:*|auto:http://*) exec hydra serve all --dev ;; *) exec hydra serve all ;; esac"]
     ports:
       # Solo para debug local, mismo criterio que db expone 5432. El puerto
       # admin (4445) NUNCA se publica aca.

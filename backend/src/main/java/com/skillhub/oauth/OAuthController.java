@@ -2,6 +2,7 @@ package com.skillhub.oauth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.skillhub.session.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -28,27 +29,61 @@ public class OAuthController {
 
     private final UserService users;
     private final HydraAdminClient hydra;
+    private final OAuthPasswordChangeService passwordChanges;
     private final RestClient hydraPublic;
     private final String mcpResourceUrl;
     private final String hydraIssuer;
 
+    @Autowired
     public OAuthController(UserService users, HydraAdminClient hydra,
+                            OAuthPasswordChangeService passwordChanges,
                             @Value("${app.hydra.mcp-resource-url}") String mcpResourceUrl,
                             @Value("${app.hydra.issuer}") String hydraIssuer,
                             @Value("${app.hydra.public-url}") String hydraPublicUrl) {
         this.users = users;
         this.hydra = hydra;
+        this.passwordChanges = passwordChanges;
         this.hydraPublic = RestClient.builder().baseUrl(hydraPublicUrl).build();
         this.mcpResourceUrl = mcpResourceUrl;
         this.hydraIssuer = hydraIssuer;
+    }
+
+    /** Constructor kept for focused controller tests that do not need Spring wiring. */
+    public OAuthController(UserService users, HydraAdminClient hydra,
+                           String mcpResourceUrl, String hydraIssuer, String hydraPublicUrl) {
+        this(users, hydra, new OAuthPasswordChangeService(), mcpResourceUrl, hydraIssuer, hydraPublicUrl);
     }
 
     /** Valida usuario/contrasena con el mismo login que ya usa la web, y se lo confirma a Hydra. */
     @PostMapping("/api/oauth/accept-login")
     public Map<String, Object> acceptLogin(@RequestBody Map<String, String> body) {
         var result = users.login(body.get("username"), body.get("password"));
+        if (result.user().mustChangePassword()) {
+            String transaction = passwordChanges.create(body.get("loginChallenge"), result.user().id(),
+                    result.payload().passwordChangeNonce());
+            return Map.of("redirectTo", "/oauth/password-change?transaction=" + transaction);
+        }
         String redirectTo = hydra.acceptLogin(body.get("loginChallenge"), result.user().id());
         return Map.of("redirectTo", redirectTo);
+    }
+
+    /** Completa el cambio temporal y recien entonces acepta el login_challenge en Hydra. */
+    @PostMapping("/api/oauth/password-change")
+    public Map<String, Object> completePasswordChange(@RequestBody Map<String, String> body) {
+        String transaction = requireTransaction(body.get("transaction"));
+        String newPassword = body.get("password");
+        CompletedPasswordChange completed = passwordChanges.complete(transaction, pending -> new CompletedPasswordChange(
+                pending.loginChallenge(),
+                users.changeRequiredPassword(pending.userId(), pending.passwordChangeNonce(), newPassword)));
+        String redirectTo = hydra.acceptLogin(completed.loginChallenge(), completed.changed().user().id());
+        return Map.of("redirectTo", redirectTo);
+    }
+
+    /** Rechaza el login OAuth y consume la transaccion sin aceptar el challenge. */
+    @PostMapping("/api/oauth/password-change/reject")
+    public Map<String, Object> rejectPasswordChange(@RequestBody Map<String, String> body) {
+        OAuthPasswordChangeService.PendingChange pending = passwordChanges.reject(requireTransaction(body.get("transaction")));
+        return Map.of("redirectTo", hydra.rejectLogin(pending.loginChallenge()));
     }
 
     /** Devuelve al frontend sólo los datos seguros necesarios para mostrar consentimiento. */
@@ -85,6 +120,15 @@ public class OAuthController {
         }
         return challenge;
     }
+
+    private String requireTransaction(Object rawTransaction) {
+        if (!(rawTransaction instanceof String transaction) || transaction.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "PASSWORD_CHANGE_TRANSACTION_REQUIRED");
+        }
+        return transaction;
+    }
+
+    private record CompletedPasswordChange(String loginChallenge, UserService.LoginResult changed) {}
 
     private List<String> requestedScopes(JsonNode request) {
         if (request == null || !request.path("requested_scope").isArray()) return List.of();

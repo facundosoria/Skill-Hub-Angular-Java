@@ -8,6 +8,7 @@ import com.nimbusds.jose.proc.BadJOSEException;
 import com.nimbusds.jose.proc.JWSVerificationKeySelector;
 import com.nimbusds.jose.proc.SecurityContext;
 import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.proc.BadJWTException;
 import com.nimbusds.jwt.proc.DefaultJWTClaimsVerifier;
 import com.nimbusds.jwt.proc.DefaultJWTProcessor;
 import org.slf4j.Logger;
@@ -18,6 +19,8 @@ import org.springframework.stereotype.Component;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.text.ParseException;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
@@ -37,20 +40,42 @@ import java.util.Set;
 public class HydraJwtValidator {
 
     private static final Logger log = LoggerFactory.getLogger(HydraJwtValidator.class);
+    private static final String REQUIRED_SCOPE = "mcp";
 
     private final DefaultJWTProcessor<SecurityContext> processor;
 
     public HydraJwtValidator(@Value("${app.hydra.jwks-uri}") String jwksUri,
-                              @Value("${app.hydra.issuer}") String issuer) throws MalformedURLException {
+                              @Value("${app.hydra.issuer}") String issuer,
+                              @Value("${app.hydra.mcp-resource-url}") String resource) throws MalformedURLException {
         JWKSource<SecurityContext> jwkSource = new RemoteJWKSet<>(new URL(jwksUri));
         JWSVerificationKeySelector<SecurityContext> keySelector =
                 new JWSVerificationKeySelector<>(JWSAlgorithm.RS256, jwkSource);
 
         this.processor = new DefaultJWTProcessor<>();
         this.processor.setJWSKeySelector(keySelector);
-        this.processor.setJWTClaimsSetVerifier(new DefaultJWTClaimsVerifier<>(
-                new JWTClaimsSet.Builder().issuer(issuer).build(),
-                Set.of("sub", "exp")));
+        DefaultJWTClaimsVerifier<SecurityContext> standardClaims = new DefaultJWTClaimsVerifier<>(
+                new JWTClaimsSet.Builder().issuer(issuer).audience(resource).build(),
+                Set.of("sub", "exp", "aud"));
+        this.processor.setJWTClaimsSetVerifier((claims, context) -> {
+            standardClaims.verify(claims, context);
+            verifyMcpScope(claims);
+        });
+    }
+
+    private static void verifyMcpScope(JWTClaimsSet claims) throws BadJWTException {
+        try {
+            String scope = claims.getStringClaim("scope");
+            boolean containsMcpInScope = scope != null
+                    && Arrays.stream(scope.trim().split("\\s+"))
+                    .anyMatch(REQUIRED_SCOPE::equals);
+            List<String> scp = claims.getStringListClaim("scp");
+            boolean containsMcpInScp = scp != null && scp.contains(REQUIRED_SCOPE);
+            if (!containsMcpInScope && !containsMcpInScp) {
+                throw new BadJWTException("Missing required scope: " + REQUIRED_SCOPE);
+            }
+        } catch (ParseException e) {
+            throw new BadJWTException("Invalid scope claim", e);
+        }
     }
 
     /** Devuelve el claim "sub" (el userId que pasamos al aceptar el login), o vacio si el token no es valido. */

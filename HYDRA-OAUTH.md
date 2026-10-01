@@ -11,6 +11,16 @@ La integración mantiene compatibilidad con las API keys existentes. Un cliente
 MCP puede autenticarse con una API key `sk_hub_...` o con un access token JWT
 emitido por Hydra.
 
+## Estado verificado
+
+Al 2026-10-01, la integración tiene una verificación E2E reproducible: la suite
+`scripts/test-hydra-oauth.sh` terminó con `RESULT PASS checks=15 failures=0` y
+validó DCR, PKCE, discovery, login, consentimiento, intercambio de código,
+las tres operaciones MCP, tokens inválidos, usuario inactivo, logout y cambio
+obligatorio de contraseña. El backend terminó con 109 tests sin fallos; la
+verificación directa del frontend se ejecutó en `node:22-alpine` sobre una
+copia temporal del directorio y terminó con 12 tests y build exitosos.
+
 ## Arquitectura
 
 ```text
@@ -62,6 +72,13 @@ Las variables principales son:
 | `HYDRA_MCP_RESOURCE_URL` | Recurso protegido: `/api/mcp`. |
 | `HYDRA_PROTECTED_RESOURCE_METADATA_URL` | URL pública de metadata RFC 9728. |
 
+La configuración efectiva también impone PKCE para clientes públicos, usa el
+recurso `${PUBLIC_BASE_URL}/api/mcp`, anuncia el scope `mcp`, emite scopes JWT
+en formatos `scope` y `scp`, limita CORS público al origen de
+`PUBLIC_BASE_URL`, y mantiene el Admin API `4445` sólo en la red interna de
+Docker. `serve all --dev` queda reservado para HTTP local; con un issuer HTTPS
+se ejecuta `serve all` sin `--dev`.
+
 Los valores reales deben vivir en `.env` y no se commitean.
 
 ### Login y consentimiento
@@ -83,10 +100,19 @@ El login implementado es:
 6. El frontend consulta los datos del challenge a través de
    `GET /api/oauth/consent-request`.
 7. El usuario ve el cliente y los scopes solicitados.
-8. `Autorizar` llama a `POST /api/oauth/accept-consent`.
-9. `Rechazar` llama a `POST /api/oauth/reject-consent`.
-10. Hydra redirige al callback del cliente con un authorization code o con
+8. Si la cuenta exige cambio de contraseña, el login queda retenido en una
+   transacción efímera de un solo uso y el usuario continúa por
+   `/oauth/password-change`; la transacción se consume antes de aceptar el
+   login en Hydra.
+9. `Autorizar` llama a `POST /api/oauth/accept-consent`.
+10. `Rechazar` llama a `POST /api/oauth/reject-consent`.
+11. Hydra redirige al callback del cliente con un authorization code o con
     `access_denied`.
+
+El consentimiento consulta el challenge real en Hydra y sólo concede la
+intersección con `{openid, offline_access, mcp}`. También otorga como
+audiencia el recurso `${PUBLIC_BASE_URL}/api/mcp`; el navegador no puede
+ampliar scopes ni audiencia.
 
 El backend obtiene los scopes directamente desde Hydra. El navegador no puede
 modificar la lista de scopes que se otorga.
@@ -99,6 +125,11 @@ modificar la lista de scopes que se otorga.
 | `GET /api/oauth/consent-request` | Devuelve nombre del cliente y scopes seguros para la UI. |
 | `POST /api/oauth/accept-consent` | Acepta el consentimiento consultando los scopes en Hydra. |
 | `POST /api/oauth/reject-consent` | Rechaza con `access_denied`. |
+| `POST /api/oauth/password-change` | Completa el cambio obligatorio y continúa el login retenido. |
+| `POST /api/oauth/password-change/reject` | Invalida una continuación pendiente. |
+| `GET /api/oauth/logout-request` | Devuelve sólo datos seguros del `logout_challenge`. |
+| `POST /api/oauth/accept-logout` | Limpia la sesión local, invalida continuaciones y acepta el logout en Hydra. |
+| `POST /api/oauth/reject-logout` | Rechaza el logout y continúa al callback de Hydra. |
 | `GET /.well-known/oauth-protected-resource` | Metadata RFC 9728 del recurso MCP. |
 | `GET /.well-known/oauth-authorization-server` | Reenvía el discovery de Hydra bajo RFC 8414. |
 
@@ -108,8 +139,10 @@ modificar la lista de scopes que se otorga.
 
 - firma `RS256`;
 - issuer;
-- `sub`;
-- expiración (`exp`).
+- `sub` UUID;
+- expiración (`exp`);
+- audiencia igual a `HYDRA_MCP_RESOURCE_URL` (`${PUBLIC_BASE_URL}/api/mcp`);
+- scope `mcp`, en un claim `scope` string o `scp` como lista de strings.
 
 `OAuthIdentityService` usa el `sub` como UUID de usuario, busca la cuenta en
 `users` y exige `status = 'active'`. El resultado se adapta al mismo
@@ -117,6 +150,11 @@ modificar la lista de scopes que se otorga.
 
 El endpoint MCP devuelve `401` con `WWW-Authenticate` y el enlace a metadata
 cuando falta o es inválida la autenticación.
+
+Las API keys siguen el flujo anterior y no pasan por la validación JWT. La
+identidad OAuth sólo se acepta cuando coinciden firma, issuer, expiración,
+subject, audiencia/recurso y scope; registrar un cliente no crea una sesión,
+no autentica un usuario y no concede acceso a `/api/mcp`.
 
 ## Discovery y superficie pública
 
@@ -177,10 +215,11 @@ La primera cuenta registrada en una base limpia es administradora. El volumen
 `skill-hub-angular-java_pgdata` es local a cada host y no se sube al repositorio.
 Eliminarlo borra los datos locales, pero no afecta producción.
 
-## Cliente OAuth local de prueba
+## Registro dinámico y acceso
 
-Hydra tiene habilitado el Dynamic Client Registration para desarrollo local.
-Un cliente de prueba puede registrarse en:
+Hydra tiene habilitado el Dynamic Client Registration (DCR) también para el
+despliegue previsto. El registro no requiere una cuenta previa de Skill Hub y
+sólo crea una identidad técnica. Un cliente de prueba puede registrarse en:
 
 ```text
 POST http://localhost:8087/oauth2/register
@@ -189,6 +228,12 @@ POST http://localhost:8087/oauth2/register
 Debe usar Authorization Code + PKCE, `token_endpoint_auth_method: none`, un
 redirect URI local y `skip_consent: false` para probar la pantalla de
 consentimiento.
+
+Registrar el cliente y obtener acceso son operaciones distintas: después del
+DCR todavía se requiere login de un usuario activo, consentimiento explícito,
+PKCE y un intercambio válido del authorization code. El backend acepta en MCP
+únicamente el token destinado al recurso MCP y con scope `mcp`; por eso un
+cliente recién registrado no puede leer ni modificar datos.
 
 El cliente MCP debe configurarse con:
 
@@ -210,37 +255,63 @@ GET /api/mcp
   -> POST /api/mcp con Bearer JWT
 ```
 
-## Verificaciones realizadas
+## Ejecutar la suite E2E
 
-- `docker compose config --quiet`.
-- `mvn -DskipTests compile`.
-- `mvn -Dtest=OAuthControllerTest test`.
-- `npx tsc --noEmit -p tsconfig.app.json`.
-- `git diff --check`.
-- Build Docker de backend y frontend mediante `scripts/rebuild-app.sh`.
-- Hydra respondió saludable en `/health/ready`.
-- Metadata protegida y metadata del authorization server respondieron
-  correctamente.
-- Se registró un cliente local con `skip_consent=false`.
-- Se recreó una base local vacía y se reaplicaron las migraciones de Hydra y
-  Skill Hub.
+Desde la raíz del repositorio:
 
-El flujo completo con credenciales reales, intercambio de authorization code y
-llamada MCP autenticada todavía debe ejecutarse manualmente con un cliente
-OAuth/MCP.
+```bash
+scripts/test-hydra-oauth.sh
+```
 
-## Pendientes conocidos
+La suite crea el proyecto Docker aislado `skillhub-e2e`, con PostgreSQL,
+Hydra, backend, frontend/Caddy y un cliente Node sin dependencias externas.
+Usa puertos propios, genera secretos efímeros en `/tmp`, limpia sólo ese
+proyecto y escanea los logs sin imprimir passwords, tokens, client secrets,
+challenges ni valores del `.env`. La ejecución verificada terminó con 15/15
+checks aprobados y código 0; el detalle de pasos está en
+[`e2e/oauth/README.md`](e2e/oauth/README.md).
 
-El seguimiento detallado está en
-[`OAUTH-HYDRA-CHECKLIST.md`](OAUTH-HYDRA-CHECKLIST.md). Los principales
-pendientes son:
+## Diagnóstico y rollback
 
-- implementar logout OAuth;
-- completar pruebas end-to-end automatizadas;
-- validar audiencia, recurso y scopes del JWT;
-- impedir que OAuth saltee el cambio obligatorio de contraseña;
-- endurecer DCR, CORS y el modo `--dev` antes de producción;
-- ejecutar la prueba real de autorización, rechazo y llamada MCP.
+Para un fallo de la suite, consultar primero el estado del proyecto aislado:
 
-Hydra/OAuth no debe considerarse listo para producción hasta cerrar esos
-pendientes.
+```bash
+docker compose -p skillhub-e2e ps
+docker compose -p skillhub-e2e logs --no-color
+```
+
+No usar `docker compose down` sin el proyecto `-p skillhub-e2e`. El script
+limpia automáticamente sólo sus contenedores y volúmenes. Para repetir un
+flujo local, verificar `/health/ready`, discovery, `HYDRA_MCP_RESOURCE_URL`,
+issuer, CORS y la salud del backend; no copiar secretos de los logs.
+
+El rollback de aplicación consiste en volver al artefacto o imagen anterior y
+reiniciar el stack conservando las bases existentes. No borrar `pgdata` en un
+entorno compartido: eliminar ese volumen sólo descarta datos locales y exige
+recrear ambas bases. Los clientes DCR ya registrados y sus redirect URIs se
+administran en Hydra; un rollback no debe eliminar clientes sin una decisión
+operativa explícita.
+
+## Riesgos residuales y criterio de producción
+
+- DCR no tiene todavía rate limiting específico: el spam y los registros
+  masivos quedan pospuestos como riesgo operativo. Deben monitorizarse y
+  mitigarse antes de exponer el endpoint a tráfico no confiable.
+- Hydra 2.2 no ofrece una allow-list global para `grant_types` ni para limitar
+  globalmente el `scope` declarado por DCR. El control compensatorio vigente es
+  filtrar scopes/audiencia en el consentimiento y validar recurso y `mcp` en
+  `/api/mcp`.
+- Las transacciones de cambio obligatorio de contraseña viven en memoria y no
+  son distribuidas: un reinicio o una réplica distinta invalida una
+  continuación pendiente; el usuario debe reiniciar OAuth.
+- El Node local 22.12.0 es menor que el mínimo requerido por Angular CLI 22.
+  La suite frontend se verificó con Node 22.23.3 en `node:22-alpine`, sin
+  modificar `package.json`, el Node del sistema ni `node_modules` del repo.
+
+Se puede considerar producción sólo cuando la configuración use issuer HTTPS,
+CORS explícito, `serve all` sin `--dev`, Admin API 4445 interno, secretos
+externos y la suite E2E termine con código 0. La checklist debe conservar
+evidencia de cada criterio y una decisión operativa sobre el riesgo de DCR;
+no se requiere bloquear el cierre documental por implementar rate limiting
+avanzado, pero sí debe quedar aceptado y monitoreado por el responsable de
+producción.

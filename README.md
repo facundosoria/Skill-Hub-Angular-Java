@@ -7,7 +7,7 @@ Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-b
 
 | | |
 |---|---|
-| `backend/` | Spring Boot 3.4 (Java 21, Maven). MCP + API REST completos, 38 tests en verde. |
+| `backend/` | Spring Boot 3.4 (Java 21, Maven). MCP + API REST + OAuth/Hydra completos, 109 tests en verde. |
 | `frontend/` | Angular 22 (standalone, signals, zoneless) + Tailwind 4. **Todas las pantallas portadas y verificadas e2e.** |
 
 ## Frontend (`frontend/`)
@@ -59,9 +59,11 @@ El spike valida las dos incógnitas de mayor riesgo del plan:
    `ts_rank × boost`, el período de gracia. Los 17 tests de integración pasan.
 
 ```
-McpIntegrationTest   23 tests   (MCP end-to-end)
-RestApiIntegrationTest 15 tests  (auth + API REST)
--> 38 en verde
+McpIntegrationTest      43 tests   (MCP end-to-end)
+RestApiIntegrationTest  26 tests  (auth + API REST)
+OAuth tests              35 tests  (JWT, consentimiento, logout y cambio de contraseña)
+LanguageDetectorTest     5 tests   (regresión de skills)
+-> 109 en verde
 ```
 
 ## Cómo correr
@@ -79,6 +81,28 @@ Env del server: `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD`, `SESSION_SE
 
 El toolchain de esta máquina: Temurin JDK 21 (`winget`), Maven 3.9.9 en `C:\Tools`
 (no está en winget, se bajó a mano). `JAVA_HOME` y el `PATH` quedaron seteados a nivel usuario.
+
+## OAuth/Hydra para MCP
+
+La autenticación OAuth para `POST /api/mcp` usa Hydra con Authorization Code +
+PKCE. El DCR está habilitado y no requiere una cuenta Skill Hub previa, pero
+registrar un cliente sólo crea una identidad técnica: el acceso exige login de
+un usuario activo, consentimiento, PKCE y un token con issuer, subject,
+audiencia/recurso `${PUBLIC_BASE_URL}/api/mcp` y scope `mcp` (`scope` o `scp`).
+Las API keys existentes siguen funcionando.
+
+Para ejecutar la suite completa, desde la raíz:
+
+```bash
+scripts/test-hydra-oauth.sh
+```
+
+La suite levanta un proyecto Compose aislado y valida discovery, DCR, PKCE,
+login, consentimiento, MCP, negativos JWT, logout y cambio obligatorio de
+contraseña. El procedimiento operativo, diagnóstico y rollback están en
+[`HYDRA-OAUTH.md`](HYDRA-OAUTH.md), la checklist con evidencia en
+[`OAUTH-HYDRA-CHECKLIST.md`](OAUTH-HYDRA-CHECKLIST.md) y el detalle de la suite
+en [`e2e/oauth/README.md`](e2e/oauth/README.md).
 
 ## Qué cubre el spike (y qué no)
 

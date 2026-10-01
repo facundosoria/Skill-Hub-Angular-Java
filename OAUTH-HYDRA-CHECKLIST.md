@@ -1,92 +1,90 @@
-# Checklist de implementación Hydra/OAuth
+# Checklist de cierre Hydra/OAuth
 
-Seguimiento de los pendientes detectados en la revisión de Hydra/OAuth para el
-endpoint MCP. Marcar una tarea sólo cuando su criterio de aceptación haya sido
-verificado.
+Guía operativa para el endpoint MCP. Los estados permitidos son `pendiente`,
+`en progreso`, `aprobado` y `bloqueado`; `aprobado` exige evidencia reproducible
+en código, test o un paso de la suite E2E.
 
 ## Estado actual
 
-- **Última revisión:** 2026-09-29
-- **Estado:** implementación base disponible; pendientes de cierre
-- **Fuente relacionada:** `docker-compose.yml`, `backend/src/main/java/com/skillhub/oauth/`, `frontend/src/app/features/auth/` y `frontend/Caddyfile`
+- **Última revisión:** 2026-10-01
+- **Estado:** aprobado con riesgos operativos documentados
+- **Fuente relacionada:** `HYDRA-OAUTH.md`, `docker-compose.yml`, `backend/src/main/java/com/skillhub/oauth/`, `frontend/src/app/features/auth/`, `scripts/test-hydra-oauth.sh` y `e2e/oauth/README.md`
 
-## Pendientes
+## Resultado de verificación
 
-### 1. Completar consentimiento OAuth
+La suite `scripts/test-hydra-oauth.sh` terminó con `RESULT PASS checks=15
+failures=0` y código 0. El frontend se verificó en una copia temporal con
+`node:22-alpine` (Node 22.23.3): `npm ci` código 0, 4 archivos/12 tests
+aprobados y `npm run build` código 0. El backend terminó con 109 tests, 0
+fallos, 0 errores y 0 omitidos.
 
-- [x] Crear la ruta frontend `/oauth/consent`.
-- [x] Mostrar el `consent_challenge` y los scopes solicitados.
-- [x] Conectar la pantalla con `POST /api/oauth/accept-consent`.
-- [x] Redirigir al `redirectTo` devuelto por Hydra.
-- [ ] Verificar el flujo con un cliente OAuth/MCP real.
+Los warnings CSS de presupuesto del build son preexistentes y no alteran el
+resultado. El Node local 22.12.0 queda registrado como limitación de entorno;
+no se modificaron `package.json`, tests ni el Node del sistema.
 
-**Criterio de listo:** un cliente que no use `skip_consent` puede completar login, consentimiento y volver correctamente a su callback.
+## Criterios documentales (Fase 7)
 
-### 2. Completar logout OAuth
+| Criterio | Estado | Evidencia |
+|---|---|---|
+| 7.1 Actualizar `HYDRA-OAUTH.md` | aprobado | `HYDRA-OAUTH.md`: estado, controles, E2E, diagnóstico, rollback, riesgos y producción. |
+| 7.2 Actualizar esta checklist | aprobado | Esta tabla y los criterios finales conservan estado y evidencia. |
+| 7.3 Corregir README obsoleto | aprobado | `README.md`: conteo backend actualizado y sección OAuth/Hydra enlazada. |
+| 7.4 DCR sin cuenta previa | aprobado | `HYDRA-OAUTH.md` y E2E 5.2; registro público sin login. |
+| 7.5 Separar registro de acceso | aprobado | `HYDRA-OAUTH.md` y E2E 5.2/5.7/5.8; DCR no crea sesión ni acceso MCP. |
+| 7.6 Controles de seguridad | aprobado | `HYDRA-OAUTH.md`; `HydraJwtValidatorTest`, `McpOAuthIntegrationTest`, `HydraAdminClientConsentTest`; E2E 5.3, 5.6 y 5.12. |
+| 7.7 Riesgo de spam pospuesto | aprobado | `HYDRA-OAUTH.md`, sección “Riesgos residuales y criterio de producción”. |
+| 7.8 Ejecución E2E | aprobado | `e2e/oauth/README.md`, `scripts/test-hydra-oauth.sh`, salida final 15/15. |
+| 7.9 Diagnóstico y rollback | aprobado | `HYDRA-OAUTH.md`, sección “Diagnóstico y rollback”. |
+| 7.10 Criterio de producción | aprobado | `HYDRA-OAUTH.md`, sección “Riesgos residuales y criterio de producción”. |
 
-- [ ] Definir el comportamiento esperado para `/oauth/logout`.
-- [ ] Crear la ruta o handler correspondiente.
-- [ ] Resolver el `logout_challenge` con Hydra cuando corresponda.
-- [ ] Verificar que el logout no exponga ni conserve datos de sesión.
+## Criterios finales (7.17–7.32)
 
-**Criterio de listo:** Hydra puede completar un logout iniciado por un cliente sin terminar en una ruta inexistente.
+| Criterio | Estado | Evidencia |
+|---|---|---|
+| 7.17 Un cliente puede registrarse sin cuenta | aprobado | E2E 5.2: DCR público devuelve cliente sin login previo. |
+| 7.18 El registro no permite acceder a datos | aprobado | E2E 5.2: cliente sin login recibe 401 en MCP; E2E 5.8–5.10 sólo pasan con token válido. |
+| 7.19 Sólo usuario activo, autenticado y con consentimiento obtiene token | aprobado | E2E 5.5–5.7 y 5.13: login, consentimiento, code exchange y usuario inactivo rechazado. |
+| 7.20 PKCE, issuer, audiencia, recurso, subject y scope validados | aprobado | `HydraJwtValidatorTest`, `McpOAuthIntegrationTest`; E2E 5.3, 5.4 y 5.12; `scope`/`scp` y recurso MCP configurados. |
+| 7.21 Logout funciona | aprobado | `OAuthLogoutTest`, `HydraAdminClientLogoutTest`; E2E 5.11: callback, cookie eliminada y `/api/auth/me` 401. |
+| 7.22 Cambio obligatorio no se puede saltar | aprobado | `OAuthPasswordChangeFlowTest`; E2E 5.15: no token antes y token sólo después del cambio. |
+| 7.23 API keys y login web siguen funcionando | aprobado | `McpIntegrationTest`, `RestApiIntegrationTest`; E2E 5.14; backend 109 tests. |
+| 7.24 Suite E2E completa desde entorno limpio | aprobado | `scripts/test-hydra-oauth.sh`: proyecto Compose aislado, `RESULT PASS checks=15 failures=0`, código 0; logs sin secretos. |
+| 7.25 Checklist con evidencia de cada criterio aprobado | aprobado | Tablas de criterios documentales y finales de este archivo. |
+| 7.26 DCR habilitado en producción | aprobado | `docker-compose.yml`: DCR habilitado; E2E 5.2. |
+| 7.27 No se exige cuenta Skill Hub antes de DCR | aprobado | `HYDRA-OAUTH.md` y E2E 5.2. |
+| 7.28 PKCE obligatorio | aprobado | `docker-compose.yml` (`OAUTH2_PKCE_ENFORCED_FOR_PUBLIC_CLIENTS=true`); E2E 5.3 valida rechazo al finalizar authorize/token exchange. |
+| 7.29 Scope único obligatorio `mcp` | aprobado | `HydraJwtValidator` exige `mcp` en `scope` o `scp`; consentimiento filtra scopes; E2E 5.8–5.12. |
+| 7.30 Rate limiting/spam pospuestos y documentados | aprobado | `HYDRA-OAUTH.md`: riesgo residual, monitoreo y criterio de producción explícitos. |
+| 7.31 Registrar cliente no concede acceso MCP | aprobado | E2E 5.2/5.8; validación JWT exige usuario activo, recurso y scope. |
+| 7.32 Consentimiento obligatorio | aprobado | `OAuthControllerTest`, `HydraAdminClientConsentTest`; E2E 5.6 rechazo explícito y 5.7 code exchange sólo tras aceptar. |
 
-### 3. Agregar pruebas end-to-end de Hydra/OAuth
+## Riesgos residuales
 
-- [ ] Levantar Hydra y PostgreSQL en un entorno reproducible de pruebas.
-- [ ] Registrar o provisionar un cliente OAuth de prueba.
-- [ ] Probar authorization code + PKCE.
-- [ ] Probar login y consentimiento.
-- [ ] Probar intercambio del código por token.
-- [ ] Probar llamada autenticada a `/api/mcp` con JWT.
-- [ ] Probar token expirado, inválido, usuario inactivo y API key existente.
+- Rate limiting específico de DCR y mitigación avanzada de spam quedan
+  pospuestos; registrar y monitorear el riesgo antes de tráfico no confiable.
+- Hydra 2.2 no limita globalmente `grant_types` ni `scope` en DCR; el control
+  compensatorio es el filtrado en consentimiento y la validación de audiencia,
+  recurso y `mcp` en `/api/mcp`.
+- Las transacciones de cambio obligatorio viven en memoria y no son
+  distribuidas entre réplicas; un reinicio invalida una continuación pendiente.
+- El Node local 22.12.0 es menor al requerido por Angular CLI 22; Paso A se
+  aprobó con Node 22.23.3 en `node:22-alpine` sobre una copia temporal.
 
-**Criterio de listo:** el flujo completo pasa automáticamente y cubre los casos positivos y negativos principales.
+## Operación
 
-### 4. Validar audiencia, recurso y scopes del token
+Para el flujo completo usar:
 
-- [ ] Confirmar los claims reales que emite Hydra para el flujo MCP.
-- [ ] Definir la audiencia/recurso autorizado para `/api/mcp`.
-- [ ] Validar `aud` y/o el claim de recurso en el backend.
-- [ ] Definir y validar los scopes mínimos requeridos por MCP.
-- [ ] Agregar pruebas para tokens emitidos para otro cliente o recurso.
+```bash
+scripts/test-hydra-oauth.sh
+```
 
-**Criterio de listo:** `/api/mcp` rechaza tokens firmados por Hydra que no hayan sido emitidos para este recurso o que no tengan los permisos requeridos.
+Para diagnosticar sin exponer secretos: `docker compose -p skillhub-e2e ps` y
+`docker compose -p skillhub-e2e logs --no-color`; no usar `down` sobre otro
+proyecto. El rollback conserva las bases existentes y vuelve a la imagen o
+artefacto anterior; no eliminar `pgdata` compartido.
 
-### 5. Respetar el cambio obligatorio de contraseña en OAuth
+## Historial de cierre
 
-- [ ] Detectar cuentas con `must_change_password` durante `acceptLogin`.
-- [ ] Evitar emitir autorización OAuth para una contraseña temporal.
-- [ ] Diseñar la continuación del flujo después del cambio de contraseña.
-- [ ] Verificar que una cuenta activa con contraseña definitiva siga funcionando.
-
-**Criterio de listo:** ninguna cuenta con cambio obligatorio pendiente puede obtener un token OAuth antes de completar el cambio de contraseña.
-
-### 6. Endurecer la configuración para producción
-
-- [ ] Definir una política de clientes, redirect URIs y registro dinámico.
-- [ ] Decidir si DCR pública es realmente necesaria; restringirla o desactivarla si no lo es.
-- [ ] Reemplazar `SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: "*"` por orígenes explícitos.
-- [ ] Revisar el uso de `serve all --dev` para producción.
-- [ ] Confirmar secretos, TLS, issuer público y URLs de callback reales.
-- [ ] Verificar que el puerto admin `4445` no sea accesible desde fuera de Docker.
-
-**Criterio de listo:** la configuración de producción está documentada, revisada y no deja registro público, CORS abierto o modo desarrollo sin justificación.
-
-### 7. Cerrar y dejar trazable la implementación
-
-- [ ] Revisar todos los cambios locales relacionados con Hydra/OAuth.
-- [ ] Confirmar que no haya secretos, tokens ni valores de producción hardcodeados.
-- [ ] Ejecutar las verificaciones disponibles y registrar sus resultados.
-- [ ] Resolver o documentar los fallos de entorno de las pruebas.
-- [ ] Actualizar README/documentación operativa con el procedimiento de despliegue.
-- [ ] Crear el commit de cierre cuando los pendientes anteriores estén completos.
-
-**Criterio de listo:** el estado del repositorio, las verificaciones y las limitaciones conocidas quedan documentados y reproducibles.
-
-## Registro de avances
-
-| Fecha | Tarea | Cambio realizado | Verificación | Estado |
-|---|---|---|---|---|
-| 2026-09-29 | Checklist inicial | Se documentaron los siete pendientes | Revisión de código y `docker compose config --quiet` | Pendiente |
-| 2026-09-29 | Consentimiento OAuth | Se agregó consulta segura de scopes, aprobación/rechazo y ruta Angular | TypeScript, compilación Java, `OAuthControllerTest` y `git diff --check` | Implementación lista; falta prueba real |
+| Fecha | Tarea | Verificación | Estado |
+|---|---|---|---|
+| 2026-10-01 | Cierre documental P7 | Paso A en Node 22.23.3 Docker; E2E 15/15; backend 109 tests; `git diff --check` | Aprobado |

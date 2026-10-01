@@ -32,6 +32,16 @@ export const routes: Routes = [
     loadComponent: () => import('./features/auth/oauth-consent').then((m) => m.OauthConsent),
   },
   {
+    // Cuenta temporal: el login_challenge queda retenido en backend hasta cambiar la contrasena.
+    path: 'oauth/password-change',
+    loadComponent: () => import('./features/auth/oauth-password-change').then((m) => m.OauthPasswordChange),
+  },
+  {
+    // Hydra redirige aca con logout_challenge para confirmar el cierre de la sesion OAuth.
+    path: 'oauth/logout',
+    loadComponent: () => import('./features/auth/oauth-logout').then((m) => m.OauthLogout),
+  },
+  {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./layout/shell').then((m) => m.Shell),
