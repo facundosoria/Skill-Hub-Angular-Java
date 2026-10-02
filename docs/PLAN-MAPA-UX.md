@@ -11,7 +11,7 @@ Origen: `docs/AUDITORIA-UX-MAPA.md`. Fuera de alcance por decisión del usuario:
    - Si **falla**: no hay deploy ni commit; se vuelve al paso 1 con los defectos encontrados.
 3. El orquestador valida la evidencia (reportes y capturas) y actualiza este documento.
 
-**Commits:** rama `feat/mapa-ux`, un commit por fase. Push solo si el usuario lo pide.
+**Commits:** rama `feat/mapa-ux`, un commit por fase. Push y PR realizados en el cierre (R1): push publicado en `origin`; PR a `master` pendiente por falta de `gh`/token.
 
 ## Fases
 
@@ -29,7 +29,7 @@ Origen: `docs/AUDITORIA-UX-MAPA.md`. Fuera de alcance por decisión del usuario:
 
 ## Cierre (2026-10-02)
 
-Las 6 fases (0–5) están completas, verificadas en navegador y desplegadas en skillhub.rcoleman.me, en la rama `feat/mapa-ux` (sin push). Commits: `c5269b1`, `37b2790`, `eb1b4f4`, `f4d5905`, `05dad19`, `d03cc19`, `a8e3187`, `e4b6c9b`, `4ff0c0d`, `3bc649b`.
+Las 6 fases (0–5) están completas, verificadas en navegador y desplegadas en skillhub.rcoleman.me, en la rama `feat/mapa-ux` (publicada en `origin` en el cierre R1; PR a `master` pendiente por falta de `gh`/token). Commits: `c5269b1`, `37b2790`, `eb1b4f4`, `f4d5905`, `05dad19`, `d03cc19`, `a8e3187`, `e4b6c9b`, `4ff0c0d`, `3bc649b`, `4dc5c00`.
 
 **Pendiente, fuera de este plan:**
 - Vista celular: MAP-01, MAP-10 y MAP-11 en móvil.
