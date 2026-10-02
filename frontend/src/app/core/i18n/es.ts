@@ -662,6 +662,12 @@ export const es = {
     sinConexionCorta: "Sin conexión",
     opcionPendiente: "Pendiente",
     opcionADefinir: "A definir",
+    ajustar: "Ajustar",
+    zoomIn: "Acercar",
+    zoomOut: "Alejar",
+    controlesAria: "Controles del mapa",
+    verCompleto: "Ver mapa completo",
+    enfocarGrupo: "Enfocar mi grupo",
   },
 } as const;
 

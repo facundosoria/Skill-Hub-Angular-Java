@@ -77,6 +77,7 @@ export class DepMapStore {
   readonly mine = signal(this.readPreference(MINE_KEY, 'usr'));
   readonly node = signal<string | null>(null);
   readonly pair = signal<[string, string] | null>(null);
+  readonly fullMap = signal(false);
   readonly online = signal(false);
   readonly sseOpen = signal(false);
   readonly offline = signal(false);
@@ -162,6 +163,7 @@ export class DepMapStore {
     this.mine.set(mine);
     this.node.set(mine);
     this.pair.set(null);
+    this.fullMap.set(false);
     this.writePreference(MINE_KEY, mine);
   }
 
@@ -176,10 +178,23 @@ export class DepMapStore {
     });
   }
 
-  selectNode(node: string): void { this.node.set(node); this.pair.set(null); }
-  selectPair(pair: [string, string]): void { this.pair.set(pair); }
-  clearSelection(): void { this.node.set(null); this.pair.set(null); }
+  selectNode(node: string): void { this.fullMap.set(false); this.node.set(node); this.pair.set(null); }
+  selectPair(pair: [string, string]): void { this.fullMap.set(false); this.pair.set(pair); }
+  clearSelection(): void { this.fullMap.set(false); this.node.set(null); this.pair.set(null); }
   clearPair(): void { this.pair.set(null); }
+
+  /** Toggles "view full map": no selection, no dimming. Exits by selecting or focusing a group. */
+  toggleFullMap(): void {
+    if (this.fullMap()) {
+      this.fullMap.set(false);
+      this.node.set(this.mine());
+      this.pair.set(null);
+    } else {
+      this.fullMap.set(true);
+      this.node.set(null);
+      this.pair.set(null);
+    }
+  }
 
   async addEdge(body: Pick<DepMapEdge, 'from' | 'to' | 'kind' | 'state' | 'text'>): Promise<void> {
     await firstValueFrom(this.api.post('/depmap/edges', body));
@@ -235,7 +250,7 @@ export class DepMapStore {
       const first = Object.keys(state.nodes).find((id) => !state.nodes[id].transv) ?? Object.keys(state.nodes)[0];
       if (first) this.mine.set(first);
     }
-    if (!this.node() && this.mine()) this.node.set(this.mine());
+    if (!this.fullMap() && !this.node() && this.mine()) this.node.set(this.mine());
     if (!this.kindsOn().size || [...this.kindsOn()].some((kind) => !state.kinds[kind])) this.kindsOn.set(new Set(Object.keys(state.kinds)));
   }
 

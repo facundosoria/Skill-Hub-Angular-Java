@@ -1,10 +1,18 @@
 import {
+  clampPan,
+  clampScale,
+  clampTransform,
   edgeClass,
   edgeStrokeWidth,
   geom,
   boxWithinViewBox,
   clampNode,
   clampNodes,
+  MAP_IDENTITY,
+  MAP_MAX_SCALE,
+  MAP_MIN_SCALE,
+  MAP_VIEWBOX_HEIGHT,
+  MAP_VIEWBOX_WIDTH,
   mineTagBox,
   NODE_COUNT_FONT_SIZE,
   NODE_HEIGHT,
@@ -14,8 +22,11 @@ import {
   nodeTextFits,
   nodeClass,
   pairs,
+  panBy,
   relationForTimestamp,
   touchedNodes,
+  zoomAt,
+  zoomedScale,
 } from './dep-map-geometry';
 
 describe('dep-map geometry', () => {
@@ -121,5 +132,42 @@ describe('dep-map geometry', () => {
     expect(relationForTimestamp('2025-12-31T23:59:30.000Z', now)).toBe('recién');
     expect(relationForTimestamp('2025-12-31T23:58:30.000Z', now)).toBe('hace 2 min');
     expect(relationForTimestamp('2025-12-30T00:00:00.000Z', now)).toBe('hace 2 d');
+  });
+});
+
+describe('dep-map zoom and pan math', () => {
+  it('steps zoom by 1.25 and clamps to the 1x..3x range', () => {
+    expect(zoomedScale(1, 1)).toBeCloseTo(1.25, 10);
+    expect(zoomedScale(1.25, 1)).toBeCloseTo(1.5625, 10);
+    expect(zoomedScale(MAP_MAX_SCALE, 1)).toBe(MAP_MAX_SCALE);
+    expect(zoomedScale(1.1, -1)).toBe(MAP_MIN_SCALE);
+    expect(clampScale(0.2)).toBe(MAP_MIN_SCALE);
+    expect(clampScale(9)).toBe(MAP_MAX_SCALE);
+    expect(clampScale(Number.NaN)).toBe(MAP_MIN_SCALE);
+  });
+
+  it('bounds pan so the scaled drawing always covers the viewport', () => {
+    expect(clampPan(120, 1, MAP_VIEWBOX_WIDTH)).toBe(0);
+    expect(clampPan(500, 2, MAP_VIEWBOX_WIDTH)).toBe(0);
+    expect(clampPan(-500, 2, MAP_VIEWBOX_WIDTH)).toBe(-500);
+    expect(clampPan(-2_000, 2, MAP_VIEWBOX_WIDTH)).toBe(-MAP_VIEWBOX_WIDTH);
+    expect(clampPan(80, 2, MAP_VIEWBOX_HEIGHT)).toBe(0);
+    expect(clampPan(-800, 2, MAP_VIEWBOX_HEIGHT)).toBe(-MAP_VIEWBOX_HEIGHT);
+  });
+
+  it('keeps the focus point fixed while zooming and re-clamps the result', () => {
+    const focusX = 700, focusY = 500;
+    const zoomed = zoomAt(MAP_IDENTITY, 2, focusX, focusY);
+    expect(zoomed.scale).toBe(2);
+    expect(focusX * zoomed.scale + zoomed.x).toBeCloseTo(focusX, 10);
+    expect(focusY * zoomed.scale + zoomed.y).toBeCloseTo(focusY, 10);
+    expect(zoomed.x).toBe(-700);
+    expect(zoomed.y).toBe(-500);
+  });
+
+  it('clamps panBy moves and resets to the origin at 1x', () => {
+    const panned = panBy({ scale: 2, x: -100, y: -100 }, -10_000, 5_000);
+    expect(panned).toEqual({ scale: 2, x: -MAP_VIEWBOX_WIDTH, y: 0 });
+    expect(clampTransform({ scale: 1, x: 40, y: -40 })).toEqual({ scale: 1, x: 0, y: 0 });
   });
 });

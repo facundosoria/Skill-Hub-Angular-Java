@@ -666,5 +666,11 @@ export const en: Dict = {
     sinConexionCorta: "Offline",
     opcionPendiente: "Pending",
     opcionADefinir: "To define",
+    ajustar: "Fit",
+    zoomIn: "Zoom in",
+    zoomOut: "Zoom out",
+    controlesAria: "Map controls",
+    verCompleto: "View full map",
+    enfocarGrupo: "Focus my group",
   },
 };

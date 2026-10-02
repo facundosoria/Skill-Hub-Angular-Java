@@ -218,3 +218,58 @@ export function nodeClass(
 export function edgeStrokeWidth(count: number): string {
   return (1.2 + Math.min(count, 6) * 0.45).toFixed(2);
 }
+
+export const MAP_MIN_SCALE = 1;
+export const MAP_MAX_SCALE = 3;
+export const MAP_ZOOM_STEP = 1.25;
+export const MAP_PAN_THRESHOLD = 4;
+
+export interface MapTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export const MAP_IDENTITY: MapTransform = { scale: MAP_MIN_SCALE, x: 0, y: 0 };
+
+export function clampScale(scale: number): number {
+  if (!Number.isFinite(scale)) return MAP_MIN_SCALE;
+  return Math.min(MAP_MAX_SCALE, Math.max(MAP_MIN_SCALE, scale));
+}
+
+/** One zoom step in `direction` (+1 in, -1 out), clamped to the allowed range. */
+export function zoomedScale(scale: number, direction: 1 | -1): number {
+  return clampScale(direction > 0 ? scale * MAP_ZOOM_STEP : scale / MAP_ZOOM_STEP);
+}
+
+/**
+ * Keeps the scaled drawing covering the viewport: after `translate(t) scale(s)`
+ * the content spans `[t, t + size * s]`, so `t` must stay in `[size*(1-s), 0]`.
+ */
+export function clampPan(value: number, scale: number, size: number): number {
+  if (scale <= MAP_MIN_SCALE) return 0;
+  return Math.min(0, Math.max(size * (1 - scale), value));
+}
+
+export function clampTransform(transform: MapTransform): MapTransform {
+  const scale = clampScale(transform.scale);
+  return {
+    scale,
+    x: clampPan(transform.x, scale, MAP_VIEWBOX_WIDTH),
+    y: clampPan(transform.y, scale, MAP_VIEWBOX_HEIGHT),
+  };
+}
+
+/** Zooms to `nextScale` keeping the map point (`focusX`, `focusY`) fixed on screen. */
+export function zoomAt(transform: MapTransform, nextScale: number, focusX: number, focusY: number): MapTransform {
+  const scale = clampScale(nextScale);
+  return clampTransform({
+    scale,
+    x: transform.x + focusX * (transform.scale - scale),
+    y: transform.y + focusY * (transform.scale - scale),
+  });
+}
+
+export function panBy(transform: MapTransform, dx: number, dy: number): MapTransform {
+  return clampTransform({ scale: transform.scale, x: transform.x + dx, y: transform.y + dy });
+}
