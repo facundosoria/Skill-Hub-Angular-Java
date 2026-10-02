@@ -1,5 +1,18 @@
-export const NODE_WIDTH = 168;
-export const NODE_HEIGHT = 52;
+export const NODE_WIDTH = 200;
+export const NODE_HEIGHT = 64;
+export const NODE_TEXT_X = 14;
+export const NODE_TEXT_RIGHT_PADDING = 14;
+export const NODE_NAME_FONT_SIZE = 16;
+export const NODE_COUNT_FONT_SIZE = 13;
+
+/** Conservative SVG text-width estimate used by the geometry tests. */
+export function estimateTextWidth(text: string, fontSize: number): number {
+  return text.length * fontSize * 0.56;
+}
+
+export function nodeTextFits(text: string, fontSize: number): boolean {
+  return estimateTextWidth(text, fontSize) <= NODE_WIDTH - NODE_TEXT_X - NODE_TEXT_RIGHT_PADDING;
+}
 
 export interface GeometryNode {
   x: number;
