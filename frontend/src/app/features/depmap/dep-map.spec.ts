@@ -38,6 +38,20 @@ describe('DepMap fit-height estimation', () => {
     expect(shouldFitMap(0.59, true)).toBe(true);
     expect(shouldFitMap(0.57, true)).toBe(false);
   });
+
+  it('fits by height when a wide card still has limited viewport height', () => {
+    const estimatedScale = estimateMapScale({
+      ...baseMeasurements,
+      cardWidth: 1800,
+      cardTop: 300,
+      viewportHeight: 900,
+      legendHeight: 65,
+    });
+
+    expect(estimatedScale).toBeLessThan(1);
+    expect(estimatedScale).toBeGreaterThanOrEqual(0.6);
+    expect(shouldFitMap(estimatedScale, false)).toBe(true);
+  });
 });
 
 describe('DepMap offline controls', () => {
@@ -86,6 +100,19 @@ describe('DepMap offline controls', () => {
     expect([...root.querySelectorAll<HTMLButtonElement>('button[aria-label="Eliminar dependencia"]')].every((button) => button.disabled)).toBe(true);
     expect(matching('Datos').every((button) => !button.disabled)).toBe(true);
     expect(matching('Copiar').every((button) => !button.disabled)).toBe(true);
+  });
+
+  it('keeps dependency removal buttons accessible and touch-sized', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const buttons = [...root.querySelectorAll<HTMLButtonElement>('button.x')];
+
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(buttons.every((button) => button.getAttribute('aria-label') === 'Eliminar dependencia')).toBe(true);
+    expect(buttons.every((button) => button.classList.contains('x'))).toBe(true);
+    expect(buttons.every((button) => {
+      const style = getComputedStyle(button);
+      return style.display === 'inline-flex' && style.width === '32px' && style.height === '32px';
+    })).toBe(true);
   });
 
   it('clears the pair with Escape while preserving its node selection', () => {
@@ -141,5 +168,40 @@ describe('DepMap offline controls', () => {
     expect(panel).toBeTruthy();
     expect(graph).toBeTruthy();
     expect(map).toBeTruthy();
+  });
+
+  it('keeps the group selector synchronized with the store preference', () => {
+    const select = fixture.nativeElement.querySelector('select[name="mine"]') as HTMLSelectElement;
+    expect(select.value).toBe(fixture.componentInstance.store.mine());
+    fixture.componentInstance.store.setMine('ops');
+    fixture.detectChanges();
+    expect(select.value).toBe('ops');
+  });
+
+  it('toggles and persists the collapsible details panel', () => {
+    const toggle = fixture.nativeElement.querySelector('.panel-toggle') as HTMLButtonElement;
+    expect(toggle.parentElement?.classList.contains('flex')).toBe(true);
+    expect(toggle.textContent).not.toContain('·');
+    expect(toggle.querySelector('.panel-toggle__badge')).toBeNull();
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    toggle.click();
+    fixture.detectChanges();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.querySelector('.panel-toggle__badge')?.getAttribute('aria-hidden')).toBe('true');
+    expect(toggle.querySelector('.sr-only')?.textContent).toContain('Hay un detalle seleccionado');
+    expect(localStorage.getItem('depmap-panel-collapsed')).toBe('true');
+    expect(fixture.nativeElement.querySelector('.workspace')?.classList.contains('panel-collapsed')).toBe(true);
+  });
+
+  it('returns focus to the data dialog opener when it closes', async () => {
+    const opener = [...fixture.nativeElement.querySelectorAll('button')].find((button) => button.textContent?.includes('Importar/Exportar')) as HTMLButtonElement;
+    opener.focus();
+    const dialog = fixture.componentInstance.dataDialog.nativeElement as HTMLDialogElement & { showModal: () => void; close: () => void };
+    dialog.showModal = vi.fn();
+    dialog.close = vi.fn();
+    fixture.componentInstance.openData();
+    fixture.componentInstance.close(fixture.componentInstance.dataDialog.nativeElement);
+    await Promise.resolve();
+    expect(document.activeElement).toBe(opener);
   });
 });

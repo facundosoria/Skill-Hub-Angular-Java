@@ -672,5 +672,11 @@ export const en: Dict = {
     controlesAria: "Map controls",
     verCompleto: "View full map",
     enfocarGrupo: "Focus my group",
+    mostrarDetalle: "Show details",
+    ocultarDetalle: "Hide details",
+    detalleCorto: "Details",
+    mostrarPanelDetalle: "Show details panel",
+    ocultarPanelDetalle: "Hide details panel",
+    detalleSeleccionado: "A detail is selected",
   },
 };

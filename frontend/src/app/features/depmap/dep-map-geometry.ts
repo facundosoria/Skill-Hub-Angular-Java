@@ -31,17 +31,21 @@ export interface GeometryBox {
 
 const MINE_TAG_X = 136;
 const MINE_TAG_Y = -9;
-const MINE_TAG_WIDTH = 56;
 const MINE_TAG_HEIGHT = 17;
+const MINE_TAG_PADDING = 16;
+
+export function mineTagWidth(label = 'tu grupo'): number {
+  return Math.max(56, estimateTextWidth(label, 10.5) + MINE_TAG_PADDING);
+}
 
 export function nodeBox(node: GeometryNode): GeometryBox {
   return { x: node.x - NODE_WIDTH / 2, y: node.y - NODE_HEIGHT / 2, width: NODE_WIDTH, height: NODE_HEIGHT };
 }
 
 /** Clamp a node center so its full rectangle and optional group tag fit the map. */
-export function clampNode<T extends GeometryNode>(node: T, margin = MAP_VIEWBOX_MARGIN): T {
+export function clampNode<T extends GeometryNode>(node: T, margin = MAP_VIEWBOX_MARGIN, mineLabel = 'tu grupo'): T {
   const minX = margin + NODE_WIDTH / 2;
-  const maxX = MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2;
+  const maxX = Math.min(MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2, MAP_VIEWBOX_WIDTH - margin - MINE_TAG_X - mineTagWidth(mineLabel) + NODE_WIDTH / 2);
   const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT;
   const maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
   return {
@@ -52,10 +56,10 @@ export function clampNode<T extends GeometryNode>(node: T, margin = MAP_VIEWBOX_
 }
 
 /** Clamp all rendered centers and deterministically separate boxes without mutating saved data. */
-export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, margin = MAP_VIEWBOX_MARGIN, gap = 6): Record<string, T> {
-  const result = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, clampNode(node, margin)])) as Record<string, T>;
+export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, margin = MAP_VIEWBOX_MARGIN, gap = 6, mineLabel = 'tu grupo'): Record<string, T> {
+  const result = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, clampNode(node, margin, mineLabel)])) as Record<string, T>;
   const ids = Object.keys(result);
-  const minX = margin + NODE_WIDTH / 2, maxX = MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2;
+  const minX = margin + NODE_WIDTH / 2, maxX = Math.min(MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2, MAP_VIEWBOX_WIDTH - margin - MINE_TAG_X - mineTagWidth(mineLabel) + NODE_WIDTH / 2);
   const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT, maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
   for (let iteration = 0; iteration < 20; iteration++) {
     let changed = false;
@@ -87,9 +91,9 @@ export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, mar
 }
 
 /** The "your group" tag is positioned relative to the node's top-left corner. */
-export function mineTagBox(node: GeometryNode): GeometryBox {
+export function mineTagBox(node: GeometryNode, label = 'tu grupo'): GeometryBox {
   const box = nodeBox(node);
-  return { x: box.x + MINE_TAG_X, y: box.y + MINE_TAG_Y, width: MINE_TAG_WIDTH, height: MINE_TAG_HEIGHT };
+  return { x: box.x + MINE_TAG_X, y: box.y + MINE_TAG_Y, width: mineTagWidth(label), height: MINE_TAG_HEIGHT };
 }
 
 export function boxWithinViewBox(box: GeometryBox, margin = MAP_VIEWBOX_MARGIN): boolean {

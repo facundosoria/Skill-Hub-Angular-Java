@@ -53,6 +53,7 @@ export type DepMapStatus = 'todos' | 'pendiente' | 'definir' | 'hecho';
 
 const MINE_KEY = 'depmap-mine';
 const VIEW_KEY = 'depmap-view';
+const PANEL_COLLAPSED_KEY = 'depmap-panel-collapsed';
 
 const emptyState: DepMapState = {
   nodes: {}, kinds: {}, info: {}, edges: [], done: {}, activity: [], presence: [],
@@ -78,6 +79,7 @@ export class DepMapStore {
   readonly node = signal<string | null>(null);
   readonly pair = signal<[string, string] | null>(null);
   readonly fullMap = signal(false);
+  readonly panelCollapsed = signal(this.readPreference(PANEL_COLLAPSED_KEY, 'false') === 'true');
   readonly online = signal(false);
   readonly sseOpen = signal(false);
   readonly offline = signal(false);
@@ -165,6 +167,14 @@ export class DepMapStore {
     this.pair.set(null);
     this.fullMap.set(false);
     this.writePreference(MINE_KEY, mine);
+  }
+
+  togglePanel(): void {
+    this.panelCollapsed.update((collapsed) => {
+      const next = !collapsed;
+      this.writePreference(PANEL_COLLAPSED_KEY, String(next));
+      return next;
+    });
   }
 
   setQuery(query: string): void { this.query.set(query); }

@@ -53,7 +53,7 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
           <span class="live" [class.on]="store.online() && store.sseOpen()" [class.warn]="store.online() && !store.sseOpen()" [class.off]="!store.online()" role="status" aria-live="polite">
             <span class="dot"></span><span>{{ liveText() }}</span>
           </span>
-          <label class="flex flex-col gap-[3px] text-xs text-text-muted">{{ t().mapa.miGrupo }}<select uiSelect class="min-w-[150px]" [value]="store.mine()" (change)="store.setMine($any($event.target).value)">@for (id of groupIds(); track id) { <option [value]="id">{{ node(id).n }}</option> }</select></label>
+          <label class="flex flex-col gap-[3px] text-xs text-text-muted">{{ t().mapa.miGrupo }}<select uiSelect class="min-w-[150px]" [ngModel]="store.mine()" (ngModelChange)="store.setMine($event)" name="mine">@for (id of groupIds(); track id) { <option [value]="id" [selected]="store.mine() === id">{{ node(id).n }}</option> }</select></label>
           <button uiButton variant="secondary" type="button" (click)="openData()">{{ t().mapa.importarExportar }}</button>
           <button uiButton type="button" (click)="openAdd()" [disabled]="!store.online()">{{ t().mapa.agregar }}</button>
         </div>
@@ -64,7 +64,7 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
       }
       @if (store.error(); as error) { <div class="error-banner" role="alert"><span>{{ t().mapa.errorCarga }} {{ t().mapa.errorPrefijo }} {{ error }}</span><button uiButton variant="secondary" size="sm" type="button" (click)="store.retry()">{{ t().mapa.reintentarAccion }}</button></div> }
 
-      <div class="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 py-0.5 pb-3">
+      <div class="dep-map-toolbar flex flex-wrap items-center gap-x-3.5 gap-y-2.5 py-0.5 pb-3">
         <div class="inline-flex rounded-[10px] border border-border bg-surface-2 p-[3px]" role="tablist" [attr.aria-label]="t().mapa.vista">
           @for (view of views; track view.id) { <button type="button" role="tab" class="cursor-pointer rounded-[7px] border-0 bg-transparent px-3.5 py-1.5 font-medium text-text-muted" [class.bg-surface]="store.view() === view.id" [class.text-text]="store.view() === view.id" [class.shadow-[var(--shadow-sm)]]="store.view() === view.id" [attr.aria-selected]="store.view() === view.id" [attr.id]="tabId(view.id)" [attr.aria-controls]="panelId(view.id)" [attr.tabindex]="store.view() === view.id ? 0 : -1" (click)="activateView(view.id)" (keydown)="onTabKeydown($event, view.id)">{{ viewLabel(view.id) }}</button> }
         </div>
@@ -73,9 +73,14 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
           @for (status of statuses; track status.id) { <option [value]="status.id">{{ statusLabel(status.id) }}</option> }
         </select>
         <div class="flex flex-wrap gap-1.5" [attr.aria-label]="t().mapa.tipo">@for (kind of kindEntries(); track kind.id) { <button type="button" class="cursor-pointer rounded-full border border-border bg-surface px-[11px] py-[3px] text-[12.5px] text-text-muted" [class.border-text]="store.kindsOn().has(kind.id)" [class.text-text]="store.kindsOn().has(kind.id)" [attr.aria-pressed]="store.kindsOn().has(kind.id)" (click)="store.toggleKind(kind.id)">{{ kind.label }}</button> }</div>
+        <button type="button" class="panel-toggle" [attr.aria-expanded]="!store.panelCollapsed()" aria-controls="depmap-details-panel" [attr.aria-label]="store.panelCollapsed() ? t().mapa.mostrarPanelDetalle : t().mapa.ocultarPanelDetalle" (click)="togglePanel()">
+          <svg class="panel-toggle__icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 3v14" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
+          {{ t().mapa.detalleCorto }}
+          @if (store.panelCollapsed()) { <span class="panel-toggle__badge" aria-hidden="true"></span><span class="sr-only">{{ t().mapa.detalleSeleccionado }}</span> }
+        </button>
       </div>
 
-      <div class="workspace grid items-start gap-4 min-[1021px]:grid-cols-[minmax(0,1fr)_420px]">
+      <div class="workspace grid items-start gap-4 min-[1021px]:grid-cols-[minmax(0,1fr)_420px]" [class.panel-collapsed]="store.panelCollapsed()">
         <main uiCard class="workspace-card min-w-0 overflow-hidden p-2 max-[760px]:overflow-auto">
           @if (store.loading() && !store.state().edges.length) { <div class="p-6 text-text-muted">{{ t().mapa.cargando }}</div> }
           @else {
@@ -84,24 +89,24 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
             <section class="tab-panel" role="tabpanel" [attr.id]="panelId('lista')" [attr.aria-labelledby]="tabId('lista')" [hidden]="store.view() !== 'lista'">@if (store.view() === 'lista') { <app-dep-map-list /> }</section>
           }
         </main>
-        <aside uiCard class="workspace-panel overflow-auto max-[1020px]:static max-[1020px]:max-h-none"><app-dep-map-panel (addRequested)="openAdd($event)" (deleteRequested)="askDelete($event)" /></aside>
+        <aside uiCard id="depmap-details-panel" class="workspace-panel overflow-auto max-[1020px]:static max-[1020px]:max-h-none"><app-dep-map-panel (addRequested)="openAdd($event)" (deleteRequested)="askDelete($event)" /></aside>
       </div>
 
       <dialog #addDialog class="dialog" aria-labelledby="add-title">
         <form (ngSubmit)="submitAdd()" class="dialog-form"><div class="dialog-head"><h2 id="add-title">{{ t().mapa.agregar }}</h2><button type="button" class="close" [attr.aria-label]="t().mapa.cerrarDialogo" (click)="close(addDialog)">×</button></div>
-          <div class="row"><label>{{ t().mapa.quienNecesita }}<select uiSelect class="w-full" [(ngModel)]="addFrom" name="from">@for (id of groupIds(); track id) { <option [value]="id">{{ node(id).n }}</option> }</select></label><label>{{ t().mapa.deQuien }}<select uiSelect class="w-full" [(ngModel)]="addTo" name="to">@for (id of groupIds(); track id) { <option [value]="id">{{ node(id).n }}</option> }</select></label></div>
+          <div class="dialog-body"><div class="row"><label>{{ t().mapa.quienNecesita }}<select uiSelect class="w-full" [(ngModel)]="addFrom" name="from">@for (id of groupIds(); track id) { <option [value]="id">{{ node(id).n }}</option> }</select></label><label>{{ t().mapa.deQuien }}<select uiSelect class="w-full" [(ngModel)]="addTo" name="to">@for (id of groupIds(); track id) { <option [value]="id">{{ node(id).n }}</option> }</select></label></div>
           <label>{{ t().mapa.queNecesita }}<textarea uiTextarea rows="3" [(ngModel)]="addText" name="text" [placeholder]="t().mapa.queNecesitaPlaceholder"></textarea></label>
           <div class="row"><label>{{ t().mapa.tipoDependencia }}<select uiSelect class="w-full" [(ngModel)]="addKind" name="kind">@for (kind of kindEntries(); track kind.id) { <option [value]="kind.id">{{ kind.label }}</option> }</select></label><label>{{ t().mapa.estado }}<select uiSelect class="w-full" [(ngModel)]="addState" name="state"><option value="pendiente">{{ t().mapa.opcionPendiente }}</option><option value="definir">{{ t().mapa.opcionADefinir }}</option></select></label></div>
           @if (dialogError()) { <p class="error" role="alert">{{ dialogError() }}</p> }
-          <div class="actions"><button uiButton variant="secondary" type="button" (click)="close(addDialog)">{{ t().mapa.cancelar }}</button><button uiButton type="submit" [disabled]="busy()">{{ t().mapa.guardar }}</button></div>
+          </div><div class="actions"><button uiButton variant="secondary" type="button" (click)="close(addDialog)">{{ t().mapa.cancelar }}</button><button uiButton type="submit" [disabled]="busy()">{{ t().mapa.guardar }}</button></div>
         </form>
       </dialog>
 
       <dialog #dataDialog class="dialog data-dialog" aria-labelledby="data-title">
         <div class="dialog-form"><div class="dialog-head"><h2 id="data-title">{{ t().mapa.datosTitulo }}</h2><button type="button" class="close" [attr.aria-label]="t().mapa.cerrarDialogo" (click)="close(dataDialog)">×</button></div>
-          <p class="meta">{{ dataMeta() }}</p><p class="meta">{{ t().mapa.datosAyuda }}</p><textarea uiTextarea class="json" spellcheck="false" [(ngModel)]="jsonDataValue" name="json"></textarea>
+          <div class="dialog-body"><p class="meta">{{ dataMeta() }}</p><p class="meta">{{ t().mapa.datosAyuda }}</p><textarea uiTextarea class="json" spellcheck="false" [(ngModel)]="jsonDataValue" name="json"></textarea>
           @if (dialogError()) { <p class="error" role="alert">{{ dialogError() }}</p> }
-          <div class="actions"><button uiButton variant="secondary" type="button" (click)="copyData()">{{ t().mapa.copiar }}</button>@if (isAdmin()) { <button uiButton variant="secondary" type="button" (click)="askReset()" [disabled]="busy() || !store.online()">{{ t().mapa.restaurar }}</button><button uiButton type="button" (click)="applyData()" [disabled]="busy() || !store.online()">{{ t().mapa.aplicar }}</button> }<button uiButton variant="secondary" type="button" (click)="close(dataDialog)">{{ t().mapa.cerrar }}</button></div>
+          </div><div class="actions"><button uiButton variant="secondary" type="button" (click)="copyData()">{{ t().mapa.copiar }}</button>@if (isAdmin()) { <button uiButton variant="secondary" type="button" (click)="askReset()" [disabled]="busy() || !store.online()">{{ t().mapa.restaurar }}</button><button uiButton type="button" (click)="applyData()" [disabled]="busy() || !store.online()">{{ t().mapa.aplicar }}</button> }<button uiButton variant="secondary" type="button" (click)="close(dataDialog)">{{ t().mapa.cerrar }}</button></div>
         </div>
       </dialog>
 
@@ -137,8 +142,10 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
     .live .dot { width:8px; height:8px; border-radius:50%; background:var(--text-muted); flex:none; } .live.on { color:var(--text); border-color:color-mix(in srgb,var(--success) 45%,var(--border)); } .live.on .dot { background:var(--success); }
     .live.warn .dot { background:var(--warning); } .live.off { color:var(--dep-in); border-color:color-mix(in srgb,var(--dep-in) 45%,var(--border)); } .live.off .dot { background:var(--dep-in); }
     .banner,.error-banner { margin:0 0 10px; padding:10px 14px; border:1px solid color-mix(in srgb,var(--dep-in) 40%,var(--border)); border-radius:10px; background:color-mix(in srgb,var(--dep-in) 8%,var(--surface)); display:flex; align-items:center; gap:10px; font-size:13px; } .banner span,.error-banner span { flex:1; } .banner strong,.error-banner { color:var(--dep-in); }
-    .dialog { margin:auto; width:min(560px,calc(100% - 2rem)); max-height:90vh; overflow:auto; border:1px solid var(--border); border-radius:var(--radius-lg); padding:0; background:var(--surface); color:var(--text); box-shadow:var(--shadow-lg); } .dialog::backdrop { background:rgba(10,15,22,.55); }
-    .dialog.narrow { width:min(440px,calc(100% - 2rem)); } .dialog-form { padding:20px; } .dialog-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; } .dialog h2 { font-size:20px; margin:0 0 12px; } .dialog label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text-muted); margin-bottom:10px; } .dialog textarea { width:100%; resize:vertical; } .dialog .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .dialog .json { min-height:260px; font-family:ui-monospace,Menlo,monospace; font-size:12px; } .close { border:0; background:transparent; font-size:24px; color:var(--text-muted); cursor:pointer; } .actions { display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:6px; border-top:1px solid var(--border); padding-top:14px; } .meta { color:var(--text-muted); font-size:12.5px; margin:0 0 10px; } .error { color:var(--danger); font-size:13px; min-height:18px; }
+    .panel-toggle { display:none; } .panel-toggle__icon { width:16px; height:16px; flex:none; } .panel-toggle__badge { width:7px; height:7px; margin-left:6px; border-radius:50%; background:var(--accent); flex:none; } .dialog { margin:auto; width:min(560px,calc(100% - 2rem)); max-height:calc(100dvh - 2rem); overflow:hidden; border:1px solid var(--border); border-radius:var(--radius-lg); padding:0; background:var(--surface); color:var(--text); box-shadow:var(--shadow-lg); } .dialog::backdrop { background:rgba(10,15,22,.55); }
+    .dialog.narrow { width:min(440px,calc(100% - 2rem)); } .dialog-form { display:flex; flex-direction:column; max-height:calc(100dvh - 2rem); padding:20px; } .dialog-head { flex:0 0 auto; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; } .dialog-body { overflow:auto; min-height:0; } .dialog h2 { font-size:20px; margin:0 0 12px; } .dialog label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--text-muted); margin-bottom:10px; } .dialog textarea { width:100%; resize:vertical; } .dialog .row { display:grid; grid-template-columns:1fr 1fr; gap:10px; } .dialog .json { min-height:260px; font-family:ui-monospace,Menlo,monospace; font-size:12px; } .close { display:inline-flex; align-items:center; justify-content:center; flex:0 0 32px; width:32px; height:32px; border:0; background:transparent; font-size:24px; color:var(--text-muted); cursor:pointer; } .close:focus-visible { outline:2px solid var(--text); outline-offset:2px; } .actions { flex:0 0 auto; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap; margin-top:6px; border-top:1px solid var(--border); padding-top:14px; } .meta { color:var(--text-muted); font-size:12.5px; margin:0 0 10px; } .error { color:var(--danger); font-size:13px; min-height:18px; }
+    @media (min-width:1021px) { .panel-toggle { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:7px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface); color:var(--text); cursor:pointer; white-space:nowrap; } .workspace.panel-collapsed { grid-template-columns:minmax(0,1fr); } .workspace.panel-collapsed .workspace-panel { display:none; } }
+    @media (min-width:1280px) { .dep-map-toolbar { column-gap:8px; } .panel-toggle { padding-inline:8px; } }
     .toast { position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:8px 14px; border-radius:8px; font-size:13px; z-index:20; max-width:min(560px,90vw); text-align:center; }
     @media (max-width:560px) { .dialog .row { grid-template-columns:1fr; } }
     @media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
@@ -164,6 +171,8 @@ export class DepMap {
   readonly pendingDelete = signal<DepMapEdge | null>(null);
   addFrom = ''; addTo = ''; addKind = ''; addState: 'pendiente' | 'definir' = 'pendiente'; addText = '';
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly dialogOpeners = new WeakMap<HTMLDialogElement, HTMLElement>();
+  private scheduleLayoutUpdate: (() => void) | null = null;
   @ViewChild('addDialog') addDialog!: DialogRef;
   @ViewChild('dataDialog') dataDialog!: DialogRef;
   @ViewChild('confirmDialog') confirmDialog!: DialogRef;
@@ -187,6 +196,7 @@ export class DepMap {
           });
         });
       };
+      this.scheduleLayoutUpdate = updateLayout;
       updateLayout();
       window.addEventListener('resize', updateLayout);
 
@@ -200,6 +210,8 @@ export class DepMap {
         observer.observe(this.host.nativeElement);
         const workspace = this.host.nativeElement.querySelector('.workspace');
         if (workspace) observer.observe(workspace);
+        const card = this.host.nativeElement.querySelector('.workspace-card');
+        if (card) observer.observe(card);
         const legend = this.host.nativeElement.querySelector('app-dep-map-graph .legend') as HTMLElement | null;
         if (legend) observer.observe(legend);
       }
@@ -210,6 +222,7 @@ export class DepMap {
         window.removeEventListener('resize', updateLayout);
         observer?.disconnect();
         mutations?.disconnect();
+        this.scheduleLayoutUpdate = null;
       });
     });
   }
@@ -274,6 +287,7 @@ export class DepMap {
   tabId(id: string): string { return `depmap-tab-${id}`; }
   panelId(id: string): string { return `depmap-panel-${id}`; }
   activateView(id: 'mapa' | 'matriz' | 'lista'): void { this.store.setView(id); }
+  togglePanel(): void { this.store.togglePanel(); this.scheduleLayoutUpdate?.(); }
   onTabKeydown(event: KeyboardEvent, current: 'mapa' | 'matriz' | 'lista'): void {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
@@ -292,6 +306,7 @@ export class DepMap {
 
   openAdd(from?: string): void {
     const groups = this.groupIds(); if (!groups.length) return;
+    this.dialogOpeners.set(this.addDialog.nativeElement, document.activeElement as HTMLElement);
     this.addFrom = from && groups.includes(from) ? from : this.store.node() && groups.includes(this.store.node()!) ? this.store.node()! : this.store.mine();
     this.addTo = groups.find((id) => id !== this.addFrom) || groups[0]; this.addKind = this.kindEntries()[0]?.id || ''; this.addState = 'pendiente'; this.addText = ''; this.dialogError.set(''); this.addDialog.nativeElement.showModal();
   }
@@ -302,18 +317,18 @@ export class DepMap {
     try { await this.store.addEdge({ from: this.addFrom, to: this.addTo, kind: this.addKind, state: this.addState, text: this.addText.trim() }); this.close(this.addDialog.nativeElement); this.showToast('Dependencia agregada para todos'); }
     catch (error) { this.dialogError.set(error instanceof Error ? error.message : 'No se pudo guardar.'); } finally { this.busy.set(false); }
   }
-  openData(): void { const state = this.store.state(); this.jsonDataValue = JSON.stringify({ edges: state.edges, done: state.done }, null, 1); this.dialogError.set(''); this.dataDialog.nativeElement.showModal(); }
+  openData(): void { const state = this.store.state(); this.dialogOpeners.set(this.dataDialog.nativeElement, document.activeElement as HTMLElement); this.jsonDataValue = JSON.stringify({ edges: state.edges, done: state.done }, null, 1); this.dialogError.set(''); this.dataDialog.nativeElement.showModal(); }
   dataMeta(): string { const state = this.store.state(); return `Estado compartido: versión ${state.version}${state.updatedBy ? ` · último cambio de ${state.updatedBy}` : ''} · ${state.edges.length} dependencias, ${Object.keys(state.done).length} hechas.`; }
   async copyData(): Promise<void> { try { await navigator.clipboard.writeText(this.jsonDataValue); this.showToast('Copiado'); } catch { this.showToast('Seleccioná y copiá a mano'); } }
   async applyData(): Promise<void> {
     try { const parsed = JSON.parse(this.jsonDataValue) as { edges: DepMapEdge[]; done?: Record<string, boolean> }; this.busy.set(true); await this.store.importData({ edges: parsed.edges, done: parsed.done || {} }); this.close(this.dataDialog.nativeElement); this.showToast('Datos aplicados para todos'); }
     catch (error) { this.dialogError.set(error instanceof Error ? error.message : 'JSON inválido.'); } finally { this.busy.set(false); }
   }
-  askReset(): void { this.confirmKind.set('reset'); this.confirmMessage.set('Se vuelve a los datos de la reunión y se pierden todos los cambios hechos por el equipo.'); this.confirmDialog.nativeElement.showModal(); }
-  askDelete(edge: DepMapEdge): void { this.pendingDelete.set(edge); this.confirmKind.set('delete'); this.confirmMessage.set(`Se elimina para todos los que están viendo el mapa: «${edge.text}»`); this.confirmDialog.nativeElement.showModal(); }
+  askReset(): void { this.dialogOpeners.set(this.confirmDialog.nativeElement, document.activeElement as HTMLElement); this.confirmKind.set('reset'); this.confirmMessage.set('Se vuelve a los datos de la reunión y se pierden todos los cambios hechos por el equipo.'); this.confirmDialog.nativeElement.showModal(); }
+  askDelete(edge: DepMapEdge): void { this.dialogOpeners.set(this.confirmDialog.nativeElement, document.activeElement as HTMLElement); this.pendingDelete.set(edge); this.confirmKind.set('delete'); this.confirmMessage.set(`Se elimina para todos los que están viendo el mapa: «${edge.text}»`); this.confirmDialog.nativeElement.showModal(); }
   async confirmAction(): Promise<void> {
     this.busy.set(true); try { if (this.confirmKind() === 'delete' && this.pendingDelete()) { await this.store.deleteEdge(this.pendingDelete()!.id); this.showToast('Dependencia eliminada'); } else if (this.confirmKind() === 'reset') { await this.store.reset(); this.close(this.dataDialog.nativeElement); this.showToast('Datos originales restaurados'); } this.close(this.confirmDialog.nativeElement); } catch (error) { this.dialogError.set(error instanceof Error ? error.message : 'No se pudo completar la acción.'); } finally { this.busy.set(false); }
   }
-  close(dialog: HTMLDialogElement): void { dialog.close(); this.dialogError.set(''); }
+  close(dialog: HTMLDialogElement): void { const opener = this.dialogOpeners.get(dialog); this.dialogOpeners.delete(dialog); dialog.close(); this.dialogError.set(''); queueMicrotask(() => opener?.focus()); }
   private showToast(message: string): void { this.toast.set(message); if (this.toastTimer) clearTimeout(this.toastTimer); this.toastTimer = setTimeout(() => this.toast.set(''), 2_200); }
 }

@@ -13,6 +13,7 @@ import {
   MAP_PAN_THRESHOLD,
   MAP_VIEWBOX_HEIGHT,
   MAP_VIEWBOX_WIDTH,
+  mineTagWidth,
   NODE_HEIGHT,
   NODE_WIDTH,
   nodeClass,
@@ -88,7 +89,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
               <text class="ct" [attr.x]="NODE_TEXT_X" y="49"><tspan class="cto">↑{{ entry.out }}</tspan>{{ '  ' }}<tspan class="cti">↓{{ entry.in }}</tspan></text>
             }
             @if (entry.id === store.mine()) {
-              <g class="mineTag" transform="translate(136,-9)"><rect width="56" height="17" rx="8.5"></rect><text x="28" y="12" text-anchor="middle">{{ t().mapa.grupoPropio }}</text></g>
+              <g class="mineTag" transform="translate(136,-9)"><rect [attr.width]="mineTagWidth(t().mapa.grupoPropio)" height="17" rx="8.5"></rect><text [attr.x]="mineTagWidth(t().mapa.grupoPropio) / 2" y="12" text-anchor="middle">{{ t().mapa.grupoPropio }}</text></g>
             }
           </g>
         }
@@ -162,6 +163,7 @@ export class DepMapGraph {
   readonly NODE_WIDTH = NODE_WIDTH;
   readonly NODE_HEIGHT = NODE_HEIGHT;
   readonly NODE_TEXT_X = NODE_TEXT_X;
+  readonly mineTagWidth = mineTagWidth;
 
   readonly transform = signal<MapTransform>({ ...MAP_IDENTITY });
   readonly dragging = signal(false);
@@ -181,7 +183,7 @@ export class DepMapGraph {
 
   readonly renderedNodes = computed(() => {
     const nodes = this.store.state().nodes;
-    return clampNodes(nodes);
+    return clampNodes(nodes, 8, 6, this.t().mapa.grupoPropio);
   });
 
   readonly edgeEntries = computed(() => {

@@ -668,6 +668,12 @@ export const es = {
     controlesAria: "Controles del mapa",
     verCompleto: "Ver mapa completo",
     enfocarGrupo: "Enfocar mi grupo",
+    mostrarDetalle: "Mostrar detalle",
+    ocultarDetalle: "Ocultar detalle",
+    detalleCorto: "Detalle",
+    mostrarPanelDetalle: "Mostrar panel de detalle",
+    ocultarPanelDetalle: "Ocultar panel de detalle",
+    detalleSeleccionado: "Hay un detalle seleccionado",
   },
 } as const;
 

@@ -14,6 +14,7 @@ import {
   MAP_VIEWBOX_HEIGHT,
   MAP_VIEWBOX_WIDTH,
   mineTagBox,
+  mineTagWidth,
   NODE_COUNT_FONT_SIZE,
   NODE_HEIGHT,
   NODE_NAME_FONT_SIZE,
@@ -108,6 +109,13 @@ describe('dep-map geometry', () => {
       expect(boxWithinViewBox(nodeBox(node)), JSON.stringify(node)).toBe(true);
       expect(boxWithinViewBox(mineTagBox(node)), JSON.stringify(node)).toBe(true);
     });
+  });
+
+  it('sizes the group tag for Spanish and English labels and keeps both in bounds', () => {
+    expect(mineTagWidth('your group')).toBeGreaterThan(mineTagWidth('tu grupo'));
+    const english = clampNode({ x: 900, y: 112 }, 8, 'your group');
+    expect(boxWithinViewBox(mineTagBox(english, 'your group'))).toBe(true);
+    expect(mineTagBox(english, 'your group').width).toBe(mineTagWidth('your group'));
   });
 
   it('separates clamped seed nodes with a deterministic six-unit gap', () => {
