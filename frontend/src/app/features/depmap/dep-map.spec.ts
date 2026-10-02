@@ -4,7 +4,41 @@ import { signal } from '@angular/core';
 import { throwError } from 'rxjs';
 import { Api } from '../../core/api';
 import { AuthService } from '../../core/auth';
-import { DepMap } from './dep-map';
+import { DepMap, estimateMapScale, shouldFitMap } from './dep-map';
+
+describe('DepMap fit-height estimation', () => {
+  const baseMeasurements = {
+    cardWidth: 1400,
+    horizontalPadding: 16,
+    viewportHeight: 777,
+    cardTop: 246.6,
+    scrollY: 0,
+    verticalPadding: 16,
+    shellPaddingBottom: 42.5,
+    legendHeight: 51.5,
+  };
+
+  it('subtracts the shell bottom padding from available height', () => {
+    expect(estimateMapScale(baseMeasurements)).toBeCloseTo(0.564, 2);
+  });
+
+  it('uses document coordinates, keeping the estimate stable across scroll', () => {
+    const scrolled = { ...baseMeasurements, cardTop: baseMeasurements.cardTop - 300, scrollY: 300 };
+    expect(estimateMapScale(scrolled)).toBeCloseTo(estimateMapScale(baseMeasurements), 10);
+  });
+
+  it('uses the last known legend height when the graph is not rendered', () => {
+    expect(estimateMapScale({ ...baseMeasurements, legendHeight: 51.5 }))
+      .toBeCloseTo(estimateMapScale({ ...baseMeasurements, legendHeight: 0 }) - 51.5 / 745, 10);
+  });
+
+  it('applies the entry and exit hysteresis thresholds', () => {
+    expect(shouldFitMap(0.60, false)).toBe(true);
+    expect(shouldFitMap(0.59, false)).toBe(false);
+    expect(shouldFitMap(0.59, true)).toBe(true);
+    expect(shouldFitMap(0.57, true)).toBe(false);
+  });
+});
 
 describe('DepMap offline controls', () => {
   let fixture: ComponentFixture<DepMap>;

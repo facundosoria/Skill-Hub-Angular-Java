@@ -8,6 +8,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   selector: 'app-dep-map-graph',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    <div class="graph">
     <div class="legend">
       @if (!store.visible().length) {
         <span>{{ t().mapa.sinFiltros }}</span>
@@ -19,7 +20,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
         <span>{{ isNarrow() ? 'Tocá' : 'Clic' }} en un grupo para ver sus dependencias en ambos sentidos. La flecha apunta hacia quien provee. {{ store.visible().length }} {{ store.visible().length === 1 ? 'dependencia visible' : 'dependencias visibles' }}.</span>
       }
     </div>
-    <svg class="map" viewBox="0 0 1000 745" role="img" aria-label="Mapa de dependencias">
+    <svg class="map" viewBox="0 0 1000 745" role="group" aria-label="Mapa de dependencias">
       <defs>
         @for (marker of markers; track marker.id) {
           <marker [id]="marker.id" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
@@ -56,29 +57,33 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
         }
       </g>
       <ng-template #edgeTemplate let-edge="edge">
-      <g class="edge" [class]="edge.classes" [class.flash]="edge.items.some(item => item.id === store.flashId())" [attr.data-pair]="edge.key" [attr.data-eid]="edge.firstId" (click)="store.selectPair(edge.pair)">
+      <g class="edge" [class]="edge.classes" [class.flash]="edge.items.some(item => item.id === store.flashId())" [attr.data-pair]="edge.key" [attr.data-eid]="edge.firstId" tabindex="0" role="button" [attr.aria-label]="edgeLabel(edge.pair, edge.items.length)" (click)="store.selectPair(edge.pair)" (keydown.enter)="store.selectPair(edge.pair)" (keydown.space)="store.selectPair(edge.pair); $event.preventDefault()">
         <path class="line" [attr.d]="edge.geometry.d" [attr.stroke-width]="edge.width" [attr.marker-end]="'url(#' + edge.marker + ')'" />
         <path class="hit" [attr.d]="edge.geometry.d"><title>{{ nodeName(edge.pair[0]) }} necesita de {{ nodeName(edge.pair[1]) }} ({{ edge.items.length }})</title></path>
         <g class="badge"><circle [attr.cx]="edge.geometry.lx" [attr.cy]="edge.geometry.ly" r="9" /><text [attr.x]="edge.geometry.lx" [attr.y]="edge.geometry.ly + 3.4" text-anchor="middle">{{ edge.items.length }}</text></g>
       </g>
       </ng-template>
     </svg>
+    </div>
   `,
   imports: [NgTemplateOutlet],
   styles: `
     :host { display:block; }
+    .graph { display:flex; flex-direction:column; min-height:0; height:100%; }
     .legend { display:flex; flex-wrap:wrap; gap:6px 18px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
     .legend i { display:inline-block; width:22px; height:0; border-top:3px solid; vertical-align:middle; margin-right:6px; border-radius:2px; }
-    .legend-out { border-color:var(--dep-out); } .legend-in { border-color:var(--dep-in); }
+    .legend i.legend-out { border-top-color:var(--dep-out); } .legend i.legend-in { border-top-color:var(--dep-in); }
     svg.map { width:100%; height:auto; display:block; }
+    @media (min-width:1021px) and (min-height:700px) { :host-context(.fit-height) svg.map { flex:1 1 auto; min-height:0; height:100%; } }
     .node { cursor:pointer; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.2; }
     .node:hover rect { stroke:var(--text-muted); } .node:focus-visible rect { stroke:var(--text); stroke-width:2.4; }
     .node.sel rect { stroke:var(--text); stroke-width:2.2; } .node.out rect { stroke:var(--dep-out); stroke-width:2; }
-    .node.in rect { stroke:var(--dep-in); stroke-width:2; } .node.dim { opacity:.35; }
+    .node.in rect { stroke:var(--dep-in); stroke-width:2; } .node.dim > rect { opacity:.35; } .node.dim .mineTag { opacity:.35; }
     .node.transv rect { stroke-dasharray:5 4; } .node text.nm { font-weight:700; font-size:14px; fill:var(--text); }
     .node text.ct { font-size:9.5px; fill:var(--text-muted); } .node .cto { fill:var(--dep-out); font-weight:600; } .node .cti { fill:var(--dep-in); font-weight:600; }
     .mineTag rect { fill:var(--text); stroke:none; } .mineTag text { fill:var(--bg); font-size:10.5px; font-weight:600; }
     .edge path.line { fill:none; stroke:var(--border-strong); stroke-linecap:round; } .edge path.hit { fill:none; stroke:transparent; stroke-width:14; cursor:pointer; }
+    .edge:focus-visible { outline:2px solid var(--text); outline-offset:3px; } .edge:focus-visible path.line { stroke-width:5; }
     .edge.out path.line { stroke:var(--dep-out); } .edge.in path.line { stroke:var(--dep-in); } .edge.sel path.line { stroke:var(--text); }
     .edge.dim { opacity:.1; } .edge.base { opacity:.7; } .edge .badge circle { fill:var(--surface); stroke:var(--border-strong); }
     .edge.out .badge circle { stroke:var(--dep-out); } .edge.in .badge circle { stroke:var(--dep-in); } .edge .badge text { font-size:10px; font-weight:600; fill:var(--text); }
@@ -122,5 +127,6 @@ export class DepMapGraph {
   });
 
   nodeName(id: string | null): string { return id ? this.store.state().nodes[id]?.n || id : ''; }
+  edgeLabel(pair: [string, string], count: number): string { return `${this.nodeName(pair[0])} necesita de ${this.nodeName(pair[1])}: ${count} ${count === 1 ? 'pedido' : 'pedidos'}`; }
   isNarrow(): boolean { return typeof matchMedia !== 'undefined' && matchMedia('(max-width:760px)').matches; }
 }

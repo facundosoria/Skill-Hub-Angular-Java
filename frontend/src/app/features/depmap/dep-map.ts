@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
+import { afterNextRender, ChangeDetectionStrategy, ChangeDetectorRef, Component, DestroyRef, ElementRef, ViewChild, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { I18n } from '../../core/i18n/i18n';
 import { AuthService } from '../../core/auth';
@@ -11,15 +11,43 @@ import { DepMapPanel } from './dep-map-panel';
 
 type DialogRef = ElementRef<HTMLDialogElement>;
 
+// Minimum rendered SVG scale for the height-fitted desktop layout.
+const MIN_MAP_SCALE = 0.6;
+const MIN_MAP_SCALE_EXIT = 0.58;
+const DEFAULT_LEGEND_HEIGHT = 51.5;
+
+export interface MapFitMeasurements {
+  cardWidth: number;
+  horizontalPadding: number;
+  viewportHeight: number;
+  cardTop: number;
+  scrollY: number;
+  verticalPadding: number;
+  shellPaddingBottom: number;
+  legendHeight: number;
+}
+
+export function estimateMapScale(measurements: MapFitMeasurements): number {
+  const availableWidth = measurements.cardWidth - measurements.horizontalPadding;
+  const cardDocumentTop = measurements.cardTop + measurements.scrollY;
+  const availableHeight = measurements.viewportHeight - cardDocumentTop
+    - measurements.verticalPadding - measurements.shellPaddingBottom - measurements.legendHeight;
+  return Math.min(availableWidth / 1000, availableHeight / 745);
+}
+
+export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean): boolean {
+  return estimatedScale >= (currentlyFitting ? MIN_MAP_SCALE_EXIT : MIN_MAP_SCALE);
+}
+
 @Component({
   selector: 'app-dep-map',
   imports: [FormsModule, ...UI, DepMapGraph, DepMapMatrix, DepMapList, DepMapPanel],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="dep-map text-text">
-      <header class="flex flex-wrap items-end justify-between gap-x-6 gap-y-4 pb-2.5">
-        <div><h1 class="m-0 text-[26px] leading-[1.1] tracking-[-.01em] max-[560px]:text-[22px]">{{ t().mapa.titulo }}</h1><p class="mt-1 mb-0 max-w-[64ch] text-text-muted">{{ t().mapa.subtitulo }}</p></div>
-        <div class="flex flex-wrap items-end gap-2.5">
+    <div class="dep-map text-text" [class.fit-height]="fitHeight()">
+      <header class="module-header flex flex-wrap items-end justify-between gap-x-6 gap-y-4 pb-2.5">
+        <div class="module-heading"><h1 class="m-0 text-[26px] leading-[1.1] tracking-[-.01em] max-[560px]:text-[22px]">{{ t().mapa.titulo }}</h1><p class="module-subtitle mt-1 mb-0 max-w-[64ch] text-text-muted">{{ t().mapa.subtitulo }}</p></div>
+        <div class="module-actions flex flex-wrap items-end gap-2.5">
           <span class="live" [class.on]="store.online() && store.sseOpen()" [class.warn]="store.online() && !store.sseOpen()" [class.off]="!store.online()" role="status" aria-live="polite">
             <span class="dot"></span><span>{{ liveText() }}</span>
           </span>
@@ -44,12 +72,12 @@ type DialogRef = ElementRef<HTMLDialogElement>;
         <div class="flex flex-wrap gap-1.5" [attr.aria-label]="t().mapa.tipo">@for (kind of kindEntries(); track kind.id) { <button type="button" class="cursor-pointer rounded-full border border-border bg-surface px-[11px] py-[3px] text-[12.5px] text-text-muted" [class.border-text]="store.kindsOn().has(kind.id)" [class.text-text]="store.kindsOn().has(kind.id)" [attr.aria-pressed]="store.kindsOn().has(kind.id)" (click)="store.toggleKind(kind.id)">{{ kind.label }}</button> }</div>
       </div>
 
-      <div class="grid items-start gap-4 min-[1021px]:grid-cols-[minmax(0,1fr)_420px]">
-        <main uiCard class="min-w-0 overflow-hidden p-2 max-[760px]:overflow-auto">
+      <div class="workspace grid items-start gap-4 min-[1021px]:grid-cols-[minmax(0,1fr)_420px]">
+        <main uiCard class="workspace-card min-w-0 overflow-hidden p-2 max-[760px]:overflow-auto">
           @if (store.loading() && !store.state().edges.length) { <div class="p-6 text-text-muted">{{ t().mapa.cargando }}</div> }
           @else { @switch (store.view()) { @case ('mapa') { <app-dep-map-graph /> } @case ('matriz') { <app-dep-map-matrix /> } @default { <app-dep-map-list /> } } }
         </main>
-        <aside uiCard class="sticky top-3 max-h-[calc(100vh-24px)] overflow-auto max-[1020px]:static max-[1020px]:max-h-none"><app-dep-map-panel (addRequested)="openAdd($event)" (deleteRequested)="askDelete($event)" /></aside>
+        <aside uiCard class="workspace-panel overflow-auto max-[1020px]:static max-[1020px]:max-h-none"><app-dep-map-panel (addRequested)="openAdd($event)" (deleteRequested)="askDelete($event)" /></aside>
       </div>
 
       <dialog #addDialog class="dialog" aria-labelledby="add-title">
@@ -75,7 +103,22 @@ type DialogRef = ElementRef<HTMLDialogElement>;
     </div>
   `,
   styles: `
-    :host { --dep-out:#1f5fe0; --dep-in:#b8490a; display:block; } @media (prefers-color-scheme:dark) { :host { --dep-out:#6fa0ff; --dep-in:#ff9a52; } } :host-context([data-theme=dark]) { --dep-out:#6fa0ff; --dep-in:#ff9a52; }
+    :host { --dep-out:#1f5fe0; --dep-in:#b8490a; --map-offset:147px; display:block; } @media (prefers-color-scheme:dark) { :host { --dep-out:#6fa0ff; --dep-in:#ff9a52; } } :host-context([data-theme=dark]) { --dep-out:#6fa0ff; --dep-in:#ff9a52; }
+    @media (min-width:1021px) {
+      .module-header { align-items:flex-start; }
+      .module-heading { flex:1 1 auto; min-width:0; }
+      .module-subtitle { font-size:12.5px; }
+      .module-actions { align-items:flex-end; }
+    }
+    @media (min-width:1021px) and (min-height:700px) {
+      .dep-map.fit-height { height:calc(100dvh - var(--map-offset)); display:flex; flex-direction:column; min-height:0; }
+      .dep-map.fit-height .workspace { flex:1 1 auto; min-height:0; height:100%; align-items:stretch; }
+      .dep-map.fit-height .workspace-card, .dep-map.fit-height .workspace-panel { min-height:0; height:100%; }
+      .dep-map.fit-height .workspace-card { display:flex; flex-direction:column; }
+      .dep-map.fit-height .workspace-card > app-dep-map-graph, .dep-map.fit-height .workspace-card > app-dep-map-matrix, .dep-map.fit-height .workspace-card > app-dep-map-list { display:block; min-height:0; height:100%; }
+      .dep-map.fit-height .workspace-card > app-dep-map-matrix, .dep-map.fit-height .workspace-card > app-dep-map-list { overflow:hidden; }
+      .dep-map.fit-height .workspace-panel { overflow-y:auto; overflow-x:hidden; }
+    }
     .live { display:inline-flex; align-items:center; gap:7px; min-height:36px; padding:7px 12px; border-radius:999px; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:12.5px; box-shadow:var(--shadow-sm); }
     .live .dot { width:8px; height:8px; border-radius:50%; background:var(--text-muted); flex:none; } .live.on { color:var(--text); border-color:color-mix(in srgb,var(--success) 45%,var(--border)); } .live.on .dot { background:var(--success); }
     .live.warn .dot { background:var(--warning); } .live.off { color:var(--dep-in); border-color:color-mix(in srgb,var(--dep-in) 45%,var(--border)); } .live.off .dot { background:var(--dep-in); }
@@ -91,11 +134,16 @@ export class DepMap {
   readonly store = inject(DepMapStore);
   private readonly i18n = inject(I18n);
   private readonly auth = inject(AuthService);
+  private readonly host = inject(ElementRef<HTMLElement>);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly changeDetector = inject(ChangeDetectorRef);
   readonly t = this.i18n.t;
   readonly isAdmin = computed(() => this.auth.user()?.role === 'admin');
   readonly busy = signal(false);
   readonly dialogError = signal('');
   readonly toast = signal('');
+  readonly fitHeight = signal(false);
+  private lastLegendHeight = DEFAULT_LEGEND_HEIGHT;
   jsonDataValue = '';
   readonly confirmMessage = signal('');
   readonly confirmKind = signal<'delete' | 'reset' | null>(null);
@@ -105,6 +153,73 @@ export class DepMap {
   @ViewChild('addDialog') addDialog!: DialogRef;
   @ViewChild('dataDialog') dataDialog!: DialogRef;
   @ViewChild('confirmDialog') confirmDialog!: DialogRef;
+
+  constructor() {
+    afterNextRender(() => {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      const updateLayout = () => { this.updateMapOffset(); this.updateFitHeight(); };
+      updateLayout();
+      window.addEventListener('resize', updateLayout);
+
+      const main = this.host.nativeElement.closest('main');
+      const shellHeader = main?.parentElement?.querySelector('header');
+      const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateLayout) : null;
+      if (observer) {
+        if (shellHeader) observer.observe(shellHeader);
+        observer.observe(document.body);
+        observer.observe(this.host.nativeElement);
+        const workspace = this.host.nativeElement.querySelector('.workspace');
+        if (workspace) observer.observe(workspace);
+      }
+      this.destroyRef.onDestroy(() => {
+        window.removeEventListener('resize', updateLayout);
+        observer?.disconnect();
+      });
+    });
+  }
+
+  private updateMapOffset(): void {
+    const root = this.host.nativeElement as HTMLElement;
+    const main = root.closest('main');
+    if (!main) return;
+    const paddingBottom = Number.parseFloat(getComputedStyle(main).paddingBottom) || 0;
+    root.style.setProperty('--map-offset', `${root.getBoundingClientRect().top + window.scrollY + paddingBottom}px`);
+  }
+
+  private updateFitHeight(): void {
+    const root = this.host.nativeElement as HTMLElement;
+    const desktop = window.matchMedia('(min-width:1021px) and (min-height:700px)').matches;
+    if (!desktop) { this.fitHeight.set(false); return; }
+
+    const workspace = root.querySelector<HTMLElement>('.workspace');
+    const card = root.querySelector<HTMLElement>('.workspace-card');
+    if (!workspace || !card) return;
+
+    const cardStyle = getComputedStyle(card);
+    const cardRect = card.getBoundingClientRect();
+    const legend = root.querySelector<HTMLElement>('app-dep-map-graph .legend');
+    const measuredLegendHeight = legend?.getBoundingClientRect().height || 0;
+    if (measuredLegendHeight > 0) this.lastLegendHeight = measuredLegendHeight;
+    const horizontalPadding = (Number.parseFloat(cardStyle.paddingLeft) || 0) + (Number.parseFloat(cardStyle.paddingRight) || 0);
+    const verticalPadding = (Number.parseFloat(cardStyle.paddingTop) || 0) + (Number.parseFloat(cardStyle.paddingBottom) || 0);
+    const shell = root.closest('main');
+    const shellPaddingBottom = shell ? Number.parseFloat(getComputedStyle(shell).paddingBottom) || 0 : 0;
+    const estimatedScale = estimateMapScale({
+      cardWidth: cardRect.width,
+      horizontalPadding,
+      viewportHeight: window.innerHeight,
+      cardTop: cardRect.top,
+      scrollY: window.scrollY,
+      verticalPadding,
+      shellPaddingBottom,
+      legendHeight: this.lastLegendHeight,
+    });
+    const fitHeight = shouldFitMap(estimatedScale, this.fitHeight());
+    if (fitHeight !== this.fitHeight()) {
+      this.fitHeight.set(fitHeight);
+      this.changeDetector.markForCheck();
+    }
+  }
 
   readonly views = [
     { id: 'mapa' as const, label: 'Mapa' }, { id: 'matriz' as const, label: 'Matriz' }, { id: 'lista' as const, label: 'Lista' },

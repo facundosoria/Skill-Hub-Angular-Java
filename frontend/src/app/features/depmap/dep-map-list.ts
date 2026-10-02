@@ -24,6 +24,10 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   `,
   styles: `
     :host { display:block; } .tablewrap { overflow:auto; padding:12px; } table { border-collapse:separate; border-spacing:0; font-size:13px; width:100%; }
+    @media (min-width:1021px) and (min-height:700px) {
+      :host-context(.fit-height) { height:100%; min-height:0; }
+      :host-context(.fit-height) .tablewrap { height:100%; min-height:0; overflow:auto; }
+    }
     th,td { padding:6px 8px; text-align:left; vertical-align:top; } .list th { position:sticky; top:0; background:var(--surface); border-bottom:1px solid var(--border); font-weight:600; }
     .list td { border-bottom:1px solid var(--border); } .list tr:last-child td { border-bottom:0; } .list tr.flash td { animation:flash 1.6s ease-out; }
     input { margin:3px 0 0; accent-color:var(--success); width:16px; height:16px; } .lnk { border:0; background:transparent; padding:0; font-weight:600; text-decoration:underline; text-decoration-color:var(--border); text-underline-offset:3px; cursor:pointer; color:var(--text); }

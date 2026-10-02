@@ -39,6 +39,11 @@ import { DepMapStore } from './dep-map-store';
   `,
   styles: `
     :host { display:block; } .tablewrap { overflow:auto; padding:12px; }
+    @media (min-width:1021px) and (min-height:700px) {
+      :host-context(.fit-height) { height:100%; min-height:0; display:flex; flex-direction:column; }
+      :host-context(.fit-height) .tablewrap { height:100%; min-height:0; flex:1 1 auto; overflow:auto; }
+      :host-context(.fit-height) .hint { flex:none; }
+    }
     table { border-collapse:separate; border-spacing:0; font-size:13px; width:100%; }
     th,td { padding:0; text-align:left; vertical-align:top; } .mx { min-width:820px; table-layout:fixed; }
     .mx thead th { position:relative; height:112px; vertical-align:bottom; border-bottom:1px solid var(--border); padding:0 2px; }
