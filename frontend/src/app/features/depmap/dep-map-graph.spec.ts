@@ -108,4 +108,17 @@ describe('DepMapGraph zoom and full map controls', () => {
     expect(store.fullMap()).toBe(false);
     expect(store.node()).toBe('usr');
   });
+
+  it('keeps map controls in the legend instead of over the drawing', () => {
+    const legend = fixture.nativeElement.querySelector('.legend');
+    const controls = fixture.nativeElement.querySelector('.map-controls');
+
+    expect(legend?.contains(controls)).toBe(true);
+    expect(fixture.nativeElement.querySelectorAll('.map-controls')).toHaveLength(1);
+  });
+
+  it('renders line-based focus halos for edges without a group outline', () => {
+    expect(fixture.nativeElement.querySelectorAll('.edge .focus-halo')).toHaveLength(1);
+    expect(fixture.nativeElement.querySelectorAll('.edge .focus-halo-contrast')).toHaveLength(1);
+  });
 });
