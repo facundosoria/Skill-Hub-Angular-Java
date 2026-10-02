@@ -4,6 +4,7 @@ import { I18n } from '../../core/i18n/i18n';
 import {
   edgeClass,
   edgeStrokeWidth,
+  clampNodes,
   geom,
   NODE_HEIGHT,
   NODE_WIDTH,
@@ -20,15 +21,19 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     <div class="graph">
     <div class="legend">
       <span class="legend-primary">
-        @if (store.node() && !store.pair()) { <i class="legend-out"></i><i class="legend-in"></i> }
-        <span class="legend-direction legend-out">↑ {{ t().mapa.leyendaNecesita }}</span> · <span class="legend-direction legend-in">↓ {{ t().mapa.leyendaNecesitan }}</span>
+        @if (store.node() && !store.pair()) {
+          <i class="legend-out"></i><span class="legend-direction legend-out">{{ nodeName(store.node()) }} {{ t().mapa.leyendaSeleccionNecesita }}</span>
+          · <i class="legend-in"></i><span class="legend-direction legend-in">{{ t().mapa.leyendaSeleccionNecesitan }} {{ nodeName(store.node()) }}</span>
+        } @else {
+          <span class="legend-direction legend-out">↑ {{ t().mapa.leyendaNecesita }}</span> · <span class="legend-direction legend-in">↓ {{ t().mapa.leyendaNecesitan }}</span>
+        }
       </span>
       @if (!store.visible().length) {
         <span class="legend-help">{{ t().mapa.sinFiltros }}</span>
       } @else if (store.node() && !store.pair()) {
         <span class="legend-help">{{ t().mapa.leyendaCantidad }} {{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.leyendaSeleccionAyuda }} · {{ visibleCount() }}.</span>
       } @else {
-        <span class="legend-help">{{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.leyendaGrupoAyuda }} {{ t().mapa.leyendaFlecha }} · {{ visibleCount() }}.</span>
+        <span class="legend-help">{{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.leyendaGrupoAyuda }}; {{ t().mapa.leyendaFlecha }} · {{ visibleCount() }}.</span>
       }
     </div>
     <svg class="map" viewBox="0 0 1000 745" role="group" [attr.aria-label]="t().mapa.mapaAria">
@@ -81,6 +86,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   imports: [NgTemplateOutlet],
   styles: `
     :host { display:block; }
+    :host-context(.fit-height) { min-height:0; height:100%; }
     .graph { display:flex; flex-direction:column; min-height:0; height:100%; }
     .legend { display:flex; flex-wrap:wrap; gap:3px 18px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
     .legend-primary,.legend-help { flex:0 1 auto; min-width:0; }
@@ -88,7 +94,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     .legend i.legend-out { border-top-color:var(--dep-out); } .legend i.legend-in { border-top-color:var(--dep-in); }
     .legend-direction.legend-out { color:var(--dep-out); } .legend-direction.legend-in { color:var(--dep-in); }
     svg.map { width:100%; height:auto; display:block; }
-    @media (min-width:1021px) and (min-height:700px) { :host-context(.fit-height) svg.map { flex:1 1 auto; min-height:0; height:100%; } }
+    @media (min-width:1021px) and (min-height:700px) { :host-context(.fit-height) svg.map { flex:1 1 0; min-height:0; height:auto; } }
     .node { cursor:pointer; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.2; }
     .node:hover rect { stroke:var(--text-muted); } .node:focus-visible rect { stroke:var(--text); stroke-width:2.4; }
     .node.sel rect { stroke:var(--text); stroke-width:2.2; } .node.out rect { stroke:var(--dep-out); stroke-width:2; }
@@ -119,14 +125,19 @@ export class DepMapGraph {
   readonly NODE_HEIGHT = NODE_HEIGHT;
   readonly NODE_TEXT_X = NODE_TEXT_X;
 
+  readonly renderedNodes = computed(() => {
+    const nodes = this.store.state().nodes;
+    return clampNodes(nodes);
+  });
+
   readonly edgeEntries = computed(() => {
     const grouped = this.store.grouped();
-    const state = this.store.state();
+    const nodes = this.renderedNodes();
     const selectedPair = this.store.pair();
     const selectedNode = this.store.node();
     return [...grouped.entries()].map(([key, items]) => {
       const pair = key.split('>') as [string, string];
-      const geometry = geom(state.nodes, pair[0], pair[1], grouped.has(`${pair[1]}>${pair[0]}`));
+      const geometry = geom(nodes, pair[0], pair[1], grouped.has(`${pair[1]}>${pair[0]}`));
       const classes = edgeClass(pair[0], pair[1], selectedNode, selectedPair);
       return { key, pair, items, geometry, classes, width: edgeStrokeWidth(items.length), marker: classes === 'out' ? 'm-out' : classes === 'in' ? 'm-in' : classes === 'sel' ? 'm-sel' : 'm-n', firstId: items[0]?.id };
     });
@@ -135,12 +146,12 @@ export class DepMapGraph {
   readonly passiveEdges = computed(() => this.edgeEntries().filter((edge) => edge.classes === 'dim'));
 
   readonly nodeEntries = computed(() => {
-    const state = this.store.state();
+    const nodes = this.renderedNodes();
     const visible = this.store.visible();
     const out: Record<string, number> = {}, incoming: Record<string, number> = {};
     visible.forEach((edge) => { out[edge.from] = (out[edge.from] || 0) + 1; incoming[edge.to] = (incoming[edge.to] || 0) + 1; });
     const touched = touchedNodes(visible, this.store.node());
-    return Object.entries(state.nodes).map(([id, node]) => ({ id, node, out: out[id] || 0, in: incoming[id] || 0, classes: nodeClass(id, this.store.node(), this.store.pair(), touched, !!node.transv) }));
+    return Object.entries(nodes).map(([id, node]) => ({ id, node, out: out[id] || 0, in: incoming[id] || 0, classes: nodeClass(id, this.store.node(), this.store.pair(), touched, !!node.transv) }));
   });
 
   nodeName(id: string | null): string { return id ? this.store.state().nodes[id]?.n || id : ''; }

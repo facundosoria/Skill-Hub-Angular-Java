@@ -128,7 +128,8 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
       .dep-map.fit-height .workspace { flex:1 1 auto; min-height:0; height:100%; align-items:stretch; }
       .dep-map.fit-height .workspace-card, .dep-map.fit-height .workspace-panel { min-height:0; height:100%; }
       .dep-map.fit-height .workspace-card { display:flex; flex-direction:column; }
-      .dep-map.fit-height .workspace-card > app-dep-map-graph, .dep-map.fit-height .workspace-card > app-dep-map-matrix, .dep-map.fit-height .workspace-card > app-dep-map-list { display:block; min-height:0; height:100%; }
+      .dep-map.fit-height .workspace-card > .tab-panel { display:flex; flex:1 1 auto; flex-direction:column; min-height:0; height:100%; }
+      .dep-map.fit-height .workspace-card > .tab-panel > app-dep-map-graph, .dep-map.fit-height .workspace-card > .tab-panel > app-dep-map-matrix, .dep-map.fit-height .workspace-card > .tab-panel > app-dep-map-list { display:block; flex:1 1 auto; min-height:0; height:100%; }
       .dep-map.fit-height .workspace-card > app-dep-map-matrix, .dep-map.fit-height .workspace-card > app-dep-map-list { overflow:hidden; }
       .dep-map.fit-height .workspace-panel { overflow-y:auto; overflow-x:hidden; }
     }

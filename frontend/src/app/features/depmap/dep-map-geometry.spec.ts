@@ -2,10 +2,15 @@ import {
   edgeClass,
   edgeStrokeWidth,
   geom,
+  boxWithinViewBox,
+  clampNode,
+  clampNodes,
+  mineTagBox,
   NODE_COUNT_FONT_SIZE,
   NODE_HEIGHT,
   NODE_NAME_FONT_SIZE,
   NODE_WIDTH,
+  nodeBox,
   nodeTextFits,
   nodeClass,
   pairs,
@@ -61,12 +66,13 @@ describe('dep-map geometry', () => {
   });
 
   it('keeps the seeded node rectangles separated and labels inside their width', () => {
-    const seededNodes: Record<string, { x: number; y: number }> = {
+    const seededPositions: Record<string, { x: number; y: number }> = {
       ux: { x: 95, y: 48 }, usr: { x: 300, y: 112 }, not: { x: 760, y: 112 }, cur: { x: 500, y: 255 },
       acc: { x: 315, y: 392 }, llm: { x: 685, y: 392 }, road: { x: 95, y: 392 }, teo: { x: 900, y: 290 },
       sand: { x: 900, y: 520 }, bko: { x: 500, y: 535 }, mkt: { x: 170, y: 650 }, mot: { x: 500, y: 705 },
       prac: { x: 810, y: 665 },
     };
+    const seededNodes = clampNodes(seededPositions);
     const names = ['UX/UI', 'Usuarios', 'Notificaciones', 'Cursos', 'Accounting', 'LLM', 'Roadmap', 'Desafíos teóricos', 'Sandbox', 'Backoffice', 'Market', 'Motor de desafíos', 'Desafíos prácticos'];
     const ids = Object.keys(seededNodes);
     for (let i = 0; i < ids.length; i++) {
@@ -78,6 +84,36 @@ describe('dep-map geometry', () => {
       }
     }
     expect(nodeTextFits('↑999  ↓999', NODE_COUNT_FONT_SIZE)).toBe(true);
+  });
+
+  it('keeps every node and the your-group tag inside the viewBox margin', () => {
+    const seededNodes = [
+      { x: 95, y: 48 }, { x: 300, y: 112 }, { x: 760, y: 112 }, { x: 500, y: 255 },
+      { x: 315, y: 392 }, { x: 685, y: 392 }, { x: 95, y: 392 }, { x: 900, y: 290 },
+      { x: 900, y: 520 }, { x: 500, y: 535 }, { x: 170, y: 650 }, { x: 500, y: 705 },
+      { x: 810, y: 665 },
+    ];
+    Object.values(clampNodes(Object.fromEntries(seededNodes.map((node, index) => [String(index), node])))).forEach((node) => {
+      expect(boxWithinViewBox(nodeBox(node)), JSON.stringify(node)).toBe(true);
+      expect(boxWithinViewBox(mineTagBox(node)), JSON.stringify(node)).toBe(true);
+    });
+  });
+
+  it('separates clamped seed nodes with a deterministic six-unit gap', () => {
+    const source = { ux: { x: 95, y: 48 }, usr: { x: 300, y: 112 }, road: { x: 95, y: 392 }, teo: { x: 900, y: 290 }, sand: { x: 900, y: 520 }, mot: { x: 500, y: 705 } };
+    const first = clampNodes(source), second = clampNodes(source);
+    expect(second).toEqual(first);
+    const ids = Object.keys(first);
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = first[ids[i]], b = first[ids[j]];
+      expect(Math.abs(a.x - b.x) >= NODE_WIDTH + 6 || Math.abs(a.y - b.y) >= NODE_HEIGHT + 6).toBe(true);
+    }
+  });
+
+  it('clamps centers while preserving in-bounds positions and node metadata', () => {
+    expect(clampNode({ x: 95, y: 48 })).toEqual({ x: 108, y: 57 });
+    expect(clampNode({ x: 900, y: 705 })).toEqual({ x: 892, y: 705 });
+    expect(clampNode({ x: 500, y: 300, n: 'UX/UI' } as { x: number; y: number; n: string })).toEqual({ x: 500, y: 300, n: 'UX/UI' });
   });
 
   it('keeps the original relative time thresholds', () => {

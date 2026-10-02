@@ -131,4 +131,15 @@ describe('DepMap offline controls', () => {
     expect(alert?.textContent).toContain('network failure');
     expect(alert?.querySelector('button')?.textContent).toContain('Reintentar');
   });
+
+  it('keeps the fit-height graph chain through the tab panel wrapper', () => {
+    const root = fixture.nativeElement as HTMLElement;
+    const panel = root.querySelector('.workspace-card > .tab-panel');
+    const graph = panel?.querySelector(':scope > app-dep-map-graph');
+    const map = graph?.querySelector(':scope .graph > svg.map');
+
+    expect(panel).toBeTruthy();
+    expect(graph).toBeTruthy();
+    expect(map).toBeTruthy();
+  });
 });

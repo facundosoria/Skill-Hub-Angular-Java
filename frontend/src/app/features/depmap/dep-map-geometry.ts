@@ -1,5 +1,8 @@
 export const NODE_WIDTH = 200;
 export const NODE_HEIGHT = 64;
+export const MAP_VIEWBOX_WIDTH = 1000;
+export const MAP_VIEWBOX_HEIGHT = 745;
+export const MAP_VIEWBOX_MARGIN = 8;
 export const NODE_TEXT_X = 14;
 export const NODE_TEXT_RIGHT_PADDING = 14;
 export const NODE_NAME_FONT_SIZE = 16;
@@ -17,6 +20,82 @@ export function nodeTextFits(text: string, fontSize: number): boolean {
 export interface GeometryNode {
   x: number;
   y: number;
+}
+
+export interface GeometryBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const MINE_TAG_X = 136;
+const MINE_TAG_Y = -9;
+const MINE_TAG_WIDTH = 56;
+const MINE_TAG_HEIGHT = 17;
+
+export function nodeBox(node: GeometryNode): GeometryBox {
+  return { x: node.x - NODE_WIDTH / 2, y: node.y - NODE_HEIGHT / 2, width: NODE_WIDTH, height: NODE_HEIGHT };
+}
+
+/** Clamp a node center so its full rectangle and optional group tag fit the map. */
+export function clampNode<T extends GeometryNode>(node: T, margin = MAP_VIEWBOX_MARGIN): T {
+  const minX = margin + NODE_WIDTH / 2;
+  const maxX = MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2;
+  const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT;
+  const maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
+  return {
+    ...node,
+    x: Math.min(maxX, Math.max(minX, node.x)),
+    y: Math.min(maxY, Math.max(minY, node.y)),
+  } as T;
+}
+
+/** Clamp all rendered centers and deterministically separate boxes without mutating saved data. */
+export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, margin = MAP_VIEWBOX_MARGIN, gap = 6): Record<string, T> {
+  const result = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, clampNode(node, margin)])) as Record<string, T>;
+  const ids = Object.keys(result);
+  const minX = margin + NODE_WIDTH / 2, maxX = MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2;
+  const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT, maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let changed = false;
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = result[ids[i]], b = result[ids[j]];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const overlapX = NODE_WIDTH + gap - Math.abs(dx), overlapY = NODE_HEIGHT + gap - Math.abs(dy);
+      if (overlapX <= 0 || overlapY <= 0) continue;
+      const axis = overlapX <= overlapY ? 'x' : 'y';
+      const amount = axis === 'x' ? overlapX : overlapY;
+      const aSign = (axis === 'x' ? dx : dy) >= 0 ? -1 : 1;
+      const aValue = axis === 'x' ? a.x : a.y;
+      const bValue = axis === 'x' ? b.x : b.y;
+      const aMin = axis === 'x' ? minX : minY, aMax = axis === 'x' ? maxX : maxY;
+      const aRoom = aSign < 0 ? aValue - aMin : aMax - aValue;
+      const bSign = -aSign, bRoom = bSign < 0 ? bValue - aMin : aMax - bValue;
+      const aMove = Math.min(amount / 2, Math.max(0, aRoom));
+      const bMove = Math.min(amount - aMove, Math.max(0, bRoom));
+      const extra = amount - aMove - bMove;
+      const finalAMove = aMove + Math.min(extra, Math.max(0, aRoom - aMove));
+      const finalBMove = bMove + Math.min(extra - (finalAMove - aMove), Math.max(0, bRoom - bMove));
+      if (axis === 'x') { a.x += aSign * finalAMove; b.x += bSign * finalBMove; }
+      else { a.y += aSign * finalAMove; b.y += bSign * finalBMove; }
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  return result;
+}
+
+/** The "your group" tag is positioned relative to the node's top-left corner. */
+export function mineTagBox(node: GeometryNode): GeometryBox {
+  const box = nodeBox(node);
+  return { x: box.x + MINE_TAG_X, y: box.y + MINE_TAG_Y, width: MINE_TAG_WIDTH, height: MINE_TAG_HEIGHT };
+}
+
+export function boxWithinViewBox(box: GeometryBox, margin = MAP_VIEWBOX_MARGIN): boolean {
+  return box.x >= margin && box.y >= margin
+    && box.x + box.width <= MAP_VIEWBOX_WIDTH - margin
+    && box.y + box.height <= MAP_VIEWBOX_HEIGHT - margin;
 }
 
 export interface GeometryEdge {
