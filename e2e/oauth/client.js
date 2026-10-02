@@ -268,25 +268,43 @@ async function main() {
   const client = { redirect_uri: redirectUri };
 
   await testStep('5.4', 'discovery informa issuer, recurso y endpoints', async () => {
+    const unauthenticatedGet = await request(`${baseUrl}/api/mcp`);
+    assert(unauthenticatedGet.status === 401, `GET /api/mcp sin token status ${unauthenticatedGet.status}`);
+    assert((unauthenticatedGet.headers['www-authenticate'] || '').includes('resource_metadata='),
+      'GET /api/mcp sin token no anunció resource_metadata');
+    const eventStreamGet = await request(`${baseUrl}/api/mcp`, { headers: { Accept: 'text/event-stream' } });
+    assert(eventStreamGet.status === 401, `GET /api/mcp Accept SSE sin token status ${eventStreamGet.status}`);
+    assert((eventStreamGet.headers['www-authenticate'] || '').includes('resource_metadata='),
+      'GET /api/mcp Accept SSE sin token no anunció resource_metadata');
     const protectedResource = await request(`${baseUrl}/.well-known/oauth-protected-resource`);
     assert(protectedResource.status === 200, 'protected resource metadata no disponible');
     const protectedBody = parseJson(protectedResource);
     assert(protectedBody.resource === `${baseUrl}/api/mcp`, 'recurso protegido incorrecto');
     assert(Array.isArray(protectedBody.authorization_servers) && protectedBody.authorization_servers.length === 1,
       'authorization server ausente');
+    assert(JSON.stringify(protectedBody.scopes_supported) === JSON.stringify(['mcp']),
+      'scopes_supported del recurso MCP incorrecto');
+    const pathInsertedResource = await request(`${baseUrl}/.well-known/oauth-protected-resource/api/mcp`);
+    assert(pathInsertedResource.status === 200 && parseJson(pathInsertedResource).resource === `${baseUrl}/api/mcp`,
+      'protected resource path-inserted inválido o no JSON');
     const metadataResponse = await request(`${baseUrl}/.well-known/oauth-authorization-server`);
     assert(metadataResponse.status === 200, 'authorization server metadata no disponible');
     const metadata = parseJson(metadataResponse);
     assert(typeof metadata.issuer === 'string' && metadata.issuer.replace(/\/$/, '') === baseUrl, 'issuer incorrecto');
-    for (const key of ['authorization_endpoint', 'token_endpoint', 'registration_endpoint']) {
-      if (key !== 'registration_endpoint') assert(typeof metadata[key] === 'string', `${key} ausente`);
-    }
+    for (const key of ['authorization_endpoint', 'token_endpoint', 'registration_endpoint'])
+      assert(typeof metadata[key] === 'string', `${key} ausente`);
+    assert(JSON.stringify(metadata.code_challenge_methods_supported) === JSON.stringify(['S256']),
+      'metadata PKCE debe anunciar sólo S256');
+    const pathAppendedOidc = await request(`${baseUrl}/api/mcp/.well-known/openid-configuration`);
+    assert(pathAppendedOidc.status === 200 && typeof parseJson(pathAppendedOidc).issuer === 'string',
+      'OIDC path-appended inválido o no JSON');
+    const pathInsertedAuthorization = await request(`${baseUrl}/.well-known/oauth-authorization-server/api/mcp`);
+    assert(pathInsertedAuthorization.status === 200 && typeof parseJson(pathInsertedAuthorization).registration_endpoint === 'string',
+      'authorization server path-inserted inválido o sin registration_endpoint');
     Object.assign(client, {
       authorization_endpoint: metadata.authorization_endpoint,
       token_endpoint: metadata.token_endpoint,
-      // Hydra 2.2 serves DCR at the standard endpoint but omits the optional
-      // registration_endpoint member from OIDC discovery.
-      registration_endpoint: metadata.registration_endpoint || `${baseUrl}/oauth2/register`,
+      registration_endpoint: metadata.registration_endpoint,
       issuer: metadata.issuer,
     });
   });

@@ -58,6 +58,18 @@ no se modificaron `package.json`, tests ni el Node del sistema.
 | 7.31 Registrar cliente no concede acceso MCP | aprobado | E2E 5.2/5.8; validación JWT exige usuario activo, recurso y scope. |
 | 7.32 Consentimiento obligatorio | aprobado | `OAuthControllerTest`, `HydraAdminClientConsentTest`; E2E 5.6 rechazo explícito y 5.7 code exchange sólo tras aceptar. |
 
+## Regresión de conexión Claude Desktop
+
+- Hydra publica `registration_endpoint` sólo cuando se configura
+  `WEBFINGER_OIDC_DISCOVERY_CLIENT_REGISTRATION_URL`; el endpoint anunciado es
+  `${PUBLIC_BASE_URL}/oauth2/register` y conserva DCR público, PKCE obligatorio
+  y cliente público `token_endpoint_auth_method=none`.
+- `/api/mcp` responde `401` con `WWW-Authenticate` antes de método no soportado
+  y `405 Allow: POST` después de autenticar; `HttpRequestMethodNotSupportedException`
+  también se mapea globalmente a 405.
+- Las rutas `.well-known` path-inserted se sirven como JSON desde backend y no
+  reciben el fallback HTML de Caddy; el E2E las verifica junto con DCR.
+
 ## Riesgos residuales
 
 - Rate limiting específico de DCR y mitigación avanzada de spam quedan

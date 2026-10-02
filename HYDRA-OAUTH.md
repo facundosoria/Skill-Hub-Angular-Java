@@ -49,6 +49,7 @@ los clientes acceden a través de Caddy y `PUBLIC_BASE_URL`.
 ### Infraestructura
 
 - `oryd/hydra:v2.2.0` en `docker-compose.yml`.
+- DCR público se anuncia explícitamente mediante `WEBFINGER_OIDC_DISCOVERY_CLIENT_REGISTRATION_URL`; sin esta clave Hydra habilita `/oauth2/register` pero omite `registration_endpoint` del discovery.
 - Servicio `hydra-migrate`, que aplica el schema de Hydra sobre la base `hydra`.
 - PostgreSQL con un único volumen Docker (`pgdata`) que contiene las bases
   `skillhub` y `hydra`.
@@ -141,6 +142,15 @@ modificar la lista de scopes que se otorga.
 | `POST /api/oauth/reject-logout` | Rechaza el logout y continúa al callback de Hydra. |
 | `GET /.well-known/oauth-protected-resource` | Metadata RFC 9728 del recurso MCP. |
 | `GET /.well-known/oauth-authorization-server` | Reenvía el discovery de Hydra bajo RFC 8414. |
+
+Las variantes path-inserted `/.well-known/oauth-protected-resource/api/mcp` y
+`/.well-known/oauth-authorization-server/api/mcp` también se enrutan al backend
+para impedir que Caddy las convierta en HTML del SPA. Las rutas `.well-known`
+no soportadas no deben caer al fallback.
+
+`GET /api/mcp` autentica primero: sin token devuelve `401` con
+`WWW-Authenticate` y `resource_metadata`; con token devuelve `405 Allow: POST`,
+porque este servidor sólo ofrece el transporte MCP por POST.
 
 ### Validación de access tokens
 

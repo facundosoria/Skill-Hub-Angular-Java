@@ -74,6 +74,9 @@ services:
       DSN: postgres://hydra:${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD, ver .env.example}@db:5432/hydra?sslmode=disable
       URLS_SELF_ISSUER: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/
       URLS_LOGIN: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth/login
+      # Hydra only advertises DCR when this discovery URL is configured. The
+      # endpoint itself is Hydra's public /oauth2/register route.
+      WEBFINGER_OIDC_DISCOVERY_CLIENT_REGISTRATION_URL: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth2/register
       URLS_CONSENT: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth/consent
       URLS_LOGOUT: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth/logout
       SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET:?falta HYDRA_SYSTEM_SECRET, ver .env.example}

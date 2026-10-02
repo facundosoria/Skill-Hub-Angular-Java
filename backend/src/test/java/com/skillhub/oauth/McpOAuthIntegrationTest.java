@@ -83,6 +83,42 @@ class McpOAuthIntegrationTest {
         verifyNoInteractions(oauthIdentities);
     }
 
+    @Test
+    void getWithoutTokenReturnsUnauthorizedChallenge() {
+        when(oauthIdentities.identifyByAuthHeader(null)).thenReturn(null);
+        ResponseEntity<JsonNode> response = controller.unsupported(new MockHttpServletRequest());
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getHeaders().getFirst("WWW-Authenticate"))
+                .contains("resource_metadata=\"" + RESOURCE_METADATA + "\"");
+    }
+
+    @Test
+    void getWithValidOAuthIdentityReturnsMethodNotAllowed() {
+        ApiKeyIdentity identity = new ApiKeyIdentity(null, "user-id", "oauth-user", "platform", "member");
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Authorization", "Bearer oauth-token");
+        when(oauthIdentities.identifyByAuthHeader("Bearer oauth-token")).thenReturn(identity);
+
+        ResponseEntity<JsonNode> response = controller.unsupported(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.METHOD_NOT_ALLOWED);
+        assertThat(response.getHeaders().getFirst("Allow")).isEqualTo("POST");
+    }
+
+    @Test
+    void getWithEventStreamAcceptStillAuthenticatesBeforeMethodNegotiation() {
+        when(oauthIdentities.identifyByAuthHeader(null)).thenReturn(null);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Accept", "text/event-stream");
+
+        ResponseEntity<JsonNode> response = controller.unsupported(request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(response.getHeaders().getFirst("WWW-Authenticate"))
+                .contains("resource_metadata=\"" + RESOURCE_METADATA + "\"");
+    }
+
     private ResponseEntity<JsonNode> callWith(String authorization) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.addHeader("Authorization", authorization);

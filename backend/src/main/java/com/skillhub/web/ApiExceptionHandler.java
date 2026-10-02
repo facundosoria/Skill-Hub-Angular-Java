@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 
 import java.util.Map;
 
@@ -38,6 +40,21 @@ public class ApiExceptionHandler {
     public ResponseEntity<Map<String, Object>> uploadTooLarge(MaxUploadSizeExceededException e) {
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(Map.of("error", "El archivo supera el limite de 25 MB"));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> methodNotSupported(HttpRequestMethodNotSupportedException e) {
+        ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED);
+        if (e.getSupportedHttpMethods() != null && !e.getSupportedHttpMethods().isEmpty()) {
+            response.header("Allow", String.join(", ", e.getSupportedHttpMethods().stream().map(method -> method.name()).toList()));
+        }
+        return response.body(Map.of("error", "Metodo HTTP no soportado"));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Map<String, Object>> mediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException e) {
+        return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
+                .body(Map.of("error", "Formato de respuesta no aceptado"));
     }
 
     /** Catch-all: cualquier excepcion no prevista devuelve 500 generico sin leak. */
