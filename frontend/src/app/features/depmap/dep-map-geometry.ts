@@ -1,9 +1,105 @@
-export const NODE_WIDTH = 168;
-export const NODE_HEIGHT = 52;
+export const NODE_WIDTH = 200;
+export const NODE_HEIGHT = 64;
+export const MAP_VIEWBOX_WIDTH = 1000;
+export const MAP_VIEWBOX_HEIGHT = 745;
+export const MAP_VIEWBOX_MARGIN = 8;
+export const NODE_TEXT_X = 14;
+export const NODE_TEXT_RIGHT_PADDING = 14;
+export const NODE_NAME_FONT_SIZE = 16;
+export const NODE_COUNT_FONT_SIZE = 13;
+
+/** Conservative SVG text-width estimate used by the geometry tests. */
+export function estimateTextWidth(text: string, fontSize: number): number {
+  return text.length * fontSize * 0.56;
+}
+
+export function nodeTextFits(text: string, fontSize: number): boolean {
+  return estimateTextWidth(text, fontSize) <= NODE_WIDTH - NODE_TEXT_X - NODE_TEXT_RIGHT_PADDING;
+}
 
 export interface GeometryNode {
   x: number;
   y: number;
+}
+
+export interface GeometryBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const MINE_TAG_X = 136;
+const MINE_TAG_Y = -9;
+const MINE_TAG_HEIGHT = 17;
+const MINE_TAG_PADDING = 16;
+
+export function mineTagWidth(label = 'tu grupo'): number {
+  return Math.max(56, estimateTextWidth(label, 10.5) + MINE_TAG_PADDING);
+}
+
+export function nodeBox(node: GeometryNode): GeometryBox {
+  return { x: node.x - NODE_WIDTH / 2, y: node.y - NODE_HEIGHT / 2, width: NODE_WIDTH, height: NODE_HEIGHT };
+}
+
+/** Clamp a node center so its full rectangle and optional group tag fit the map. */
+export function clampNode<T extends GeometryNode>(node: T, margin = MAP_VIEWBOX_MARGIN, mineLabel = 'tu grupo'): T {
+  const minX = margin + NODE_WIDTH / 2;
+  const maxX = Math.min(MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2, MAP_VIEWBOX_WIDTH - margin - MINE_TAG_X - mineTagWidth(mineLabel) + NODE_WIDTH / 2);
+  const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT;
+  const maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
+  return {
+    ...node,
+    x: Math.min(maxX, Math.max(minX, node.x)),
+    y: Math.min(maxY, Math.max(minY, node.y)),
+  } as T;
+}
+
+/** Clamp all rendered centers and deterministically separate boxes without mutating saved data. */
+export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, margin = MAP_VIEWBOX_MARGIN, gap = 6, mineLabel = 'tu grupo'): Record<string, T> {
+  const result = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, clampNode(node, margin, mineLabel)])) as Record<string, T>;
+  const ids = Object.keys(result);
+  const minX = margin + NODE_WIDTH / 2, maxX = Math.min(MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2, MAP_VIEWBOX_WIDTH - margin - MINE_TAG_X - mineTagWidth(mineLabel) + NODE_WIDTH / 2);
+  const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT, maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
+  for (let iteration = 0; iteration < 20; iteration++) {
+    let changed = false;
+    for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
+      const a = result[ids[i]], b = result[ids[j]];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const overlapX = NODE_WIDTH + gap - Math.abs(dx), overlapY = NODE_HEIGHT + gap - Math.abs(dy);
+      if (overlapX <= 0 || overlapY <= 0) continue;
+      const axis = overlapX <= overlapY ? 'x' : 'y';
+      const amount = axis === 'x' ? overlapX : overlapY;
+      const aSign = (axis === 'x' ? dx : dy) >= 0 ? -1 : 1;
+      const aValue = axis === 'x' ? a.x : a.y;
+      const bValue = axis === 'x' ? b.x : b.y;
+      const aMin = axis === 'x' ? minX : minY, aMax = axis === 'x' ? maxX : maxY;
+      const aRoom = aSign < 0 ? aValue - aMin : aMax - aValue;
+      const bSign = -aSign, bRoom = bSign < 0 ? bValue - aMin : aMax - bValue;
+      const aMove = Math.min(amount / 2, Math.max(0, aRoom));
+      const bMove = Math.min(amount - aMove, Math.max(0, bRoom));
+      const extra = amount - aMove - bMove;
+      const finalAMove = aMove + Math.min(extra, Math.max(0, aRoom - aMove));
+      const finalBMove = bMove + Math.min(extra - (finalAMove - aMove), Math.max(0, bRoom - bMove));
+      if (axis === 'x') { a.x += aSign * finalAMove; b.x += bSign * finalBMove; }
+      else { a.y += aSign * finalAMove; b.y += bSign * finalBMove; }
+      changed = true;
+    }
+    if (!changed) break;
+  }
+  return result;
+}
+
+/** The "your group" tag is positioned relative to the node's top-left corner. */
+export function mineTagBox(node: GeometryNode, label = 'tu grupo'): GeometryBox {
+  const box = nodeBox(node);
+  return { x: box.x + MINE_TAG_X, y: box.y + MINE_TAG_Y, width: mineTagWidth(label), height: MINE_TAG_HEIGHT };
+}
+
+export function boxWithinViewBox(box: GeometryBox, margin = MAP_VIEWBOX_MARGIN): boolean {
+  return box.x >= margin && box.y >= margin
+    && box.x + box.width <= MAP_VIEWBOX_WIDTH - margin
+    && box.y + box.height <= MAP_VIEWBOX_HEIGHT - margin;
 }
 
 export interface GeometryEdge {
@@ -125,4 +221,59 @@ export function nodeClass(
 
 export function edgeStrokeWidth(count: number): string {
   return (1.2 + Math.min(count, 6) * 0.45).toFixed(2);
+}
+
+export const MAP_MIN_SCALE = 1;
+export const MAP_MAX_SCALE = 3;
+export const MAP_ZOOM_STEP = 1.25;
+export const MAP_PAN_THRESHOLD = 4;
+
+export interface MapTransform {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+export const MAP_IDENTITY: MapTransform = { scale: MAP_MIN_SCALE, x: 0, y: 0 };
+
+export function clampScale(scale: number): number {
+  if (!Number.isFinite(scale)) return MAP_MIN_SCALE;
+  return Math.min(MAP_MAX_SCALE, Math.max(MAP_MIN_SCALE, scale));
+}
+
+/** One zoom step in `direction` (+1 in, -1 out), clamped to the allowed range. */
+export function zoomedScale(scale: number, direction: 1 | -1): number {
+  return clampScale(direction > 0 ? scale * MAP_ZOOM_STEP : scale / MAP_ZOOM_STEP);
+}
+
+/**
+ * Keeps the scaled drawing covering the viewport: after `translate(t) scale(s)`
+ * the content spans `[t, t + size * s]`, so `t` must stay in `[size*(1-s), 0]`.
+ */
+export function clampPan(value: number, scale: number, size: number): number {
+  if (scale <= MAP_MIN_SCALE) return 0;
+  return Math.min(0, Math.max(size * (1 - scale), value));
+}
+
+export function clampTransform(transform: MapTransform): MapTransform {
+  const scale = clampScale(transform.scale);
+  return {
+    scale,
+    x: clampPan(transform.x, scale, MAP_VIEWBOX_WIDTH),
+    y: clampPan(transform.y, scale, MAP_VIEWBOX_HEIGHT),
+  };
+}
+
+/** Zooms to `nextScale` keeping the map point (`focusX`, `focusY`) fixed on screen. */
+export function zoomAt(transform: MapTransform, nextScale: number, focusX: number, focusY: number): MapTransform {
+  const scale = clampScale(nextScale);
+  return clampTransform({
+    scale,
+    x: transform.x + focusX * (transform.scale - scale),
+    y: transform.y + focusY * (transform.scale - scale),
+  });
+}
+
+export function panBy(transform: MapTransform, dx: number, dy: number): MapTransform {
+  return clampTransform({ scale: transform.scale, x: transform.x + dx, y: transform.y + dy });
 }

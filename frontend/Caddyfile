@@ -18,7 +18,16 @@
 	handle /api/* {
 		reverse_proxy backend:8080
 	}
+	handle /.well-known/oauth-protected-resource/api/mcp {
+		reverse_proxy backend:8080
+	}
 	handle /.well-known/oauth-protected-resource {
+		reverse_proxy backend:8080
+	}
+	handle /.well-known/openid-configuration {
+		reverse_proxy backend:8080
+	}
+	handle /.well-known/openid-configuration/api/mcp {
 		reverse_proxy backend:8080
 	}
 
@@ -32,11 +41,14 @@
 		# OIDC discovery) - lo sirve el backend, que reenvia el contenido real.
 		reverse_proxy backend:8080
 	}
-	handle /.well-known/openid-configuration {
-		reverse_proxy hydra:4444
+	handle /.well-known/oauth-authorization-server/api/mcp {
+		reverse_proxy backend:8080
 	}
 	handle /.well-known/jwks.json {
 		reverse_proxy hydra:4444
+	}
+	handle /.well-known/* {
+		reverse_proxy backend:8080
 	}
 	handle /userinfo {
 		reverse_proxy hydra:4444

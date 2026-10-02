@@ -53,6 +53,7 @@ export type DepMapStatus = 'todos' | 'pendiente' | 'definir' | 'hecho';
 
 const MINE_KEY = 'depmap-mine';
 const VIEW_KEY = 'depmap-view';
+const PANEL_COLLAPSED_KEY = 'depmap-panel-collapsed';
 
 const emptyState: DepMapState = {
   nodes: {}, kinds: {}, info: {}, edges: [], done: {}, activity: [], presence: [],
@@ -77,6 +78,8 @@ export class DepMapStore {
   readonly mine = signal(this.readPreference(MINE_KEY, 'usr'));
   readonly node = signal<string | null>(null);
   readonly pair = signal<[string, string] | null>(null);
+  readonly fullMap = signal(false);
+  readonly panelCollapsed = signal(this.readPreference(PANEL_COLLAPSED_KEY, 'false') === 'true');
   readonly online = signal(false);
   readonly sseOpen = signal(false);
   readonly offline = signal(false);
@@ -162,7 +165,16 @@ export class DepMapStore {
     this.mine.set(mine);
     this.node.set(mine);
     this.pair.set(null);
+    this.fullMap.set(false);
     this.writePreference(MINE_KEY, mine);
+  }
+
+  togglePanel(): void {
+    this.panelCollapsed.update((collapsed) => {
+      const next = !collapsed;
+      this.writePreference(PANEL_COLLAPSED_KEY, String(next));
+      return next;
+    });
   }
 
   setQuery(query: string): void { this.query.set(query); }
@@ -176,9 +188,23 @@ export class DepMapStore {
     });
   }
 
-  selectNode(node: string): void { this.node.set(node); this.pair.set(null); }
-  selectPair(pair: [string, string]): void { this.pair.set(pair); }
+  selectNode(node: string): void { this.fullMap.set(false); this.node.set(node); this.pair.set(null); }
+  selectPair(pair: [string, string]): void { this.fullMap.set(false); this.pair.set(pair); }
+  clearSelection(): void { this.fullMap.set(false); this.node.set(null); this.pair.set(null); }
   clearPair(): void { this.pair.set(null); }
+
+  /** Toggles "view full map": no selection, no dimming. Exits by selecting or focusing a group. */
+  toggleFullMap(): void {
+    if (this.fullMap()) {
+      this.fullMap.set(false);
+      this.node.set(this.mine());
+      this.pair.set(null);
+    } else {
+      this.fullMap.set(true);
+      this.node.set(null);
+      this.pair.set(null);
+    }
+  }
 
   async addEdge(body: Pick<DepMapEdge, 'from' | 'to' | 'kind' | 'state' | 'text'>): Promise<void> {
     await firstValueFrom(this.api.post('/depmap/edges', body));
@@ -191,9 +217,14 @@ export class DepMapStore {
   }
 
   async setDone(id: string, done: boolean): Promise<void> {
-    await firstValueFrom(this.api.put(`/depmap/done/${encodeURIComponent(id)}`, { done }));
-    await this.refresh();
-    this.flash(id);
+    try {
+      await firstValueFrom(this.api.put(`/depmap/done/${encodeURIComponent(id)}`, { done }));
+      await this.refresh();
+      this.flash(id);
+    } catch (error) {
+      this.error.set(errorMessage(error));
+      throw error;
+    }
   }
 
   async importData(data: { edges: DepMapEdge[]; done: Record<string, boolean> }): Promise<void> {
@@ -229,7 +260,7 @@ export class DepMapStore {
       const first = Object.keys(state.nodes).find((id) => !state.nodes[id].transv) ?? Object.keys(state.nodes)[0];
       if (first) this.mine.set(first);
     }
-    if (!this.node() && this.mine()) this.node.set(this.mine());
+    if (!this.fullMap() && !this.node() && this.mine()) this.node.set(this.mine());
     if (!this.kindsOn().size || [...this.kindsOn()].some((kind) => !state.kinds[kind])) this.kindsOn.set(new Set(Object.keys(state.kinds)));
   }
 

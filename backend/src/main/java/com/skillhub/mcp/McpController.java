@@ -50,7 +50,7 @@ public class McpController {
         this.resourceMetadataUrl = resourceMetadataUrl;
     }
 
-    @PostMapping(value = "/api/mcp", produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping("/api/mcp")
     public ResponseEntity<JsonNode> handle(@RequestBody JsonNode body, HttpServletRequest req) {
         String authHeader = req.getHeader("Authorization");
         boolean isApiKey = authHeader != null && authHeader.regionMatches(7, "sk_hub_", 0, 7);
@@ -58,11 +58,7 @@ public class McpController {
                 ? apiKeys.identifyByAuthHeader(authHeader)
                 : oauthIdentities.identifyByAuthHeader(authHeader);
         if (identity == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .header("WWW-Authenticate", "Bearer realm=\"skill-hub\", resource_metadata=\""
-                            + resourceMetadataUrl + "\"")
-                    .body(rpcError(null, -32001,
-                            "Autenticacion invalida, revocada o ausente. Genera una API key o conectate por OAuth desde tu cuenta en el hub."));
+            return unauthorized();
         }
         if (identity.apiKeyId() != null) apiKeys.touchApiKey(identity.apiKeyId());
 
@@ -89,6 +85,36 @@ public class McpController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(rpcError(idNode, -32603, "Error interno"));
         }
+    }
+
+    /**
+     * Streamable HTTP currently exposes only POST. Keep authentication
+     * semantics identical to POST before returning 405 for other methods;
+     * otherwise Spring's unmapped GET becomes an incorrect 500 through the
+     * generic exception handler.
+     */
+    @RequestMapping(value = "/api/mcp")
+    public ResponseEntity<JsonNode> unsupported(HttpServletRequest req) {
+        if (!authenticated(req)) {
+            return unauthorized();
+        }
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .header("Allow", "POST")
+                .body(rpcError(null, -32600, "Metodo HTTP no soportado; use POST"));
+    }
+
+    private boolean authenticated(HttpServletRequest req) {
+        String authHeader = req.getHeader("Authorization");
+        boolean isApiKey = authHeader != null && authHeader.regionMatches(7, "sk_hub_", 0, 7);
+        return (isApiKey ? apiKeys.identifyByAuthHeader(authHeader) : oauthIdentities.identifyByAuthHeader(authHeader)) != null;
+    }
+
+    private ResponseEntity<JsonNode> unauthorized() {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .header("WWW-Authenticate", "Bearer realm=\"skill-hub\", resource_metadata=\"" + resourceMetadataUrl + "\"")
+                // No body lets Spring emit the challenge even when the client
+                // advertises only text/event-stream, before JSON negotiation.
+                .build();
     }
 
     private ObjectNode initialize(JsonNode params) {

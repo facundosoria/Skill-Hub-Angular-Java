@@ -104,6 +104,67 @@ describe('DepMapStore offline mode', () => {
   }
 });
 
+describe('DepMapStore full map mode', () => {
+  let api: { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    FakeEventSource.instances = [];
+    vi.stubGlobal('EventSource', FakeEventSource);
+    api = { get: vi.fn().mockReturnValue(of(state)), post: vi.fn(), put: vi.fn(), delete: vi.fn() };
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
+  async function createStore(): Promise<DepMapStore> {
+    TestBed.configureTestingModule({ providers: [DepMapStore, { provide: Api, useValue: api }] });
+    const store = TestBed.inject(DepMapStore);
+    await Promise.resolve();
+    await Promise.resolve();
+    return store;
+  }
+
+  it('clears the selection and keeps it clear across refreshes while viewing the full map', async () => {
+    const store = await createStore();
+    expect(store.node()).toBe('usr');
+
+    store.toggleFullMap();
+    expect(store.fullMap()).toBe(true);
+    expect(store.node()).toBeNull();
+    expect(store.pair()).toBeNull();
+
+    await store.refresh();
+    expect(store.fullMap()).toBe(true);
+    expect(store.node()).toBeNull();
+  });
+
+  it('exits the full map mode when a node or an edge is selected', async () => {
+    const store = await createStore();
+    store.toggleFullMap();
+    store.selectNode('usr');
+    expect(store.fullMap()).toBe(false);
+
+    store.toggleFullMap();
+    store.selectPair(['usr', 'usr']);
+    expect(store.fullMap()).toBe(false);
+  });
+
+  it('returns to My group when the toggle is turned off', async () => {
+    const store = await createStore();
+    store.toggleFullMap();
+    store.toggleFullMap();
+
+    expect(store.fullMap()).toBe(false);
+    expect(store.node()).toBe(store.mine());
+  });
+});
+
 describe('DepMap cache logout cleanup', () => {
   let api: { post: ReturnType<typeof vi.fn> };
 

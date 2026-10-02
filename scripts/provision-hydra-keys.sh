@@ -58,18 +58,26 @@ ensure_key_set() {
 # not turn that 404 into a rotation-prone POST for this set.
 public_jwks="$work_dir/public-jwks.json"
 public_headers="$work_dir/public-jwks.headers"
-if ! wget --quiet --server-response --timeout="$http_timeout" \
-    --output-document="$public_jwks" "$public_endpoint/.well-known/jwks.json" \
-    2>"$public_headers"; then
-  status="$(sed -n 's/^  HTTP\/[0-9.][0-9.]* \([0-9][0-9][0-9]\).*/\1/p' "$public_headers" | tail -n 1)"
-  echo "hydra-keys: GET public JWKS failed (HTTP ${status:-network error})" >&2
+status=""
+for attempt in 1 2 3 4 5 6; do
+  if wget --quiet --server-response --timeout="$http_timeout" \
+      --output-document="$public_jwks" "$public_endpoint/.well-known/jwks.json" \
+      2>"$public_headers"; then
+    status="$(sed -n 's/^  HTTP\/[0-9.][0-9.]* \([0-9][0-9][0-9]\).*/\1/p' "$public_headers" | tail -n 1)"
+    if [ "$status" = 200 ]; then
+      echo "hydra-keys: hydra.openid.id-token ready (public JWKS GET 200)" >&2
+      break
+    fi
+  else
+    status="$(sed -n 's/^  HTTP\/[0-9.][0-9.]* \([0-9][0-9][0-9]\).*/\1/p' "$public_headers" | tail -n 1)"
+  fi
+  echo "hydra-keys: public JWKS attempt $attempt failed (HTTP ${status:-network error}); retrying" >&2
+  sleep 2
+done
+[ "$status" = 200 ] || {
+  echo "hydra-keys: public JWKS failed after retries (HTTP ${status:-unknown})" >&2
   exit 1
-fi
-status="$(sed -n 's/^  HTTP\/[0-9.][0-9.]* \([0-9][0-9][0-9]\).*/\1/p' "$public_headers" | tail -n 1)"
-case "$status" in
-  200) echo "hydra-keys: hydra.openid.id-token ready (public JWKS GET 200)" >&2 ;;
-  *) echo "hydra-keys: public JWKS returned unexpected HTTP ${status:-unknown}" >&2; exit 1 ;;
-esac
+}
 
 case "$access_token_strategy" in
   jwt) ensure_key_set hydra.jwt.access-token ;;

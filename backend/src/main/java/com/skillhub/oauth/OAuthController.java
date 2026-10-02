@@ -5,6 +5,7 @@ import com.skillhub.session.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.server.ResponseStatusException;
@@ -12,6 +13,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 import java.util.ArrayList;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /**
  * Puente entre el login por usuario/contrasena de Skill Hub (ya existente,
@@ -140,11 +143,16 @@ public class OAuthController {
     }
 
     /** RFC 9728 (OAuth 2.0 Protected Resource Metadata) - le dice a los clientes MCP donde autenticarse. */
-    @GetMapping("/.well-known/oauth-protected-resource")
+    @GetMapping({
+            "/.well-known/oauth-protected-resource",
+            "/.well-known/oauth-protected-resource/api/mcp",
+            "/api/mcp/.well-known/oauth-protected-resource"
+    })
     public Map<String, Object> protectedResourceMetadata() {
         return Map.of(
                 "resource", mcpResourceUrl,
                 "authorization_servers", List.of(hydraIssuer),
+                "scopes_supported", List.of("mcp"),
                 "bearer_methods_supported", List.of("header"));
     }
 
@@ -155,11 +163,29 @@ public class OAuthController {
      * lo piden igual por compatibilidad, asi que este endpoint reenvia el
      * contenido real de Hydra tal cual.
      */
-    @GetMapping("/.well-known/oauth-authorization-server")
+    @GetMapping({
+            "/.well-known/oauth-authorization-server",
+            "/.well-known/oauth-authorization-server/api/mcp",
+            "/api/mcp/.well-known/oauth-authorization-server",
+            "/api/mcp/.well-known/openid-configuration",
+            "/.well-known/openid-configuration",
+            "/.well-known/openid-configuration/api/mcp"
+    })
     public JsonNode authorizationServerMetadata() {
-        return hydraPublic.get()
+        JsonNode metadata = hydraPublic.get()
                 .uri("/.well-known/openid-configuration")
                 .retrieve()
                 .body(JsonNode.class);
+        if (metadata == null || !metadata.isObject()) return metadata;
+        ObjectNode sanitized = metadata.deepCopy();
+        ArrayNode pkceMethods = sanitized.putArray("code_challenge_methods_supported");
+        pkceMethods.add("S256");
+        return sanitized;
+    }
+
+    /** Keep unknown discovery probes out of the SPA fallback. */
+    @GetMapping({"/.well-known/**", "/api/mcp/.well-known/**"})
+    public ResponseEntity<Map<String, Object>> unknownDiscoveryPath() {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Discovery endpoint not found"));
     }
 }

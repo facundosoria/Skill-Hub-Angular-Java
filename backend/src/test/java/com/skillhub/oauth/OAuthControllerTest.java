@@ -65,6 +65,15 @@ class OAuthControllerTest {
         assertThat(hydra.rejectedChallenge).isEqualTo("challenge-1");
     }
 
+    @Test
+    void protectedResourceMetadataAdvertisesOnlyTheMcpResourceScope() {
+        Map<String, Object> response = controller.protectedResourceMetadata();
+
+        assertThat(response).containsEntry("resource", "https://hub.test/api/mcp");
+        assertThat(response).containsEntry("scopes_supported", List.of("mcp"));
+        assertThat(response).containsEntry("bearer_methods_supported", List.of("header"));
+    }
+
     private static final class FakeHydraAdminClient extends HydraAdminClient {
         private JsonNode request;
         private String acceptedChallenge;
