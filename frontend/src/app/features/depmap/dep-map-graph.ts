@@ -19,18 +19,19 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   template: `
     <div class="graph">
     <div class="legend">
-      <span class="legend-format">En cada grupo: <span class="legend-direction legend-out">↑ cuántos necesita</span> · <span class="legend-direction legend-in">↓ cuántos lo necesitan</span></span>
+      <span class="legend-primary">
+        @if (store.node() && !store.pair()) { <i class="legend-out"></i><i class="legend-in"></i> }
+        <span class="legend-direction legend-out">↑ {{ t().mapa.leyendaNecesita }}</span> · <span class="legend-direction legend-in">↓ {{ t().mapa.leyendaNecesitan }}</span>
+      </span>
       @if (!store.visible().length) {
-        <span>{{ t().mapa.sinFiltros }}</span>
+        <span class="legend-help">{{ t().mapa.sinFiltros }}</span>
       } @else if (store.node() && !store.pair()) {
-        <span><i class="legend-out"></i>{{ nodeName(store.node()) }} necesita de…</span>
-        <span><i class="legend-in"></i>…quienes necesitan a {{ nodeName(store.node()) }}</span>
-        <span>El número es la cantidad de pedidos. {{ isNarrow() ? 'Tocá' : 'Clic' }} en una flecha para ver el detalle. {{ store.visible().length }} {{ store.visible().length === 1 ? 'dependencia visible' : 'dependencias visibles' }}.</span>
+        <span class="legend-help">{{ t().mapa.leyendaCantidad }} {{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.leyendaSeleccionAyuda }} · {{ visibleCount() }}.</span>
       } @else {
-        <span>{{ isNarrow() ? 'Tocá' : 'Clic' }} en un grupo para ver sus dependencias en ambos sentidos. La flecha apunta hacia quien provee. {{ store.visible().length }} {{ store.visible().length === 1 ? 'dependencia visible' : 'dependencias visibles' }}.</span>
+        <span class="legend-help">{{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.leyendaGrupoAyuda }} {{ t().mapa.leyendaFlecha }} · {{ visibleCount() }}.</span>
       }
     </div>
-    <svg class="map" viewBox="0 0 1000 745" role="group" aria-label="Mapa de dependencias">
+    <svg class="map" viewBox="0 0 1000 745" role="group" [attr.aria-label]="t().mapa.mapaAria">
       <defs>
         @for (marker of markers; track marker.id) {
           <marker [id]="marker.id" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
@@ -57,12 +58,12 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
             <rect [attr.width]="NODE_WIDTH" [attr.height]="NODE_HEIGHT" rx="12"></rect>
             <text class="nm" [attr.x]="NODE_TEXT_X" y="25">{{ entry.node.n }}</text>
             @if (entry.node.transv) {
-              <text class="ct" [attr.x]="NODE_TEXT_X" y="49">transversal</text>
+              <text class="ct" [attr.x]="NODE_TEXT_X" y="49">{{ t().mapa.transversal }}</text>
             } @else {
               <text class="ct" [attr.x]="NODE_TEXT_X" y="49"><tspan class="cto">↑{{ entry.out }}</tspan>{{ '  ' }}<tspan class="cti">↓{{ entry.in }}</tspan></text>
             }
             @if (entry.id === store.mine()) {
-              <g class="mineTag" transform="translate(136,-9)"><rect width="56" height="17" rx="8.5"></rect><text x="28" y="12" text-anchor="middle">tu grupo</text></g>
+              <g class="mineTag" transform="translate(136,-9)"><rect width="56" height="17" rx="8.5"></rect><text x="28" y="12" text-anchor="middle">{{ t().mapa.grupoPropio }}</text></g>
             }
           </g>
         }
@@ -70,7 +71,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
       <ng-template #edgeTemplate let-edge="edge">
       <g class="edge" [class]="edge.classes" [class.flash]="edge.items.some(item => item.id === store.flashId())" [attr.data-pair]="edge.key" [attr.data-eid]="edge.firstId" tabindex="0" role="button" [attr.aria-label]="edgeLabel(edge.pair, edge.items.length)" (click)="store.selectPair(edge.pair)" (keydown.enter)="store.selectPair(edge.pair)" (keydown.space)="store.selectPair(edge.pair); $event.preventDefault()">
         <path class="line" [attr.d]="edge.geometry.d" [attr.stroke-width]="edge.width" [attr.marker-end]="'url(#' + edge.marker + ')'" />
-        <path class="hit" [attr.d]="edge.geometry.d"><title>{{ nodeName(edge.pair[0]) }} necesita de {{ nodeName(edge.pair[1]) }} ({{ edge.items.length }})</title></path>
+        <path class="hit" [attr.d]="edge.geometry.d"><title>{{ edgeTitle(edge.pair, edge.items.length) }}</title></path>
         <g class="badge"><circle [attr.cx]="edge.geometry.lx" [attr.cy]="edge.geometry.ly" r="9" /><text [attr.x]="edge.geometry.lx" [attr.y]="edge.geometry.ly + 3.4" text-anchor="middle">{{ edge.items.length }}</text></g>
       </g>
       </ng-template>
@@ -81,7 +82,8 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   styles: `
     :host { display:block; }
     .graph { display:flex; flex-direction:column; min-height:0; height:100%; }
-    .legend { display:flex; flex-wrap:wrap; gap:6px 18px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
+    .legend { display:flex; flex-wrap:wrap; gap:3px 18px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
+    .legend-primary,.legend-help { flex:0 1 auto; min-width:0; }
     .legend i { display:inline-block; width:22px; height:0; border-top:3px solid; vertical-align:middle; margin-right:6px; border-radius:2px; }
     .legend i.legend-out { border-top-color:var(--dep-out); } .legend i.legend-in { border-top-color:var(--dep-in); }
     .legend-direction.legend-out { color:var(--dep-out); } .legend-direction.legend-in { color:var(--dep-in); }
@@ -142,9 +144,12 @@ export class DepMapGraph {
   });
 
   nodeName(id: string | null): string { return id ? this.store.state().nodes[id]?.n || id : ''; }
-  edgeLabel(pair: [string, string], count: number): string { return `${this.nodeName(pair[0])} necesita de ${this.nodeName(pair[1])}: ${count} ${count === 1 ? 'pedido' : 'pedidos'}`; }
+  edgeLabel(pair: [string, string], count: number): string { const m = this.t().mapa; return `${this.nodeName(pair[0])} ${m.necesitaDe} ${this.nodeName(pair[1])}: ${count} ${count === 1 ? m.pedido : m.pedidos}`; }
   nodeAriaLabel(name: string, out: number, incoming: number, transversal: boolean): string {
-    return transversal ? `${name}: transversal` : `${name}: necesita ${out} · lo necesitan ${incoming}`;
+    const m = this.t().mapa;
+    return transversal ? m.nodoTransversalAria.replace('{name}', name) : m.nodoAria.replace('{name}', name).replace('{out}', String(out)).replace('{incoming}', String(incoming));
   }
+  edgeTitle(pair: [string, string], count: number): string { return `${this.nodeName(pair[0])} ${this.t().mapa.necesitaDe} ${this.nodeName(pair[1])} (${count})`; }
+  visibleCount(): string { const count = this.store.visible().length; const m = this.t().mapa; return `${count} ${count === 1 ? m.dependenciaVisible : m.dependenciasVisibles}`; }
   isNarrow(): boolean { return typeof matchMedia !== 'undefined' && matchMedia('(max-width:760px)').matches; }
 }

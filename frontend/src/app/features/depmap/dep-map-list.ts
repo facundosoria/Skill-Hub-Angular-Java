@@ -6,17 +6,17 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   selector: 'app-dep-map-list',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (!edges().length) { <div class="empty">No hay dependencias con esos filtros.</div> }
+    @if (!edges().length) { <div class="empty">{{ t().mapa.listaVacia }}</div> }
     @else {
-      <div class="tablewrap"><table class="list"><thead><tr><th scope="col" aria-label="Hecho"></th><th>Quién necesita</th><th>De</th><th>Qué</th><th>Tipo</th><th>Estado</th></tr></thead>
+      <div class="tablewrap"><table class="list"><thead><tr><th scope="col" [attr.aria-label]="t().mapa.listaHecho"></th><th>{{ t().mapa.listaQuienNecesita }}</th><th>{{ t().mapa.listaDe }}</th><th>{{ t().mapa.listaQue }}</th><th>{{ t().mapa.listaTipo }}</th><th>{{ t().mapa.listaEstado }}</th></tr></thead>
         <tbody>@for (edge of edges(); track edge.id) {
           <tr [class.done-row]="!!store.state().done[edge.id]" [class.flash]="store.flashId() === edge.id">
-            <td><input type="checkbox" [checked]="!!store.state().done[edge.id]" [attr.aria-label]="'Marcar como hecho'" (change)="toggle(edge, $event)" /></td>
+            <td><input type="checkbox" [checked]="!!store.state().done[edge.id]" [attr.aria-label]="t().mapa.marcarHecho" (change)="toggle(edge, $event)" /></td>
             <td><button type="button" class="lnk" (click)="store.selectNode(edge.from)">{{ node(edge.from).n }}</button></td>
             <td><button type="button" class="lnk" (click)="store.selectNode(edge.to)">{{ node(edge.to).n }}</button></td>
             <td [class.line-through]="!!store.state().done[edge.id]" [class.text-text-muted]="!!store.state().done[edge.id]">{{ edge.text }}</td>
-            <td>{{ store.state().kinds[edge.kind] || edge.kind }}</td>
-            <td>@if (store.state().done[edge.id]) { Hecho } @else if (edge.state === 'definir') { <span class="chip q">a definir</span> } @else { Pendiente }</td>
+            <td>{{ kindLabel(edge.kind) }}</td>
+            <td>@if (store.state().done[edge.id]) { {{ t().mapa.listaHecho }} } @else if (edge.state === 'definir') { <span class="chip q">{{ t().mapa.listaADefinir }}</span> } @else { {{ t().mapa.listaPendiente }} }</td>
           </tr>
         }</tbody>
       </table></div>
@@ -43,5 +43,9 @@ export class DepMapList {
   readonly deleteRequested = output<DepMapEdge>();
   readonly edges = computed(() => this.store.visible().slice().sort((a, b) => this.node(a.from).n.localeCompare(this.node(b.from).n) || this.node(a.to).n.localeCompare(this.node(b.to).n)));
   node(id: string) { return this.store.state().nodes[id]; }
-  toggle(edge: DepMapEdge, event: Event): void { void this.store.setDone(edge.id, (event.target as HTMLInputElement).checked).catch(() => undefined); }
+  kindLabel(id: string): string {
+    const m = this.t().mapa;
+    return id === 'api' ? m.tipoApi : id === 'evento' ? m.tipoEvento : id === 'dato' ? m.tipoDatos : id === 'permiso' ? m.tipoPermiso : id === 'ui' ? m.tipoComponente : this.store.state().kinds[id] || id;
+  }
+  toggle(edge: DepMapEdge, event: Event): void { const input = event.target as HTMLInputElement; const previous = !!this.store.state().done[edge.id]; void this.store.setDone(edge.id, input.checked).catch(() => { input.checked = previous; }); }
 }

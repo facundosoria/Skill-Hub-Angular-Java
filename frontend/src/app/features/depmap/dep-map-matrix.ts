@@ -38,11 +38,12 @@ export function calculateMatrixLayout(width: number, height: number, rows: numbe
   selector: 'app-dep-map-matrix',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (!ids().length || !matrix().length) { <div class="empty">{{ t().mapa.matrizVacia }}</div> } @else {
     <div class="tablewrap">
       <table class="mx">
-        <thead><tr><th class="corner" scope="col" aria-label="Grupo"></th>
+        <thead><tr><th class="corner" scope="col" [attr.aria-label]="t().mapa.matrizGrupo"></th>
           @for (column of ids(); track column) { <th scope="col" [class.minecol]="column === store.mine()"><span>{{ node(column).s }}</span></th> }
-          <th class="tot" scope="col"><span>Necesita (total)</span></th>
+          <th class="tot" scope="col"><span>{{ t().mapa.matrizNecesitaTotal }}</span></th>
         </tr></thead>
         <tbody>
           @for (row of ids(); track row) {
@@ -52,25 +53,26 @@ export function calculateMatrixLayout(width: number, height: number, rows: numbe
                 @else { <td [class.minecol]="column === store.mine()">
                   @if (cellCount(row, column)) {
                     <button type="button" class="cell on" (click)="store.selectPair([row, column])"
-                      [attr.aria-label]="node(row).n + ' necesita de ' + node(column).n + ': ' + cellCount(row, column) + ' pedidos'"
-                      [title]="node(row).n + ' necesita de ' + node(column).n">{{ cellCount(row, column) }}</button>
+                      [attr.aria-label]="matrixCellAria(row, column)"
+                      [title]="matrixCellTitle(row, column)">{{ cellCount(row, column) }}</button>
                   } @else { <div class="cell" aria-hidden="true"></div> }
                 </td> }
               }
               <td class="tot">{{ rowTotal(row) }}</td>
             </tr>
           }
-          <tr><th scope="row" class="tot">Lo necesitan (total)</th>
+          <tr><th scope="row" class="tot">{{ t().mapa.matrizLoNecesitanTotal }}</th>
             @for (column of ids(); track column) { <td class="tot">{{ colTotal(column) }}</td> }
             <td class="tot"></td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="hint">Cada fila necesita de la columna. Tu grupo está resaltado: <b class="out-text">la fila</b> es lo que necesita, <b class="in-text">la columna</b> es lo que otros necesitan de vos. {{ isNarrow() ? 'Tocá' : 'Clic' }} en un número para ver el detalle.{{ isNarrow() ? ' Deslizá la tabla para ver todas las columnas.' : '' }}</p>
+    <p class="hint">{{ t().mapa.matrizHint }} <b class="out-text">{{ t().mapa.matrizFila }}</b> {{ t().mapa.matrizHintDetalle }} <b class="in-text">{{ t().mapa.matrizColumna }}</b> {{ t().mapa.matrizHintDetalle }} {{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.matrizHintDetalle2 }}{{ isNarrow() ? ' ' + t().mapa.matrizHintDesliza : '' }}</p>
+    }
   `,
   styles: `
-    :host { display:block; } .tablewrap { position:relative; overflow:auto; padding:12px; box-sizing:border-box; }
+    :host { display:block; } .empty { color:var(--text-muted); font-size:13px; padding:20px; } .tablewrap { position:relative; overflow:auto; padding:12px; box-sizing:border-box; }
     .tablewrap.overflow-x::after,.tablewrap.overflow-y::before { content:""; position:absolute; pointer-events:none; z-index:3; }
     .tablewrap.overflow-x::after { top:0; right:0; bottom:12px; width:24px; background:linear-gradient(90deg,transparent,var(--surface)); }
     .tablewrap.overflow-y::before { left:0; right:12px; bottom:0; height:24px; background:linear-gradient(0deg,var(--surface),transparent); }
@@ -115,7 +117,7 @@ export class DepMapMatrix {
   private readonly i18n = inject(I18n);
   readonly t = this.i18n.t;
   readonly ids = computed(() => Object.keys(this.store.state().nodes).filter((id) => !this.store.state().nodes[id].transv));
-  private readonly matrix = computed(() => this.store.visible());
+  readonly matrix = computed(() => this.store.visible());
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroyRef = inject(DestroyRef);
   private readonly desktop = signal(false);
@@ -207,4 +209,6 @@ export class DepMapMatrix {
   rowTotal(id: string): number { return this.matrix().filter((edge) => edge.from === id).length; }
   colTotal(id: string): number { return this.matrix().filter((edge) => edge.to === id).length; }
   isNarrow(): boolean { return typeof matchMedia !== 'undefined' && matchMedia('(max-width:760px)').matches; }
+  matrixCellAria(row: string, column: string): string { return this.t().mapa.matrizCeldaAria.replace('{from}', this.node(row).n).replace('{to}', this.node(column).n).replace('{count}', String(this.cellCount(row, column))); }
+  matrixCellTitle(row: string, column: string): string { return this.t().mapa.matrizCeldaTitulo.replace('{from}', this.node(row).n).replace('{to}', this.node(column).n); }
 }

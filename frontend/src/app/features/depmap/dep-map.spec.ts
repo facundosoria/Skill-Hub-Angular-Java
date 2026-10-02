@@ -87,4 +87,48 @@ describe('DepMap offline controls', () => {
     expect(matching('Datos').every((button) => !button.disabled)).toBe(true);
     expect(matching('Copiar').every((button) => !button.disabled)).toBe(true);
   });
+
+  it('clears the pair with Escape while preserving its node selection', () => {
+    fixture.componentInstance.store.selectNode('usr');
+    fixture.componentInstance.store.selectPair(['usr', 'ops']);
+    fixture.nativeElement.querySelector('.dep-map')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(fixture.componentInstance.store.node()).toBe('usr');
+    expect(fixture.componentInstance.store.pair()).toBeNull();
+  });
+
+  it('returns a non-default node selection to My group with Escape', () => {
+    fixture.componentInstance.store.selectNode('ops');
+    fixture.nativeElement.querySelector('.dep-map')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(fixture.componentInstance.store.node()).toBe(fixture.componentInstance.store.mine());
+    expect(fixture.componentInstance.store.pair()).toBeNull();
+  });
+
+  it('moves and activates tabs with arrow keys using roving tabindex', () => {
+    const tabs = [...fixture.nativeElement.querySelectorAll('[role="tab"]')] as HTMLButtonElement[];
+    expect(tabs[0].getAttribute('tabindex')).toBe('0');
+    expect(tabs[1].getAttribute('tabindex')).toBe('-1');
+
+    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.store.view()).toBe('matriz');
+    expect((fixture.nativeElement.querySelector('[role="tab"][aria-selected="true"]') as HTMLButtonElement | null)?.id).toBe('depmap-tab-matriz');
+    const panels = [...(fixture.nativeElement as HTMLElement).querySelectorAll('[role="tabpanel"]')] as HTMLElement[];
+    expect(panels).toHaveLength(3);
+    expect(panels.map((panel) => panel.id)).toEqual(['depmap-panel-mapa', 'depmap-panel-matriz', 'depmap-panel-lista']);
+    expect(panels.map((panel) => panel.getAttribute('aria-labelledby'))).toEqual(['depmap-tab-mapa', 'depmap-tab-matriz', 'depmap-tab-lista']);
+    expect(panels.find((panel) => panel.id === 'depmap-panel-mapa')?.hidden).toBe(true);
+    expect(panels.find((panel) => panel.id === 'depmap-panel-matriz')?.hidden).toBe(false);
+  });
+
+  it('renders the store error in an alert with a retry action', () => {
+    fixture.componentInstance.store.error.set('network failure');
+    fixture.detectChanges();
+
+    const alert = fixture.nativeElement.querySelector('[role="alert"]') as HTMLElement | null;
+    expect(alert?.textContent).toContain('network failure');
+    expect(alert?.querySelector('button')?.textContent).toContain('Reintentar');
+  });
 });

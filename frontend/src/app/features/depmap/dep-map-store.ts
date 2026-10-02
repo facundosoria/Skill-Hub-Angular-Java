@@ -178,6 +178,7 @@ export class DepMapStore {
 
   selectNode(node: string): void { this.node.set(node); this.pair.set(null); }
   selectPair(pair: [string, string]): void { this.pair.set(pair); }
+  clearSelection(): void { this.node.set(null); this.pair.set(null); }
   clearPair(): void { this.pair.set(null); }
 
   async addEdge(body: Pick<DepMapEdge, 'from' | 'to' | 'kind' | 'state' | 'text'>): Promise<void> {
@@ -191,9 +192,14 @@ export class DepMapStore {
   }
 
   async setDone(id: string, done: boolean): Promise<void> {
-    await firstValueFrom(this.api.put(`/depmap/done/${encodeURIComponent(id)}`, { done }));
-    await this.refresh();
-    this.flash(id);
+    try {
+      await firstValueFrom(this.api.put(`/depmap/done/${encodeURIComponent(id)}`, { done }));
+      await this.refresh();
+      this.flash(id);
+    } catch (error) {
+      this.error.set(errorMessage(error));
+      throw error;
+    }
   }
 
   async importData(data: { edges: DepMapEdge[]; done: Record<string, boolean> }): Promise<void> {
