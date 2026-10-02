@@ -14,7 +14,9 @@ type DialogRef = ElementRef<HTMLDialogElement>;
 // Minimum rendered SVG scale for the height-fitted desktop layout.
 const MIN_MAP_SCALE = 0.6;
 const MIN_MAP_SCALE_EXIT = 0.58;
-const DEFAULT_LEGEND_HEIGHT = 51.5;
+// Fallback for the expanded legend block; the observer below replaces it with
+// the rendered height as soon as the graph settles.
+const DEFAULT_LEGEND_HEIGHT = 65.5;
 
 export interface MapFitMeasurements {
   cardWidth: number;
@@ -157,23 +159,45 @@ export class DepMap {
   constructor() {
     afterNextRender(() => {
       if (typeof window === 'undefined' || typeof document === 'undefined') return;
-      const updateLayout = () => { this.updateMapOffset(); this.updateFitHeight(); };
+      let layoutFrame: number | null = null;
+      let stabilizationFrame: number | null = null;
+      const updateLayout = () => {
+        if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
+        if (stabilizationFrame !== null) cancelAnimationFrame(stabilizationFrame);
+        layoutFrame = requestAnimationFrame(() => {
+          layoutFrame = null;
+          this.updateMapOffset();
+          this.updateFitHeight();
+          stabilizationFrame = requestAnimationFrame(() => {
+            stabilizationFrame = null;
+            this.updateMapOffset();
+            this.updateFitHeight();
+          });
+        });
+      };
       updateLayout();
       window.addEventListener('resize', updateLayout);
 
       const main = this.host.nativeElement.closest('main');
       const shellHeader = main?.parentElement?.querySelector('header');
       const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateLayout) : null;
+      const mutations = typeof MutationObserver !== 'undefined' ? new MutationObserver(updateLayout) : null;
       if (observer) {
         if (shellHeader) observer.observe(shellHeader);
         observer.observe(document.body);
         observer.observe(this.host.nativeElement);
         const workspace = this.host.nativeElement.querySelector('.workspace');
         if (workspace) observer.observe(workspace);
+        const legend = this.host.nativeElement.querySelector('app-dep-map-graph .legend') as HTMLElement | null;
+        if (legend) observer.observe(legend);
       }
+      mutations?.observe(this.host.nativeElement, { childList: true, subtree: true, characterData: true });
       this.destroyRef.onDestroy(() => {
+        if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
+        if (stabilizationFrame !== null) cancelAnimationFrame(stabilizationFrame);
         window.removeEventListener('resize', updateLayout);
         observer?.disconnect();
+        mutations?.disconnect();
       });
     });
   }

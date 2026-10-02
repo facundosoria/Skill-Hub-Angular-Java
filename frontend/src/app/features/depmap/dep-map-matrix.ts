@@ -119,6 +119,8 @@ export class DepMapMatrix {
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly destroyRef = inject(DestroyRef);
   private readonly desktop = signal(false);
+  private layoutFrame: number | null = null;
+  private layoutStabilizationFrame: number | null = null;
 
   constructor() {
     afterNextRender(() => this.initializeLayout());
@@ -129,20 +131,35 @@ export class DepMapMatrix {
     const wrapper = this.host.nativeElement.querySelector('.tablewrap') as HTMLElement | null;
     if (!wrapper) return;
     const media = window.matchMedia(DESKTOP_QUERY);
-    const update = () => {
-      this.desktop.set(media.matches);
-      this.updateLayout(wrapper);
-    };
-    update();
+    const update = () => this.scheduleLayout(wrapper, media.matches);
     const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
     resizeObserver?.observe(wrapper);
+    resizeObserver?.observe(this.host.nativeElement);
     const mutationObserver = typeof MutationObserver !== 'undefined' ? new MutationObserver(update) : null;
     mutationObserver?.observe(wrapper, { childList: true, subtree: true });
     media.addEventListener?.('change', update);
+    update();
     this.destroyRef.onDestroy(() => {
+      if (this.layoutFrame !== null) cancelAnimationFrame(this.layoutFrame);
+      if (this.layoutStabilizationFrame !== null) cancelAnimationFrame(this.layoutStabilizationFrame);
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
       media.removeEventListener?.('change', update);
+    });
+  }
+
+  private scheduleLayout(wrapper: HTMLElement, desktop: boolean): void {
+    if (this.layoutFrame !== null) cancelAnimationFrame(this.layoutFrame);
+    if (this.layoutStabilizationFrame !== null) cancelAnimationFrame(this.layoutStabilizationFrame);
+    this.layoutFrame = requestAnimationFrame(() => {
+      this.layoutFrame = null;
+      this.desktop.set(desktop);
+      this.updateLayout(wrapper);
+      // The host can acquire its final flex height only after this pass.
+      this.layoutStabilizationFrame = requestAnimationFrame(() => {
+        this.layoutStabilizationFrame = null;
+        this.updateLayout(wrapper);
+      });
     });
   }
 
