@@ -1,4 +1,4 @@
-import { Component, computed, HostListener, inject, input, signal } from '@angular/core';
+import { Component, computed, HostListener, inject, input, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Api } from '../../core/api';
@@ -154,13 +154,27 @@ export class CopyRow {
   selector: 'app-keys',
   imports: [FormsModule, CopyRow, McpTutorial, ...UI],
   template: `
-    <div class="space-y-8">
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight">{{ t().keys.titulo }}</h1>
-        <p class="mt-1 text-sm text-text-muted">{{ t().keys.subtitulo }}</p>
-      </div>
+    <div class="space-y-4" [class.space-y-8]="activeTab() === 'keys'">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        @if (activeTab() === 'keys') {
+          <div>
+            <h1 class="text-2xl font-semibold tracking-tight">{{ t().keys.titulo }}</h1>
+            <p class="mt-1 text-sm text-text-muted">{{ t().keys.subtitulo }}</p>
+          </div>
+        } @else {
+          @if (tutorialComponent(); as tutorial) {
+            <div class="min-w-0 flex-1">
+              <h1 id="mcp-tutorial-title" class="text-2xl font-semibold tracking-tight">
+                {{ tutorial.selectedSurface() === 'cli' ? tutorial.text().titleCli : tutorial.text().titlePrompt }}
+              </h1>
+              <p class="mt-1 text-sm text-text-muted">
+                {{ tutorial.selectedSurface() === 'cli' ? tutorial.text().subtitleCli : tutorial.text().subtitlePrompt }}
+              </p>
+            </div>
+          }
+        }
 
-      <nav class="flex w-fit rounded-[var(--radius)] border border-border bg-surface-2 p-1" [attr.aria-label]="t().keys.titulo">
+        <nav class="flex w-fit shrink-0 rounded-[var(--radius)] border border-border bg-surface-2 p-1" [attr.aria-label]="t().keys.titulo">
         <button
           type="button"
           class="rounded-[calc(var(--radius)-2px)] px-3 py-1.5 text-sm font-medium transition-colors cursor-pointer focus-visible:shadow-[var(--ring)] focus-visible:outline-none"
@@ -179,7 +193,8 @@ export class CopyRow {
           [attr.aria-pressed]="activeTab() === 'tutorial'"
           (click)="selectTab('tutorial')"
         >{{ i18n.locale() === 'es' ? 'Tutorial conexión MCP' : 'MCP connection tutorial' }}</button>
-      </nav>
+        </nav>
+      </div>
 
       @if (activeTab() === 'keys') {
       <!-- Grid principal en 2 columnas -->
@@ -365,8 +380,8 @@ export class CopyRow {
             </svg>
           </div>
           <div class="space-y-1 min-w-0 flex-1">
-            <h2 class="text-sm font-semibold tracking-tight text-text">{{ t().keys.queSeRegistra }}</h2>
-            <p class="text-xs sm:text-sm text-text-muted leading-relaxed">{{ t().keys.queSeRegistraDetalle }}</p>
+            <h2 class="text-[0.625rem] font-semibold tracking-tight text-text">{{ t().keys.queSeRegistra }}</h2>
+            <p class="text-[0.625rem] text-text-muted leading-relaxed">{{ t().keys.queSeRegistraDetalle }}</p>
           </div>
         </div>
       </section>
@@ -508,6 +523,7 @@ export class Keys {
   readonly i18n = inject(I18n);
   private router = inject(Router);
   t = this.i18n.t;
+  readonly tutorialComponent = viewChild(McpTutorial);
   /** El acceso desde Cómo funciona usa /keys?tab=tutorial. */
   tab = input<string | undefined>();
   activeTab = computed<'keys' | 'tutorial'>(() => this.tab() === 'tutorial' ? 'tutorial' : 'keys');

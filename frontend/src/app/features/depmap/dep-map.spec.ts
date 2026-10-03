@@ -90,6 +90,8 @@ describe('DepMap offline controls', () => {
 
   it('disables every mutation control while keeping copy/data access available', () => {
     const root = fixture.nativeElement as HTMLElement;
+    root.querySelector<HTMLButtonElement>('[data-menu-trigger="more"]')?.click();
+    fixture.detectChanges();
     const buttons = [...root.querySelectorAll('button')];
     const matching = (text: string) => buttons.filter((button) => button.textContent?.includes(text));
 
@@ -98,7 +100,7 @@ describe('DepMap offline controls', () => {
     expect(matching('Restaurar').every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
     expect([...root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].every((input) => input.disabled)).toBe(true);
     expect([...root.querySelectorAll<HTMLButtonElement>('button[aria-label="Eliminar dependencia"]')].every((button) => button.disabled)).toBe(true);
-    expect(matching('Datos').every((button) => !button.disabled)).toBe(true);
+    expect(matching('Importar/Exportar').every((button) => !button.disabled)).toBe(true);
     expect(matching('Copiar').every((button) => !button.disabled)).toBe(true);
   });
 
@@ -180,28 +182,145 @@ describe('DepMap offline controls', () => {
 
   it('toggles and persists the collapsible details panel', () => {
     const toggle = fixture.nativeElement.querySelector('.panel-toggle') as HTMLButtonElement;
-    expect(toggle.parentElement?.classList.contains('flex')).toBe(true);
-    expect(toggle.textContent).not.toContain('·');
-    expect(toggle.querySelector('.panel-toggle__badge')).toBeNull();
+    expect(toggle.textContent).toContain('Contraer detalle');
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const toolbar = fixture.nativeElement.querySelector('.dep-map-toolbar');
     toggle.click();
     fixture.detectChanges();
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(toggle.querySelector('.panel-toggle__badge')?.getAttribute('aria-hidden')).toBe('true');
-    expect(toggle.querySelector('.sr-only')?.textContent).toContain('Hay un detalle seleccionado');
+    expect(toggle.textContent).toContain('Expandir detalle');
     expect(localStorage.getItem('depmap-panel-collapsed')).toBe('true');
     expect(fixture.nativeElement.querySelector('.workspace')?.classList.contains('panel-collapsed')).toBe(true);
+    expect(fixture.nativeElement.querySelector('.dep-map-toolbar')).toBe(toolbar);
+  });
+
+  it('renders outgoing and incoming details in separate side panels', () => {
+    const panels = fixture.nativeElement.querySelectorAll('.details-side app-dep-map-panel');
+    expect(panels).toHaveLength(2);
+    expect(panels[0].getAttribute('direction')).toBe('out');
+    expect(panels[1].getAttribute('direction')).toBe('in');
+    expect(fixture.nativeElement.querySelector('.details-out')?.textContent).toContain('Necesita de');
+    expect(fixture.nativeElement.querySelector('.details-in')?.textContent).toContain('Lo necesitan');
+  });
+
+  it('enters viewport fullscreen, preserves map focus state, and exits with Escape', () => {
+    const component = fixture.componentInstance;
+    component.store.selectNode('ops');
+    component.enterFullscreen();
+    fixture.detectChanges();
+    expect(component.fullscreen()).toBe(true);
+    expect(component.store.node()).toBe('ops');
+    expect((fixture.nativeElement.querySelector('.dep-map') as HTMLElement).classList.contains('fullscreen')).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+    expect(document.documentElement.style.overflow).toBe('hidden');
+
+    fixture.nativeElement.querySelector('.dep-map')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    fixture.detectChanges();
+    expect(component.fullscreen()).toBe(false);
+    expect(component.store.node()).toBe('ops');
+    expect(document.body.style.overflow).toBe('');
+    expect(document.documentElement.style.overflow).toBe('');
+  });
+
+  it('keeps graph full-map focus independent from the viewport fullscreen mode', () => {
+    const component = fixture.componentInstance;
+    component.store.toggleFullMap();
+    component.enterFullscreen();
+    expect(component.fullscreen()).toBe(true);
+    expect(component.store.fullMap()).toBe(true);
+    component.exitFullscreen(false);
+    expect(component.store.fullMap()).toBe(true);
+  });
+
+  it('supports viewport fullscreen for the matrix and exits when switching to the list', () => {
+    const component = fixture.componentInstance;
+    component.activateView('matriz');
+    component.enterFullscreen();
+    expect(component.fullscreen()).toBe(true);
+    component.activateView('lista');
+    expect(component.fullscreen()).toBe(false);
+    expect(component.store.view()).toBe('lista');
+  });
+
+  it('keeps Details functional as an overlay while fullscreen', () => {
+    const component = fixture.componentInstance;
+    const normalCollapsedState = component.store.panelCollapsed();
+    component.enterFullscreen();
+    fixture.detectChanges();
+    const toggle = fixture.nativeElement.querySelector('.panel-toggle') as HTMLButtonElement;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.textContent).toContain('Expandir detalle');
+    toggle.click();
+    fixture.detectChanges();
+    expect(component.fullscreenDetailsOpen()).toBe(true);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(fixture.nativeElement.querySelector('.workspace')?.classList.contains('detail-open')).toBe(true);
+    toggle.click();
+    fixture.detectChanges();
+    expect(component.fullscreenDetailsOpen()).toBe(false);
+    expect(component.store.panelCollapsed()).toBe(normalCollapsedState);
+    expect(fixture.nativeElement.querySelector('.workspace')?.classList.contains('detail-open')).toBe(false);
+    component.exitFullscreen(false);
+  });
+
+  it('contains keyboard focus in the fullscreen surface', async () => {
+    const component = fixture.componentInstance;
+    component.enterFullscreen();
+    fixture.detectChanges();
+    await Promise.resolve();
+    const exit = fixture.nativeElement.querySelector('.fullscreen-exit') as HTMLButtonElement;
+    expect(fixture.nativeElement.querySelector('.dep-map')?.getAttribute('aria-modal')).toBe('true');
+    const focusable = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>('button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')]
+      .filter((element) => !element.closest('[hidden]') && !element.closest('.module-header,.banner,.error-banner') && getComputedStyle(element).display !== 'none');
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    last.dispatchEvent(tab);
+    expect(tab.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(exit);
+    component.exitFullscreen(false);
   });
 
   it('returns focus to the data dialog opener when it closes', async () => {
-    const opener = [...fixture.nativeElement.querySelectorAll('button')].find((button) => button.textContent?.includes('Importar/Exportar')) as HTMLButtonElement;
+    const opener = fixture.nativeElement.querySelector('[data-menu-trigger="more"]') as HTMLButtonElement;
     opener.focus();
+    opener.click();
+    fixture.detectChanges();
     const dialog = fixture.componentInstance.dataDialog.nativeElement as HTMLDialogElement & { showModal: () => void; close: () => void };
     dialog.showModal = vi.fn();
     dialog.close = vi.fn();
-    fixture.componentInstance.openData();
+    (fixture.nativeElement.querySelector('#depmap-more-options button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(dialog.showModal).toHaveBeenCalled();
     fixture.componentInstance.close(fixture.componentInstance.dataDialog.nativeElement);
     await Promise.resolve();
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('filters by type from the grouped filters menu and announces active filters', () => {
+    const trigger = fixture.nativeElement.querySelector('[data-menu-trigger="filters"]') as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    const option = fixture.nativeElement.querySelector('#depmap-filter-options input[type=checkbox]') as HTMLInputElement;
+    expect(option.checked).toBe(true);
+
+    option.click();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.store.visible()).toHaveLength(0);
+    expect(trigger.textContent).toContain('Filtros');
+    expect(trigger.querySelector('.filter-count')?.textContent).toBe('1');
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+
+    option.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+
+    trigger.click();
+    fixture.detectChanges();
+    document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    fixture.detectChanges();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
   });
 });

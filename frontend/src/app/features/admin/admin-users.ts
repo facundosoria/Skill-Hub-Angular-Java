@@ -28,7 +28,7 @@ import { apiError } from '../auth/login';
     }
   `,
   template: `
-    <div class="max-w-3xl">
+    <div class="mx-auto max-w-3xl">
       <h1 class="text-2xl font-semibold tracking-tight">{{ t().usuarios.titulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">{{ t().usuarios.subtitulo }}</p>
 

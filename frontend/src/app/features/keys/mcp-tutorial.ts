@@ -45,27 +45,11 @@ interface Provider {
   imports: [FormsModule, ...UI],
   template: `
     <section class="space-y-6" aria-labelledby="mcp-tutorial-title">
-      <!-- Barra Superior: Título + Selector de SO -->
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div class="flex items-center gap-2">
-            <span class="rounded bg-accent-soft px-2 py-0.5 text-xs font-semibold uppercase tracking-wider text-accent">MCP Tutorial</span>
-          </div>
-          <h2 id="mcp-tutorial-title" class="mt-1 text-xl font-bold tracking-tight text-text">
-            {{ selectedSurface() === 'cli' ? text().titleCli : text().titlePrompt }}
-          </h2>
-          <p class="mt-0.5 text-sm text-text-muted">
-            {{ selectedSurface() === 'cli' ? text().subtitleCli : text().subtitlePrompt }}
-          </p>
-        </div>
-      </div>
-
-
       <!-- Espacio de trabajo estable: configuración + paso activo -->
-      <div class="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr] items-stretch lg:h-[680px]">
+      <div class="grid min-h-0 grid-cols-1 items-stretch gap-6 lg:grid-cols-[320px_1fr] lg:grid-rows-[minmax(0,1fr)] lg:h-[min(680px,calc(100dvh-15rem))]">
         <!-- Columna izquierda: configuración, sin una lista de pasos que compita con el contenido -->
-        <div uiCard class="p-5 flex flex-col justify-between h-full space-y-5">
-          <div class="space-y-5">
+        <div uiCard class="flex h-full min-h-0 flex-col gap-5 p-5">
+          <div class="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain pr-1">
             <!-- 1. Modalidad: CLI vs Prompt -->
             <div>
               <h3 class="text-xs font-semibold uppercase tracking-wider text-text-muted">{{ text().chooseMode }}</h3>
@@ -173,7 +157,7 @@ interface Provider {
           </div>
 
           <!-- Footer Sidebar -->
-          <div class="pt-4 border-t border-border flex flex-col gap-2 text-xs text-text-muted">
+          <div class="shrink-0 border-t border-border pt-4 flex flex-col gap-2 text-xs text-text-muted">
             <div class="flex items-center gap-2 text-text-faint">
               <span>🔒</span>
               <span>{{ text().securityNote }}</span>
@@ -190,7 +174,7 @@ interface Provider {
         </div>
 
         <!-- Columna derecha: encabezado, contenido desplazable y acciones siempre reservadas -->
-        <div uiCard class="grid h-[min(680px,calc(100dvh-1.5rem))] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-4 sm:p-6 lg:h-[680px]">
+        <div uiCard class="grid h-[min(680px,calc(100dvh-1.5rem))] min-h-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden p-4 sm:p-6 lg:h-full">
           <div class="border-b border-border pb-4">
             <div class="flex flex-wrap items-start justify-between gap-3">
               <div class="min-w-0 flex-1">

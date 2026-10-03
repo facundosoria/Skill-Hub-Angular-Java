@@ -4,7 +4,7 @@ Qué es esto, para qué sirve, cómo se conecta tu IDE y qué hace la IA con lo 
 
 ## El problema
 
-Somos once equipos trabajando en paralelo sobre el mismo sistema. Sin una fuente única, cada equipo inventa su forma de manejar errores, de nombrar endpoints, de armar un formulario. A los seis meses hay once dialectos y nadie puede moverse entre equipos sin reaprender todo.
+Somos doce equipos trabajando en paralelo sobre el mismo sistema. Sin una fuente única, cada equipo inventa su forma de manejar errores, de nombrar endpoints, de armar un formulario. A los seis meses hay doce dialectos y nadie puede moverse entre equipos sin reaprender todo.
 
 Los documentos de Confluence no lo resuelven, porque nadie los abre en el momento exacto en que está escribiendo el código.
 

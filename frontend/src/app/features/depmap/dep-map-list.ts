@@ -24,7 +24,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   `,
   styles: `
     :host { display:block; } .tablewrap { overflow:auto; padding:12px; } table { border-collapse:separate; border-spacing:0; font-size:13px; width:100%; }
-    @media (min-width:1021px) and (min-height:700px) {
+    @media (min-width:1021px) {
       :host-context(.fit-height) { height:100%; min-height:0; }
       :host-context(.fit-height) .tablewrap { height:100%; min-height:0; overflow:auto; }
     }

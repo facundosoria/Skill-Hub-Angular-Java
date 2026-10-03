@@ -4,10 +4,12 @@ import { I18n } from '../../core/i18n/i18n';
 import {
   edgeClass,
   edgeStrokeWidth,
+  clampNode,
   clampNodes,
   geom,
   MapTransform,
   MAP_IDENTITY,
+  MAP_LAYOUT_OFFSET_X,
   MAP_MAX_SCALE,
   MAP_MIN_SCALE,
   MAP_PAN_THRESHOLD,
@@ -29,7 +31,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
   selector: 'app-dep-map-graph',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="graph" [class.panning]="dragging()">
+    <div class="graph" [class.panning]="dragging()" [class.dragging-node]="draggingNodeId() !== null">
     <div class="legend">
       <span class="legend-primary">
         @if (store.node() && !store.pair()) {
@@ -46,15 +48,8 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
       } @else {
         <span class="legend-help">{{ isNarrow() ? t().mapa.toca : t().mapa.clic }} {{ t().mapa.leyendaGrupoAyuda }}; {{ t().mapa.leyendaFlecha }} · {{ visibleCount() }}.</span>
       }
-      <div class="map-controls" role="group" [attr.aria-label]="t().mapa.controlesAria">
-        <button type="button" class="map-ctl" [attr.aria-label]="t().mapa.zoomOut" [disabled]="!canZoomOut()" (click)="zoomOut()">−</button>
-        <span class="zoom-value" aria-hidden="true">{{ zoomPercent() }}</span>
-        <button type="button" class="map-ctl" [attr.aria-label]="t().mapa.zoomIn" [disabled]="!canZoomIn()" (click)="zoomIn()">+</button>
-        <button type="button" class="map-ctl wide" (click)="fit()">{{ t().mapa.ajustar }}</button>
-        <button type="button" class="map-ctl wide toggle" [attr.aria-pressed]="store.fullMap()" (click)="store.toggleFullMap()">{{ store.fullMap() ? t().mapa.enfocarGrupo : t().mapa.verCompleto }}</button>
-      </div>
     </div>
-    <svg #mapSvg class="map" [class.pannable]="canPan()" viewBox="0 0 1000 745" role="group" [attr.aria-label]="t().mapa.mapaAria"
+    <svg #mapSvg class="map" [class.pannable]="canPan()" [attr.viewBox]="viewBox" role="group" [attr.aria-label]="t().mapa.mapaAria"
       (wheel)="onWheel($event)" (pointerdown)="onPointerDown($event)" (pointermove)="onPointerMove($event)"
       (pointerup)="onPointerUp($event)" (pointercancel)="onPointerUp($event)" (click)="onMapClick($event)">
       <defs>
@@ -79,7 +74,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
         @for (entry of nodeEntries(); track entry.id) {
           <g class="node" [class]="entry.classes" [attr.data-node]="entry.id" [attr.transform]="'translate(' + (entry.node.x - NODE_WIDTH / 2) + ',' + (entry.node.y - NODE_HEIGHT / 2) + ')'"
              tabindex="0" role="button" [attr.aria-label]="nodeAriaLabel(entry.node.n, entry.out, entry.in, !!entry.node.transv)" (click)="selectNode(entry.id)"
-             (keydown.enter)="selectNode(entry.id)" (keydown.space)="selectNode(entry.id); $event.preventDefault()">
+             (keydown)="onNodeKeydown($event, entry.id)">
             <title>{{ nodeAriaLabel(entry.node.n, entry.out, entry.in, !!entry.node.transv) }}</title>
             <rect [attr.width]="NODE_WIDTH" [attr.height]="NODE_HEIGHT" rx="12"></rect>
             <text class="nm" [attr.x]="NODE_TEXT_X" y="25">{{ entry.node.n }}</text>
@@ -112,24 +107,16 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     :host { display:block; }
     :host-context(.fit-height) { min-height:0; height:100%; }
     .graph { position:relative; display:flex; flex-direction:column; min-height:0; height:100%; }
-    .graph.panning { user-select:none; }
-    .legend { display:flex; flex-wrap:wrap; align-items:flex-start; gap:3px 18px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
-    .legend-primary,.legend-help { flex:0 1 auto; min-width:0; }
+    .graph.panning,.graph.dragging-node { user-select:none; }
+    .legend { display:grid; grid-template-columns:minmax(0,1fr); grid-template-areas:'primary' 'help'; align-items:center; gap:4px 12px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
+    .legend-primary { grid-area:primary; min-width:0; } .legend-help { grid-area:help; min-width:0; }
     .legend i { display:inline-block; width:22px; height:0; border-top:3px solid; vertical-align:middle; margin-right:6px; border-radius:2px; }
     .legend i.legend-out { border-top-color:var(--dep-out); border-top-style:solid; } .legend i.legend-in { border-top-color:var(--dep-in); border-top-style:dashed; }
-    .map-controls { order:1; position:static; display:flex; flex:0 0 auto; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:4px; max-width:100%; margin-left:auto; padding:4px; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); box-shadow:var(--shadow-sm); }
-    .map-ctl { display:inline-flex; align-items:center; justify-content:center; min-width:32px; height:32px; padding:0 8px; border:1px solid var(--border-strong); border-radius:var(--radius); background:var(--surface); color:var(--text); font-size:13px; font-weight:600; cursor:pointer; }
-    .map-ctl.wide { font-weight:500; }
-    .map-ctl.toggle { color:var(--text-muted); }
-    .map-ctl:hover:not(:disabled) { background:var(--surface-2); }
-    .map-ctl:focus-visible { outline:2px solid var(--text); outline-offset:2px; }
-    .map-ctl:disabled { opacity:.5; cursor:default; }
-    .zoom-value { min-width:42px; text-align:center; font-size:12px; color:var(--text-muted); font-variant-numeric:tabular-nums; }
-    .legend-help { order:2; }
     .legend-direction.legend-out { color:var(--dep-out); } .legend-direction.legend-in { color:var(--dep-in); }
+    @media (max-width:560px) { .legend { display:flex; flex-wrap:wrap; align-items:flex-start; gap:3px 18px; } .legend-primary,.legend-help { flex:0 1 auto; } }
     svg.map { width:100%; height:auto; display:block; } .map.pannable { cursor:grab; } .graph.panning svg.map { cursor:grabbing; }
-    @media (min-width:1021px) and (min-height:700px) { :host-context(.fit-height) svg.map { flex:1 1 0; min-height:0; height:auto; } }
-    .node { cursor:pointer; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.2; }
+    @media (min-width:1021px) { :host-context(.fit-height) svg.map { flex:1 1 0; min-height:0; height:auto; } }
+    .node { cursor:grab; } .graph.dragging-node .node { cursor:grabbing; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.2; }
     .node:hover rect { stroke:var(--text-muted); } .node:focus-visible rect { stroke:var(--text); stroke-width:2.4; }
     .node.sel rect { stroke:var(--text); stroke-width:2.2; } .node.out rect { stroke:var(--dep-out); stroke-width:2; }
     .node.in rect { stroke:var(--dep-in); stroke-width:2; } .node.dim > rect { opacity:.35; }
@@ -143,7 +130,7 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     .edge:focus-visible path.focus-halo { opacity:1; stroke:var(--bg); stroke-width:10; }
     .edge:focus-visible path.focus-halo-contrast { opacity:1; stroke:var(--text); stroke-width:8; }
     .edge:focus-visible path.line { stroke-width:5; }
-    .edge.out path.line { stroke:var(--dep-out); } .edge.in path.line { stroke:var(--dep-in); stroke-dasharray:10 6; } .edge.sel path.line { stroke:var(--text); stroke-dasharray:none; }
+    .edge.base path.line { stroke:var(--text-muted); } .edge.out path.line { stroke:var(--dep-out); } .edge.in path.line { stroke:var(--dep-in); stroke-dasharray:10 6; } .edge.sel path.line { stroke:var(--text); stroke-dasharray:none; }
     .edge.dim { opacity:.1; } .edge.base { opacity:.7; } .edge .badge circle { fill:var(--surface); stroke:var(--border-strong); }
     .edge.out .badge circle { stroke:var(--dep-out); } .edge.in .badge circle { stroke:var(--dep-in); } .edge .badge text { font-size:13px; font-weight:600; fill:var(--text); }
     .edge.dim .badge { display:none; } .edge[data-eid].flash path.line { animation:flash 1.6s ease-out; }
@@ -163,10 +150,12 @@ export class DepMapGraph {
   readonly NODE_WIDTH = NODE_WIDTH;
   readonly NODE_HEIGHT = NODE_HEIGHT;
   readonly NODE_TEXT_X = NODE_TEXT_X;
+  readonly viewBox = `0 0 ${MAP_VIEWBOX_WIDTH} ${MAP_VIEWBOX_HEIGHT}`;
   readonly mineTagWidth = mineTagWidth;
 
   readonly transform = signal<MapTransform>({ ...MAP_IDENTITY });
   readonly dragging = signal(false);
+  readonly draggingNodeId = signal<string | null>(null);
   readonly canPan = computed(() => this.transform().scale > MAP_MIN_SCALE + 1e-6);
   readonly canZoomIn = computed(() => this.transform().scale < MAP_MAX_SCALE - 1e-6);
   readonly canZoomOut = computed(() => this.transform().scale > MAP_MIN_SCALE + 1e-6);
@@ -180,10 +169,18 @@ export class DepMapGraph {
   private pointerStartTransform: MapTransform | null = null;
   private pointerMoved = false;
   private suppressClick = false;
+  private nodePointerStart: { id: string; pointerId: number; clientX: number; clientY: number; mapX: number; mapY: number; nodeX: number; nodeY: number; scale: number } | null = null;
+  private readonly savedNodePositions = signal<Record<string, { x: number; y: number }>>(this.readNodePositions());
 
   readonly renderedNodes = computed(() => {
     const nodes = this.store.state().nodes;
-    return clampNodes(nodes, 8, 6, this.t().mapa.grupoPropio);
+    const expanded = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, { ...node, x: node.x + MAP_LAYOUT_OFFSET_X }]));
+    const positioned = clampNodes(expanded, 8, 6, this.t().mapa.grupoPropio);
+    const saved = this.savedNodePositions();
+    return Object.fromEntries(Object.entries(positioned).map(([id, node]) => [
+      id,
+      saved[id] ? clampNode({ ...node, ...saved[id] }, 8, this.t().mapa.grupoPropio) : node,
+    ]));
   });
 
   readonly edgeEntries = computed(() => {
@@ -232,7 +229,20 @@ export class DepMapGraph {
   }
 
   onPointerDown(event: PointerEvent): void {
-    if (event.button !== 0 || event.pointerType === 'touch' || !this.canPan()) return;
+    if (event.button !== 0 || event.pointerType === 'touch') return;
+    const target = typeof Element !== 'undefined' && event.target instanceof Element
+      ? event.target.closest<SVGGElement>('.node[data-node]')
+      : null;
+    const nodeId = target?.getAttribute('data-node');
+    const node = nodeId ? this.renderedNodes()[nodeId] : undefined;
+    if (nodeId && node) {
+      const point = this.pointInMap(event.clientX, event.clientY);
+      this.nodePointerStart = { id: nodeId, pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, mapX: point.x, mapY: point.y, nodeX: node.x, nodeY: node.y, scale: this.transform().scale };
+      this.pointerMoved = false;
+      this.suppressClick = false;
+      return;
+    }
+    if (!this.canPan()) return;
     this.pointerStart = { x: event.clientX, y: event.clientY };
     this.pointerStartTransform = this.transform();
     this.pointerMoved = false;
@@ -240,6 +250,21 @@ export class DepMapGraph {
   }
 
   onPointerMove(event: PointerEvent): void {
+    if (this.nodePointerStart) {
+      const start = this.nodePointerStart;
+      const dx = event.clientX - start.clientX;
+      const dy = event.clientY - start.clientY;
+      if (!this.pointerMoved && Math.hypot(dx, dy) < MAP_PAN_THRESHOLD) return;
+      if (!this.pointerMoved) {
+        this.pointerMoved = true;
+        this.draggingNodeId.set(start.id);
+        try { this.mapSvg()?.nativeElement.setPointerCapture(event.pointerId); } catch { /* jsdom / unsupported */ }
+      }
+      event.preventDefault();
+      const point = this.pointInMap(event.clientX, event.clientY);
+      this.saveNodePosition(start.id, start.nodeX + (point.x - start.mapX) / start.scale, start.nodeY + (point.y - start.mapY) / start.scale, false);
+      return;
+    }
     if (!this.pointerStart || !this.pointerStartTransform) return;
     const dx = event.clientX - this.pointerStart.x;
     const dy = event.clientY - this.pointerStart.y;
@@ -256,6 +281,18 @@ export class DepMapGraph {
   }
 
   onPointerUp(event: PointerEvent): void {
+    if (this.nodePointerStart) {
+      const moved = this.pointerMoved;
+      const svg = this.mapSvg()?.nativeElement;
+      if (moved && svg && typeof svg.hasPointerCapture === 'function' && svg.hasPointerCapture(event.pointerId)) {
+        try { svg.releasePointerCapture(event.pointerId); } catch { /* jsdom / unsupported */ }
+      }
+      this.nodePointerStart = null;
+      this.pointerMoved = false;
+      this.draggingNodeId.set(null);
+      if (moved) { this.persistNodePositions(); this.suppressClick = true; }
+      return;
+    }
     if (!this.pointerStart) return;
     const moved = this.pointerMoved;
     const svg = this.mapSvg()?.nativeElement;
@@ -272,6 +309,51 @@ export class DepMapGraph {
   selectNode(id: string): void {
     if (this.suppressClick) { this.suppressClick = false; return; }
     this.store.selectNode(id);
+  }
+
+  onNodeKeydown(event: KeyboardEvent, id: string): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      this.selectNode(id);
+      event.preventDefault();
+      return;
+    }
+    const delta = event.shiftKey ? 10 : 2;
+    const movement = event.key === 'ArrowLeft' ? [-delta, 0]
+      : event.key === 'ArrowRight' ? [delta, 0]
+        : event.key === 'ArrowUp' ? [0, -delta]
+          : event.key === 'ArrowDown' ? [0, delta] : null;
+    if (!movement) return;
+    const node = this.renderedNodes()[id];
+    if (!node) return;
+    event.preventDefault();
+    this.saveNodePosition(id, node.x + movement[0], node.y + movement[1]);
+  }
+
+  private readNodePositions(): Record<string, { x: number; y: number }> {
+    try {
+      if (typeof localStorage === 'undefined') return {};
+      const current = localStorage.getItem('depmap-node-positions-v2');
+      const stored = JSON.parse(current ?? localStorage.getItem('depmap-node-positions') ?? '{}') as Record<string, { x?: number; y?: number }>;
+      const valid = Object.fromEntries(Object.entries(stored).filter(([, point]) => Number.isFinite(point?.x) && Number.isFinite(point?.y)).map(([id, point]) => [id, { x: point.x!, y: point.y! }]));
+      if (!current && Object.keys(valid).length) {
+        for (const point of Object.values(valid)) point.x += MAP_LAYOUT_OFFSET_X;
+        localStorage.setItem('depmap-node-positions-v2', JSON.stringify(valid));
+      }
+      return valid;
+    } catch { return {}; }
+  }
+
+  private saveNodePosition(id: string, x: number, y: number, persist = true): void {
+    const node = this.renderedNodes()[id];
+    if (!node) return;
+    const position = clampNode({ ...node, x, y }, 8, this.t().mapa.grupoPropio);
+    const next = { ...this.savedNodePositions(), [id]: { x: position.x, y: position.y } };
+    this.savedNodePositions.set(next);
+    if (persist) this.persistNodePositions();
+  }
+
+  private persistNodePositions(): void {
+    try { localStorage.setItem('depmap-node-positions-v2', JSON.stringify(this.savedNodePositions())); } catch { /* storage is optional */ }
   }
 
   selectPair(pair: [string, string]): void {

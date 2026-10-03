@@ -1,7 +1,8 @@
 export const NODE_WIDTH = 200;
 export const NODE_HEIGHT = 64;
-export const MAP_VIEWBOX_WIDTH = 1000;
+export const MAP_VIEWBOX_WIDTH = 1200;
 export const MAP_VIEWBOX_HEIGHT = 745;
+export const MAP_LAYOUT_OFFSET_X = 100;
 export const MAP_VIEWBOX_MARGIN = 8;
 export const NODE_TEXT_X = 14;
 export const NODE_TEXT_RIGHT_PADDING = 14;

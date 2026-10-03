@@ -131,7 +131,7 @@ describe('dep-map geometry', () => {
 
   it('clamps centers while preserving in-bounds positions and node metadata', () => {
     expect(clampNode({ x: 95, y: 48 })).toEqual({ x: 108, y: 57 });
-    expect(clampNode({ x: 900, y: 705 })).toEqual({ x: 892, y: 705 });
+    expect(clampNode({ x: 900, y: 705 })).toEqual({ x: 900, y: 705 });
     expect(clampNode({ x: 500, y: 300, n: 'UX/UI' } as { x: number; y: number; n: string })).toEqual({ x: 500, y: 300, n: 'UX/UI' });
   });
 

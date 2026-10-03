@@ -76,7 +76,7 @@ export function calculateMatrixLayout(width: number, height: number, rows: numbe
     .tablewrap.overflow-x::after,.tablewrap.overflow-y::before { content:""; position:absolute; pointer-events:none; z-index:3; }
     .tablewrap.overflow-x::after { top:0; right:0; bottom:12px; width:24px; background:linear-gradient(90deg,transparent,var(--surface)); }
     .tablewrap.overflow-y::before { left:0; right:12px; bottom:0; height:24px; background:linear-gradient(0deg,var(--surface),transparent); }
-    @media (min-width:1021px) and (min-height:700px) {
+    @media (min-width:1021px) {
       :host-context(.fit-height) { height:100%; min-height:0; display:flex; flex-direction:column; }
       :host-context(.fit-height) .tablewrap { height:100%; min-height:0; flex:1 1 auto; overflow:auto; }
       :host-context(.fit-height) .hint { flex:none; }

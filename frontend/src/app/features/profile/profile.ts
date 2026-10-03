@@ -15,13 +15,13 @@ import { apiError } from '../auth/login';
   selector: 'app-profile',
   imports: [FormsModule, ...UI],
   template: `
-    <div class="max-w-lg">
+    <div class="mx-auto max-w-lg">
       <h1 class="text-2xl font-semibold tracking-tight">{{ t().perfil.titulo }}</h1>
       <p class="mt-1 mb-6 text-sm text-text-muted">{{ t().perfil.subtitulo }}</p>
 
       <form (ngSubmit)="save()" class="space-y-4">
         <ui-field [label]="t().perfil.nombre">
-          <input uiInput [(ngModel)]="name" name="name" />
+          <input uiInput [ngModel]="name()" (ngModelChange)="name.set($event)" name="name" />
         </ui-field>
         <ui-field [label]="t().perfil.equipo" [hint]="t().perfil.equipoHint">
           <select uiSelect [(ngModel)]="team" name="team" class="w-full">
@@ -64,7 +64,7 @@ export class Profile {
   private themeSvc = inject(ThemeService);
   t = this.i18n.t;
 
-  name = '';
+  name = signal('');
   team: Team | '' = '';
   teams = TEAM_OPTIONS;
   theme: Theme = this.themeSvc.theme();
@@ -76,7 +76,7 @@ export class Profile {
   constructor() {
     firstValueFrom(this.api.get<{ name: string; team: Team | null; theme: Theme; locale: Locale }>('/profile'))
       .then((p) => {
-        this.name = p.name;
+        this.name.set(p.name);
         this.team = p.team ?? '';
         this.theme = p.theme;
         this.locale = p.locale;
@@ -97,7 +97,7 @@ export class Profile {
     try {
       await firstValueFrom(
         this.api.put('/profile', {
-          name: this.name,
+          name: this.name(),
           team: this.team || null,
           theme: this.theme,
           locale: this.locale,
