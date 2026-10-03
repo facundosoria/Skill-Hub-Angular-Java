@@ -31,8 +31,7 @@
     }
     @media (max-width:560px) {
       .module-actions { gap:8px; }
-      .group-select { flex:1 1 140px; }
-      .group-select select { width:100%; min-width:0; }
+      .action-buttons > button { padding-inline:4px; font-size:12px; white-space:normal; line-height:1.1; }
       .control-row { gap:5px; }
       .toolbar-search { flex:1 1 100%; order:2; }
       .dep-map-toolbar [role=tablist] { flex:1 1 100%; width:100%; order:1; }

@@ -55,11 +55,11 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
           <p class="module-subtitle mt-1 mb-0 text-text-muted">{{ t().mapa.subtitulo }}</p>
         </div>
         <div class="module-actions flex flex-wrap items-end gap-2">
-          <label class="group-select flex flex-col gap-[3px] text-xs text-text-muted">{{ t().mapa.miGrupo }}<select uiSelect class="min-w-[150px]" [ngModel]="store.mine()" (ngModelChange)="store.setMine($event)" name="mine">@for (id of groupIds(); track id) { <option [value]="id" [selected]="store.mine() === id">{{ node(id).n }}</option> }</select></label>
+          <label class="group-select flex flex-col gap-[3px] text-xs text-text-muted">{{ t().mapa.miGrupo }}<select uiSelect [ngModel]="store.mine()" (ngModelChange)="store.setMine($event)" name="mine">@for (id of groupIds(); track id) { <option [value]="id" [selected]="store.mine() === id">{{ node(id).n }}</option> }</select></label>
           <div class="action-buttons flex gap-2">
             <button uiButton size="sm" type="button" (click)="openAdd()" [disabled]="!store.online()">{{ t().mapa.agregar }}</button>
             <div class="menu-wrap" data-map-menu="more">
-              <button uiButton variant="secondary" size="sm" type="button" data-menu-trigger="more" aria-controls="depmap-more-options" [attr.aria-expanded]="openMenu() === 'more'" (click)="toggleMenu('more')">{{ t().mapa.mas }} <span aria-hidden="true">⌄</span></button>
+              <button uiButton variant="secondary" size="sm" type="button" data-menu-trigger="more" aria-controls="depmap-more-options" [attr.aria-expanded]="openMenu() === 'more'" (click)="toggleMenu('more')">{{ t().mapa.mas }} <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg></button>
               @if (openMenu() === 'more') { <div class="menu-panel" id="depmap-more-options" role="group" [attr.aria-label]="t().mapa.mas"><button uiButton variant="ghost" type="button" (click)="openDataFromMenu()">{{ t().mapa.importarExportar }}</button></div> }
             </div>
           </div>
