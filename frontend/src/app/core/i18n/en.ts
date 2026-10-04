@@ -24,6 +24,7 @@ export const en: Dict = {
     pluginsDesc: "MCP tools, Git hooks, and CLI runners",
     contratosDesc: "OpenAPI specifications and data schemas",
     mapa: "Map",
+    galaxia: "Open galaxy",
   },
   login: {
     subtitulo: "The canonical catalogue of engineering conventions.",

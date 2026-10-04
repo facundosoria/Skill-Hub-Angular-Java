@@ -22,6 +22,7 @@ export const es = {
     pluginsDesc: "Herramientas MCP, hooks de Git y CLI runners",
     contratosDesc: "Especificaciones OpenAPI y schemas de datos",
     mapa: "Mapa",
+    galaxia: "Abrir galaxia",
   },
   login: {
     subtitulo: "El catálogo canónico de convenciones de la organización.",

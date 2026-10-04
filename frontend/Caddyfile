@@ -53,6 +53,16 @@
 	handle /userinfo {
 		reverse_proxy hydra:4444
 	}
+	handle /galaxy {
+		redir /galaxy/ 308
+	}
+	handle /galaxy/* {
+		# La escena y su punto de entrada cambian junto con la aplicación. Obligar
+		# al navegador a revalidarlos evita servir una respuesta anterior de /galaxy/.
+		header Cache-Control "no-cache, must-revalidate"
+		root * /srv
+		file_server
+	}
 
 	# Resto -> archivos estaticos, con fallback a index.html (rutas del router).
 	handle {
