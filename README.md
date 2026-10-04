@@ -29,7 +29,8 @@ de PostgreSQL, sesión y Hydra. El script prepara Hydra, construye backend y web
 recrea esos dos servicios y verifica la respuesta. En `raspi` y `prod` exige el
 volumen `skill-hub-angular-java_pgdata` existente y comprueba que el dominio
 sirve el bundle nuevo. En `prod`, además, guarda un respaldo SQL en
-`~/skill-hub-backups/prod/` antes de las migraciones. Nunca usa `down -v`.
+`~/skill-hub-backups/prod/` antes de las migraciones y exige que la base
+existente contenga la tabla `users`. Nunca usa `down -v`.
 El script comprueba que `raspi` corra en `pi-server` y `prod` en `servidin`;
 si el hostname del servidor final es distinto, hay que verificarlo y actualizar
 ese identificador versionado antes de desplegar.

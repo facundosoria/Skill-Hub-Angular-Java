@@ -137,6 +137,12 @@ if [[ "$target" != local ]]; then
 fi
 
 if [[ "$target" == prod ]]; then
+  users_table="$("${compose[@]}" exec -T db sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atqc "SELECT to_regclass('\''public.users'\'') IS NOT NULL"' | tr -d '\r\n')"
+  if [[ "$users_table" != t ]]; then
+    echo "La base existente no contiene public.users. No se iniciaron migraciones ni el rebuild." >&2
+    exit 1
+  fi
+
   backup_dir="${HOME}/skill-hub-backups/${target}"
   mkdir -p "$backup_dir"
   chmod 700 "$backup_dir"
