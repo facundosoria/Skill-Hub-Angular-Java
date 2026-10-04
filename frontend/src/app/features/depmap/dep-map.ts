@@ -102,12 +102,6 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
           <input uiInput class="toolbar-search" type="search" [value]="store.query()" [placeholder]="t().mapa.buscar" [attr.aria-label]="t().mapa.buscarAria" (input)="store.setQuery($any($event.target).value)" />
           <div class="menu-wrap filter-wrap" data-map-menu="filters">
             <button uiButton variant="secondary" size="sm" type="button" data-menu-trigger="filters" aria-controls="depmap-filter-options" [attr.aria-expanded]="openMenu() === 'filters'" (click)="toggleMenu('filters')">{{ t().mapa.filtros }} <span class="filter-count" [class.controls-hidden]="!activeFilterCount()" aria-hidden="true">{{ activeFilterCount() || 0 }}</span> <span aria-hidden="true">⌄</span></button>
-            @if (openMenu() === 'filters') {
-              <div class="menu-panel filter-panel" id="depmap-filter-options" role="group" [attr.aria-label]="t().mapa.filtros">
-                <label class="filter-label">{{ t().mapa.estado }}<select uiSelect [value]="store.status()" (change)="store.setStatus($any($event.target).value)">@for (status of statuses; track status.id) { <option [value]="status.id">{{ statusLabel(status.id) }}</option> }</select></label>
-                <div class="filter-kinds" role="group" [attr.aria-label]="t().mapa.tipo">@for (kind of kindEntries(); track kind.id) { <label class="kind-option"><input type="checkbox" [checked]="store.kindsOn().has(kind.id)" (change)="store.toggleKind(kind.id)" />{{ kind.label }}</label> }</div>
-              </div>
-            }
           </div>
           <button type="button" class="panel-toggle" [attr.aria-expanded]="fullscreen() ? fullscreenDetailsOpen() : !store.panelCollapsed()" aria-controls="depmap-details-panel" [attr.aria-label]="(fullscreen() ? fullscreenDetailsOpen() : !store.panelCollapsed()) ? t().mapa.contraerDetalle : t().mapa.expandirDetalle" (click)="togglePanel()">
             <svg class="panel-toggle__icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 3v14" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
@@ -118,6 +112,15 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
           </div>
         }
       </div>
+
+      @if (openMenu() === 'filters') {
+        <div class="filter-popover" data-map-menu="filters">
+          <div class="menu-panel filter-panel" id="depmap-filter-options" role="group" [attr.aria-label]="t().mapa.filtros">
+            <label class="filter-label">{{ t().mapa.estado }}<select uiSelect [value]="store.status()" (change)="store.setStatus($any($event.target).value)">@for (status of statuses; track status.id) { <option [value]="status.id">{{ statusLabel(status.id) }}</option> }</select></label>
+            <div class="filter-kinds" role="group" [attr.aria-label]="t().mapa.tipo">@for (kind of kindEntries(); track kind.id) { <label class="kind-option"><input type="checkbox" [checked]="store.kindsOn().has(kind.id)" (change)="store.toggleKind(kind.id)" />{{ kind.label }}</label> }</div>
+          </div>
+        </div>
+      }
 
       <dialog #addDialog class="dialog" aria-labelledby="add-title">
         <form (ngSubmit)="submitAdd()" class="dialog-form"><div class="dialog-head"><h2 id="add-title">{{ t().mapa.agregar }}</h2><button type="button" class="close" [attr.aria-label]="t().mapa.cerrarDialogo" (click)="close(addDialog)">×</button></div>
@@ -202,7 +205,8 @@ export class DepMap {
       updateLayout();
       window.addEventListener('resize', updateLayout);
       const closeMenusOutside = (event: PointerEvent) => {
-        if (this.openMenu() && event.target instanceof Node && !this.host.nativeElement.querySelector(`[data-map-menu="${this.openMenu()}"]`)?.contains(event.target)) {
+        const menu = this.openMenu();
+        if (menu && event.target instanceof Element && !event.target.closest(`[data-map-menu="${menu}"]`)) {
           this.openMenu.set(null);
         }
       };
