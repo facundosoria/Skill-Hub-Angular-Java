@@ -192,3 +192,6 @@ services:
 
 volumes:
   pgdata:
+    # En producción el script fija el volumen existente de Skullhub.
+    # En local/Raspberry conserva el volumen del stack unificado.
+    name: ${PGDATA_VOLUME_NAME:-skill-hub-angular-java_pgdata}

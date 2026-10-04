@@ -17,16 +17,22 @@ case "$target" in
     public_base_url="http://localhost:8087"
     cookie_secure="false"
     web_port="8087"
+    compose_project="skill-hub-angular-java"
+    db_volume_name="skill-hub-angular-java_pgdata"
     ;;
   raspi)
     public_base_url="https://skillhub.rcoleman.me"
     cookie_secure="true"
     web_port="18080"
+    compose_project="skill-hub-angular-java"
+    db_volume_name="skill-hub-angular-java_pgdata"
     ;;
   prod)
     public_base_url="https://marketplace-utn.tech"
     cookie_secure="true"
     web_port="8087"
+    compose_project="skullhub-v2"
+    db_volume_name="skullhub-v2_pgdata"
     ;;
   *)
     echo "Destino desconocido: $target. Usar local, raspi o prod." >&2
@@ -36,8 +42,8 @@ esac
 
 host_name="$(hostname -s)"
 if [[ "$target" == raspi && "$host_name" != pi-server ]] ||
-   [[ "$target" == prod && "$host_name" != servidin ]] ||
-   [[ "$target" == local && ( "$host_name" == pi-server || "$host_name" == servidin ) ]]; then
+   [[ "$target" == prod && "$host_name" != servidin && "$host_name" != mk-luisao-02 ]] ||
+   [[ "$target" == local && ( "$host_name" == pi-server || "$host_name" == servidin || "$host_name" == mk-luisao-02 ) ]]; then
   echo "El destino $target no corresponde al host $host_name. No se modificaron contenedores." >&2
   exit 1
 fi
@@ -52,15 +58,15 @@ if [[ ! -f "$env_file" ]]; then
   exit 1
 fi
 
-compose=(env "PUBLIC_BASE_URL=$public_base_url" "COOKIE_SECURE=$cookie_secure" "WEB_PORT=$web_port" "HYDRA_DEV_MODE=auto" \
-  docker compose -p skill-hub-angular-java --env-file "$env_file" -f "$compose_file")
+compose=(env "PUBLIC_BASE_URL=$public_base_url" "COOKIE_SECURE=$cookie_secure" "WEB_PORT=$web_port" "HYDRA_DEV_MODE=auto" "PGDATA_VOLUME_NAME=$db_volume_name" \
+  docker compose -p "$compose_project" --env-file "$env_file" -f "$compose_file")
 
 "${compose[@]}" config --quiet
 
 # En los hosts remotos, nunca crear silenciosamente un volumen vacío en lugar
 # de reutilizar la base existente. El alta inicial requiere revisar el volumen.
-if [[ "$target" != local ]] && ! docker volume inspect skill-hub-angular-java_pgdata >/dev/null 2>&1; then
-  echo "No existe el volumen skill-hub-angular-java_pgdata en este host. No se modificaron contenedores." >&2
+if [[ "$target" != local ]] && ! docker volume inspect "$db_volume_name" >/dev/null 2>&1; then
+  echo "No existe el volumen $db_volume_name en este host. No se modificaron contenedores." >&2
   echo "Identificar y respaldar el volumen PostgreSQL existente antes del primer despliegue." >&2
   exit 1
 fi
@@ -125,7 +131,7 @@ if [[ "$target" != local ]]; then
   fi
 
   db_volume="$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/var/lib/postgresql/data"}}{{.Name}}{{end}}{{end}}' "$db_id")"
-  if [[ "$db_volume" != skill-hub-angular-java_pgdata ]]; then
+  if [[ "$db_volume" != "$db_volume_name" ]]; then
     echo "El contenedor db usa un volumen inesperado: ${db_volume:-ninguno}. No se iniciaron migraciones." >&2
     exit 1
   fi

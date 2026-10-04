@@ -27,11 +27,13 @@ script la URL pública, el puerto web y la seguridad de la cookie; no se editan
 Compose ni `.env` al pasar de un host a otro. El `.env` contiene las credenciales
 de PostgreSQL, sesión y Hydra. El script prepara Hydra, construye backend y web,
 recrea esos dos servicios y verifica la respuesta. En `raspi` y `prod` exige el
-volumen `skill-hub-angular-java_pgdata` existente y comprueba que el dominio
+volumen existente del destino (`skill-hub-angular-java_pgdata` en local/Raspberry;
+`skullhub-v2_pgdata` en producción) y comprueba que el dominio
 sirve el bundle nuevo. En `prod`, además, guarda un respaldo SQL en
 `~/skill-hub-backups/prod/` antes de las migraciones y exige que la base
 existente contenga la tabla `users`. Nunca usa `down -v`.
-El script comprueba que `raspi` corra en `pi-server` y `prod` en `servidin`;
+El script comprueba que `raspi` corra en `pi-server` y `prod` en `servidin` o
+`mk-luisao-02`;
 si el hostname del servidor final es distinto, hay que verificarlo y actualizar
 ese identificador versionado antes de desplegar.
 
