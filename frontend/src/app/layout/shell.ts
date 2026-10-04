@@ -45,7 +45,7 @@ import { I18n } from '../core/i18n/i18n';
           <a routerLink="/" class="text-base font-semibold tracking-tight">
             <span class="bg-gradient-to-r from-accent to-text bg-clip-text text-transparent">Skill Hub</span>
           </a>
-          <a href="/galaxy/" target="_blank" rel="noopener noreferrer" [attr.aria-label]="t().nav.galaxia" [title]="t().nav.galaxia"
+          <a href="/galaxy/" [attr.aria-label]="t().nav.galaxia" [title]="t().nav.galaxia"
              class="inline-flex h-8 w-8 items-center justify-center text-accent transition-colors hover:text-text focus-visible:outline-none focus-visible:shadow-[var(--ring)]">
             <i class="ph ph-rocket text-[18px]" aria-hidden="true"></i>
           </a>
