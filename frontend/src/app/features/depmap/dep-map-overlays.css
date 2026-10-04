@@ -28,7 +28,7 @@
       .workspace { grid-template-columns:minmax(0,1fr); }
       .workspace-card { min-height:55vh; }
       .details-side { max-height:38vh; }
-      .control-row { flex-wrap:wrap; }
+      .control-row { justify-content:flex-start; }
       .toolbar-search { flex:1 1 180px; max-width:none; }
     }
     @media (max-width:560px) {
