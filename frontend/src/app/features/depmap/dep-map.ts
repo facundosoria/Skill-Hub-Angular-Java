@@ -266,8 +266,11 @@ export class DepMap {
     const root = this.host.nativeElement as HTMLElement;
     const main = root.closest('main');
     if (!main) return;
-    const paddingBottom = Number.parseFloat(getComputedStyle(main).paddingBottom) || 0;
+    const styles = getComputedStyle(main);
+    const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(styles.paddingBottom) || 0;
     root.style.setProperty('--map-offset', `${root.getBoundingClientRect().top + window.scrollY + paddingBottom}px`);
+    root.style.setProperty('--map-shell-padding-top', `${paddingTop}px`);
   }
 
   private updateFitHeight(): void {
