@@ -16,7 +16,7 @@
     .collapse-controls { display:none; }
     .fullscreen .collapse-controls { display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; min-height:38px; margin-left:0; padding:0; border-radius:var(--radius); }
     @media (min-width:1021px) {
-      .dep-map.fit-height { height:calc(100dvh - var(--map-offset) + var(--map-shell-padding-top)); min-height:0; margin-bottom:calc(-1 * var(--map-shell-padding-top)); }
+      .dep-map.fit-height { height:calc(100dvh - var(--map-offset)); min-height:0; }
       .dep-map.fit-height .workspace { align-items:stretch; }
       .dep-map.fit-height .details-side { height:100%; overflow-y:auto; overflow-x:hidden; }
       .dep-map.fit-height .workspace-card { height:100%; }
