@@ -1,5 +1,5 @@
 # Stack de produccion de Skill Hub (Angular + Spring Boot).
-# Reemplaza al stack Next.js. El túnel/proxy del host apunta a 127.0.0.1:8087.
+# Reemplaza al stack Next.js. El túnel/proxy del host apunta al puerto WEB_PORT.
 #
 #   db            -> postgres:16-alpine, mismo volumen que el stack viejo (datos intactos)
 #   hydra-migrate -> corre una vez, aplica el schema de Hydra sobre la base "hydra"
@@ -10,7 +10,7 @@
 #   backend       -> Spring Boot :8080 (solo red interna). Flyway con baseline en V12.
 #   web           -> Caddy: sirve el bundle Angular y proxea /api -> backend:8080
 #                    y /oauth2, /.well-known, /userinfo -> hydra:4444.
-#                    Único puerto publicado: 127.0.0.1:8087.
+#                    Puerto web local: 127.0.0.1:${WEB_PORT}.
 #
 # `db-init` reconcilia el rol, la password y la base de Hydra en cada
 # despliegue. Usa un script versionado compartido con la suite E2E, por lo que
@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-skillhub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
       POSTGRES_DB: ${POSTGRES_DB:-skillhub}
     ports:
       - "127.0.0.1:5432:5432"
@@ -44,8 +44,8 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-skillhub}
       POSTGRES_DB: ${POSTGRES_DB:-skillhub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
-      PGPASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
       HYDRA_DB_PASSWORD: ${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD, ver .env.example}
       PGHOST: db
       PGPORT: "5432"
@@ -72,13 +72,13 @@ services:
         condition: service_completed_successfully
     environment:
       DSN: postgres://hydra:${HYDRA_DB_PASSWORD:?falta HYDRA_DB_PASSWORD, ver .env.example}@db:5432/hydra?sslmode=disable
-      URLS_SELF_ISSUER: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/
-      URLS_LOGIN: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth/login
+      URLS_SELF_ISSUER: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/
+      URLS_LOGIN: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/oauth/login
       # Hydra only advertises DCR when this discovery URL is configured. The
       # endpoint itself is Hydra's public /oauth2/register route.
-      WEBFINGER_OIDC_DISCOVERY_CLIENT_REGISTRATION_URL: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth2/register
-      URLS_CONSENT: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth/consent
-      URLS_LOGOUT: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/oauth/logout
+      WEBFINGER_OIDC_DISCOVERY_CLIENT_REGISTRATION_URL: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/oauth2/register
+      URLS_CONSENT: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/oauth/consent
+      URLS_LOGOUT: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/oauth/logout
       SECRETS_SYSTEM: ${HYDRA_SYSTEM_SECRET:?falta HYDRA_SYSTEM_SECRET, ver .env.example}
       OAUTH2_EXPOSE_INTERNAL_ERRORS: "false"
       OAUTH2_EXPIRATION_ACCESS_TOKEN: "1h"
@@ -105,11 +105,11 @@ services:
       SERVE_PUBLIC_CORS_ENABLED: "true"
       # El frontend y Hydra se consumen por el mismo origen publico; no abrir
       # CORS globalmente. PUBLIC_BASE_URL debe ser solo scheme://host[:port].
-      SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}
+      SERVE_PUBLIC_CORS_ALLOWED_ORIGINS: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}
       SERVE_ADMIN_CORS_ENABLED: "false"
-      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}
       # auto activa --dev solo para un issuer HTTP local; produccion HTTPS usa
-      # `serve all` sin --dev. Puede forzarse true/false en el .env local.
+      # `serve all` sin --dev. El destino del script fija la URL pública.
       HYDRA_DEV_MODE: ${HYDRA_DEV_MODE:-auto}
       LOG_LEVEL: info
     command: ["case \"$${HYDRA_DEV_MODE}:$${PUBLIC_BASE_URL}\" in true:*|auto:http://*) exec hydra serve all --dev ;; *) exec hydra serve all ;; esac"]
@@ -154,11 +154,11 @@ services:
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-skillhub}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-skillhub}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-skillhub}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD en .env}
       SESSION_SECRET: ${SESSION_SECRET:?falta SESSION_SECRET, ver .env.example}
-      APP_TZ: ${APP_TZ:-America/Argentina/Cordoba}
-      COOKIE_SECURE: ${COOKIE_SECURE:-true}
-      USAGE_RETENTION_DAYS: ${USAGE_RETENTION_DAYS:-90}
+      APP_TZ: America/Argentina/Cordoba
+      COOKIE_SECURE: ${COOKIE_SECURE:?usar scripts/rebuild-app.sh local|raspi|prod}
+      USAGE_RETENTION_DAYS: "90"
       # Base de prod: ya tiene el schema de Drizzle (== V1..V12) sin
       # flyway_schema_history. Se marca la linea base en V12 y no se aplica nada.
       FLYWAY_BASELINE_ON_MIGRATE: "true"
@@ -166,15 +166,14 @@ services:
       # OAuth 2.1 para /api/mcp via Hydra (ver plan de OAuth). jwks-uri/admin-url
       # usan el DNS interno de docker; issuer/mcp-resource-url son las URLs
       # publicas y deben coincidir con URLS_SELF_ISSUER de arriba y con lo que
-      # proxea Caddy. PUBLIC_BASE_URL (mismo default que arriba) permite correr
-      # todo el stack en local (ej. PUBLIC_BASE_URL=http://localhost:8087 en tu
-      # .env local) antes de subirlo al server con el dominio real.
-      HYDRA_ISSUER: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/
+      # proxea Caddy. El script fija PUBLIC_BASE_URL según el destino para que
+      # coincida con el issuer de Hydra y el dominio que usa el navegador.
+      HYDRA_ISSUER: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/
       HYDRA_JWKS_URI: http://hydra:4444/.well-known/jwks.json
       HYDRA_ADMIN_URL: http://hydra:4445
       HYDRA_PUBLIC_URL: http://hydra:4444
-      HYDRA_MCP_RESOURCE_URL: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/api/mcp
-      HYDRA_PROTECTED_RESOURCE_METADATA_URL: ${PUBLIC_BASE_URL:-https://marketplace-utn.tech}/.well-known/oauth-protected-resource
+      HYDRA_MCP_RESOURCE_URL: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/api/mcp
+      HYDRA_PROTECTED_RESOURCE_METADATA_URL: ${PUBLIC_BASE_URL:?usar scripts/rebuild-app.sh local|raspi|prod}/.well-known/oauth-protected-resource
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health || exit 1"]
       interval: 10s
@@ -189,7 +188,7 @@ services:
       backend:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8087:8080"
+      - "127.0.0.1:${WEB_PORT:-8087}:8080"
 
 volumes:
   pgdata:

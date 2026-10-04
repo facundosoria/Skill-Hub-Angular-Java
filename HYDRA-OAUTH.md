@@ -191,19 +191,18 @@ metadata que recibe el cliente.
 
 ## Levantar localmente
 
-1. Crear `.env` desde `.env.example` y completar secretos generados.
-2. Para HTTP local, usar `PUBLIC_BASE_URL=http://localhost:8087` y
-   `COOKIE_SECURE=false`.
-3. Ejecutar el rebuild completo (el script levanta PostgreSQL y prepara Hydra):
+1. Crear `.env` desde `.env.example` y completar credenciales. El dominio y la
+   seguridad de la cookie se eligen con el destino del script.
+2. Ejecutar el rebuild completo (el script levanta PostgreSQL y prepara Hydra):
 
    ```bash
-   ./scripts/rebuild-app.sh
+   ./scripts/rebuild-app.sh local
    ```
 
-4. Verificar servicios:
+3. Verificar servicios:
 
    ```bash
-   docker compose --env-file .env ps
+   docker ps --filter label=com.docker.compose.project=skill-hub-angular-java
    curl -fsS http://localhost:4444/health/ready
    curl -fsS http://localhost:8087/.well-known/oauth-protected-resource
    curl -fsS http://localhost:8087/.well-known/oauth-authorization-server

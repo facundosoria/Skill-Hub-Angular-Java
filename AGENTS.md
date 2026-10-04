@@ -71,7 +71,8 @@ Si no podés ejecutar una verificación, indicá exactamente cuál no se ejecut�
 por qué. No afirmes que algo funciona sin haberlo comprobado.
 
 Para que un cambio llegue a `localhost:8087`, después de validar ejecutá
-`./scripts/rebuild-app.sh` desde la raíz. `npm run build` no actualiza el
+`./scripts/rebuild-app.sh local` desde la raíz. En Raspberry y servidor final
+se usa el mismo script con `raspi` o `prod` respectivamente. `npm run build` no actualiza el
 contenedor web. No uses un stack de pruebas ni un rebuild parcial para
 comprobar lo que sirve ese localhost.
 

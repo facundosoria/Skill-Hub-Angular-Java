@@ -12,21 +12,38 @@ Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-b
 
 ## Reconstruir la aplicación
 
-Desde la raíz, con `.env` configurado para ese entorno:
+El mismo `docker-compose.yml` y el mismo script se usan en las tres máquinas.
+Cada host conserva su `.env` local con credenciales (no se versiona). Desde la
+raíz, después de `git pull --ff-only` en los hosts remotos:
 
 ```bash
-./scripts/rebuild-app.sh
+./scripts/rebuild-app.sh local  # esta máquina: http://localhost:8087
+./scripts/rebuild-app.sh raspi  # Raspberry: https://skillhub.rcoleman.me -> :18080
+./scripts/rebuild-app.sh prod   # servidor final: https://marketplace-utn.tech -> :8087
 ```
 
-Este es el comando para publicar cambios en `http://localhost:8087` y el mismo
-que se ejecuta en el servidor con su propio `.env`. Levanta PostgreSQL si hace
-falta, prepara Hydra, construye backend y web, recrea esos dos servicios y
-comprueba que el nuevo web responde. Conserva el volumen de PostgreSQL. No
-levanta un stack de pruebas.
+Se ejecuta **solo la línea que corresponde al host**. El destino fija en el
+script la URL pública, el puerto web y la seguridad de la cookie; no se editan
+Compose ni `.env` al pasar de un host a otro. El `.env` contiene las credenciales
+de PostgreSQL, sesión y Hydra. El script prepara Hydra, construye backend y web,
+recrea esos dos servicios y verifica la respuesta. En `raspi` y `prod` exige el
+volumen `skill-hub-angular-java_pgdata` existente y comprueba que el dominio
+sirve el bundle nuevo. En `prod`, además, guarda un respaldo SQL en
+`~/skill-hub-backups/prod/` antes de las migraciones. Nunca usa `down -v`.
+El script comprueba que `raspi` corra en `pi-server` y `prod` en `servidin`;
+si el hostname del servidor final es distinto, hay que verificarlo y actualizar
+ese identificador versionado antes de desplegar.
+
+La Raspberry tiene un corte inicial: el túnel ya apunta a `127.0.0.1:18080`,
+pero ese puerto lo ocupa el stack anterior `skillhub-test`. Hay que detenerlo
+**sin borrar sus volúmenes** antes del primer `rebuild-app.sh raspi`. Luego el
+stack principal ocupa `:18080` y no se necesita un segundo Compose. Antes del
+primer despliegue en el servidor final, verificar que su base existente sea el
+volumen exigido; si tiene otro nombre, el script se detiene sin crear una base.
 
 `npm run build` sólo valida Angular y escribe `frontend/dist`; no actualiza
-el contenedor web. Para ver un cambio en localhost, ejecutar el comando de
-arriba y recargar la página.
+el contenedor web. Para ver un cambio en localhost, ejecutar
+`./scripts/rebuild-app.sh local` y recargar la página.
 
 ## Frontend (`frontend/`)
 
