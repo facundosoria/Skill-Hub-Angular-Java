@@ -28,7 +28,7 @@
     .kind-option:hover { background:var(--surface-2); } .kind-option:focus-within { box-shadow:var(--ring); }
     .kind-option input { accent-color:var(--accent); }
     .filter-panel { width:min(300px,calc(100vw - 24px)); }
-    .filter-popover { position:fixed; right:12px; bottom:72px; z-index:100; }
+    .filter-popover { position:fixed; bottom:72px; z-index:100; }
     .filter-label { display:flex; flex-direction:column; gap:6px; padding:7px 8px 10px; color:var(--text-muted); font-size:12px; }
     .filter-kinds { max-height:260px; overflow:auto; border-top:1px solid var(--border); padding-top:4px; }
     .filter-count { display:inline-grid; place-items:center; width:24px; height:18px; border-radius:9px; padding:0; background:var(--surface-2); color:var(--text); font-size:11px; font-variant-numeric:tabular-nums; }

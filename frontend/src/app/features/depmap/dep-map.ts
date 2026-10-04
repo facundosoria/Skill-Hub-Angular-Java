@@ -114,7 +114,7 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
       </div>
 
       @if (openMenu() === 'filters') {
-        <div class="filter-popover" data-map-menu="filters">
+        <div class="filter-popover" data-map-menu="filters" [style.left.px]="filterPopoverLeft()">
           <div class="menu-panel filter-panel" id="depmap-filter-options" role="group" [attr.aria-label]="t().mapa.filtros">
             <label class="filter-label">{{ t().mapa.estado }}<select uiSelect [value]="store.status()" (change)="store.setStatus($any($event.target).value)">@for (status of statuses; track status.id) { <option [value]="status.id">{{ statusLabel(status.id) }}</option> }</select></label>
             <div class="filter-kinds" role="group" [attr.aria-label]="t().mapa.tipo">@for (kind of kindEntries(); track kind.id) { <label class="kind-option"><input type="checkbox" [checked]="store.kindsOn().has(kind.id)" (change)="store.toggleKind(kind.id)" />{{ kind.label }}</label> }</div>
@@ -163,6 +163,7 @@ export class DepMap {
   readonly fullscreenDetailsOpen = signal(false);
   readonly floatingControlsCollapsed = signal(false);
   readonly openMenu = signal<'more' | 'filters' | null>(null);
+  readonly filterPopoverLeft = signal(12);
   readonly activeFilterCount = computed(() => Number(this.store.status() !== 'todos') + Number(this.kindEntries().length > 0 && this.store.kindsOn().size !== this.kindEntries().length));
   readonly selectedGroupId = computed(() => this.store.pair()?.[0] || this.store.node() || this.store.mine());
   readonly selectedGroupName = computed(() => this.store.state().nodes[this.selectedGroupId()]?.n || this.selectedGroupId());
@@ -203,7 +204,13 @@ export class DepMap {
       };
       this.scheduleLayoutUpdate = updateLayout;
       updateLayout();
+      const updateOpenFilterPosition = () => {
+        if (this.openMenu() === 'filters') this.updateFilterPopoverPosition();
+      };
+      const toolbar = this.host.nativeElement.querySelector('.dep-map-toolbar');
       window.addEventListener('resize', updateLayout);
+      window.addEventListener('resize', updateOpenFilterPosition);
+      toolbar?.addEventListener('scroll', updateOpenFilterPosition, { passive: true });
       const closeMenusOutside = (event: PointerEvent) => {
         const menu = this.openMenu();
         if (menu && event.target instanceof Element && !event.target.closest(`[data-map-menu="${menu}"]`)) {
@@ -242,6 +249,8 @@ export class DepMap {
         if (layoutFrame !== null) cancelAnimationFrame(layoutFrame);
         if (stabilizationFrame !== null) cancelAnimationFrame(stabilizationFrame);
         window.removeEventListener('resize', updateLayout);
+        window.removeEventListener('resize', updateOpenFilterPosition);
+        toolbar?.removeEventListener('scroll', updateOpenFilterPosition);
         document.removeEventListener('pointerdown', closeMenusOutside);
         document.removeEventListener('keydown', keepFullscreenKeyboardInside, true);
         document.removeEventListener('fullscreenchange', syncNativeFullscreen);
@@ -291,7 +300,17 @@ export class DepMap {
     if (this.fullscreen()) this.fullscreenDetailsOpen.update((open) => !open);
     else { this.store.togglePanel(); this.scheduleLayoutUpdate?.(); }
   }
-  toggleMenu(menu: 'more' | 'filters'): void { this.openMenu.update((current) => current === menu ? null : menu); }
+  toggleMenu(menu: 'more' | 'filters'): void {
+    this.openMenu.update((current) => current === menu ? null : menu);
+    if (menu === 'filters' && this.openMenu() === 'filters') this.updateFilterPopoverPosition();
+  }
+  private updateFilterPopoverPosition(): void {
+    const button = (this.host.nativeElement as HTMLElement).querySelector<HTMLElement>('[data-menu-trigger="filters"]');
+    if (!button) return;
+    const buttonRect = button.getBoundingClientRect();
+    const popoverWidth = Math.min(300, window.innerWidth - 24);
+    this.filterPopoverLeft.set(Math.max(12, Math.min(buttonRect.left, window.innerWidth - popoverWidth - 12)));
+  }
   toggleFullscreen(): void { if (this.fullscreen()) this.exitFullscreen(); else this.enterFullscreen(); }
   enterFullscreen(): void {
     if (this.store.view() !== 'mapa' || this.fullscreen()) return;
