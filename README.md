@@ -10,6 +10,24 @@ Plan completo: `D:\ClaudeData\claude-home\plans\me-gustaria-migrar-todo-lively-b
 | `backend/` | Spring Boot 3.4 (Java 21, Maven). MCP + API REST + OAuth/Hydra completos, 109 tests en verde. |
 | `frontend/` | Angular 22 (standalone, signals, zoneless) + Tailwind 4. **Todas las pantallas portadas y verificadas e2e.** |
 
+## Reconstruir la aplicación
+
+Desde la raíz, con `.env` configurado para ese entorno:
+
+```bash
+./scripts/rebuild-app.sh
+```
+
+Este es el comando para publicar cambios en `http://localhost:8087` y el mismo
+que se ejecuta en el servidor con su propio `.env`. Levanta PostgreSQL si hace
+falta, prepara Hydra, construye backend y web, recrea esos dos servicios y
+comprueba que el nuevo web responde. Conserva el volumen de PostgreSQL. No
+levanta un stack de pruebas.
+
+`npm run build` sólo valida Angular y escribe `frontend/dist`; no actualiza
+el contenedor web. Para ver un cambio en localhost, ejecutar el comando de
+arriba y recargar la página.
+
 ## Frontend (`frontend/`)
 
 ```bash

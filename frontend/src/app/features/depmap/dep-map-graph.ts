@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signa
 import { NgTemplateOutlet } from '@angular/common';
 import { I18n } from '../../core/i18n/i18n';
 import {
+  arrangeNodesSymmetrically,
   edgeClass,
   edgeStrokeWidth,
   clampNode,
@@ -109,11 +110,13 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     .graph { position:relative; display:flex; flex-direction:column; min-height:0; height:100%; }
     .graph.panning,.graph.dragging-node { user-select:none; }
     .legend { display:grid; grid-template-columns:minmax(0,1fr); grid-template-areas:'primary' 'help'; align-items:center; gap:4px 12px; padding:6px 10px 2px; color:var(--text-muted); font-size:12.5px; }
+    :host-context(.fullscreen) .legend { text-align:center; }
     .legend-primary { grid-area:primary; min-width:0; } .legend-help { grid-area:help; min-width:0; }
     .legend i { display:inline-block; width:22px; height:0; border-top:3px solid; vertical-align:middle; margin-right:6px; border-radius:2px; }
     .legend i.legend-out { border-top-color:var(--dep-out); border-top-style:solid; } .legend i.legend-in { border-top-color:var(--dep-in); border-top-style:dashed; }
     .legend-direction.legend-out { color:var(--dep-out); } .legend-direction.legend-in { color:var(--dep-in); }
     @media (max-width:560px) { .legend { display:flex; flex-wrap:wrap; align-items:flex-start; gap:3px 18px; } .legend-primary,.legend-help { flex:0 1 auto; } }
+    @media (max-width:560px) { :host-context(.fullscreen) .legend { justify-content:center; } }
     svg.map { width:100%; height:auto; display:block; } .map.pannable { cursor:grab; } .graph.panning svg.map { cursor:grabbing; }
     @media (min-width:1021px) { :host-context(.fit-height) svg.map { flex:1 1 0; min-height:0; height:auto; } }
     .node { cursor:grab; } .graph.dragging-node .node { cursor:grabbing; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.2; }
@@ -209,7 +212,12 @@ export class DepMapGraph {
 
   zoomIn(): void { this.applyZoom(1); }
   zoomOut(): void { this.applyZoom(-1); }
-  fit(): void { this.transform.set({ ...MAP_IDENTITY }); }
+  fit(): void {
+    const arranged = arrangeNodesSymmetrically(this.store.state().nodes);
+    this.savedNodePositions.set(Object.fromEntries(Object.entries(arranged).map(([id, node]) => [id, { x: node.x, y: node.y }])));
+    this.persistNodePositions();
+    this.transform.set({ ...MAP_IDENTITY });
+  }
 
   private applyZoom(direction: 1 | -1): void {
     const current = this.transform();

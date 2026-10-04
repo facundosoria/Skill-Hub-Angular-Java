@@ -91,6 +91,28 @@ export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, mar
   return result;
 }
 
+/** Center each row and distribute the nodes evenly across the map. */
+export function arrangeNodesSymmetrically<T extends GeometryNode>(nodes: Record<string, T>): Record<string, T> {
+  const entries = Object.entries(nodes);
+  if (!entries.length) return {};
+  const rows = Math.ceil(entries.length / 3);
+  const rowSizes = Array<number>(rows).fill(Math.floor(entries.length / rows));
+  const middle = (rows - 1) / 2;
+  const centeredRows = rowSizes.map((_, index) => index).sort((a, b) => Math.abs(a - middle) - Math.abs(b - middle) || a - b);
+  for (let index = 0; index < entries.length % rows; index++) rowSizes[centeredRows[index]]++;
+  const minY = MAP_VIEWBOX_MARGIN + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT + 20;
+  const maxY = MAP_VIEWBOX_HEIGHT - MAP_VIEWBOX_MARGIN - NODE_HEIGHT / 2 - 20;
+  let next = 0;
+  return Object.fromEntries(rowSizes.flatMap((size, row) => Array.from({ length: size }, (_, column) => {
+    const [id, node] = entries[next++];
+    return [id, {
+      ...node,
+      x: MAP_VIEWBOX_WIDTH / 2 + (column - (size - 1) / 2) * 300,
+      y: rows === 1 ? MAP_VIEWBOX_HEIGHT / 2 : minY + row * (maxY - minY) / (rows - 1),
+    }];
+  }))) as Record<string, T>;
+}
+
 /** The "your group" tag is positioned relative to the node's top-left corner. */
 export function mineTagBox(node: GeometryNode, label = 'tu grupo'): GeometryBox {
   const box = nodeBox(node);

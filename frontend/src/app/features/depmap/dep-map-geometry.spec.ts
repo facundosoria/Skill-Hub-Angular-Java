@@ -1,4 +1,5 @@
 import {
+  arrangeNodesSymmetrically,
   clampPan,
   clampScale,
   clampTransform,
@@ -96,6 +97,28 @@ describe('dep-map geometry', () => {
       }
     }
     expect(nodeTextFits('↑999  ↓999', NODE_COUNT_FONT_SIZE)).toBe(true);
+  });
+
+  it('arranges thirteen nodes in centered, evenly spaced rows without overlaps', () => {
+    const original = Object.fromEntries(Array.from({ length: 13 }, (_, index) => [`node-${index}`, { x: 0, y: 0 }]));
+    const arranged = arrangeNodesSymmetrically(original);
+    const rows = [...new Set(Object.values(arranged).map((node) => node.y))];
+
+    expect(rows.map((y) => Object.values(arranged).filter((node) => node.y === y).length)).toEqual([2, 3, 3, 3, 2]);
+    expect(rows[1] - rows[0]).toBeCloseTo(rows[2] - rows[1]);
+    for (const y of rows) {
+      const columns = Object.values(arranged).filter((node) => node.y === y).map((node) => node.x);
+      expect(columns.reduce((sum, x) => sum + x, 0) / columns.length).toBe(600);
+      if (columns.length === 3) expect(columns[1] - columns[0]).toBe(columns[2] - columns[1]);
+    }
+    expect(original['node-0']).toEqual({ x: 0, y: 0 });
+    for (const [id, node] of Object.entries(arranged)) {
+      expect(boxWithinViewBox(nodeBox(node)), id).toBe(true);
+      for (const [otherId, other] of Object.entries(arranged)) {
+        if (id === otherId) continue;
+        expect(Math.abs(node.x - other.x) >= NODE_WIDTH || Math.abs(node.y - other.y) >= NODE_HEIGHT, `${id} / ${otherId}`).toBe(true);
+      }
+    }
   });
 
   it('keeps every node and the your-group tag inside the viewBox margin', () => {

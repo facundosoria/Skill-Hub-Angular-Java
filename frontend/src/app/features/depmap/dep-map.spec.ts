@@ -203,6 +203,25 @@ describe('DepMap offline controls', () => {
     expect(fixture.nativeElement.querySelector('.details-in')?.textContent).toContain('Lo necesitan');
   });
 
+  it('uses Ajustar to align the boxes and reset the zoom', () => {
+    const graph = fixture.componentInstance.graph!;
+    graph.zoomIn();
+    const adjust = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.map-ctl')]
+      .find((button) => button.textContent?.trim() === 'Ajustar');
+
+    expect(adjust).toBeTruthy();
+    adjust!.click();
+    fixture.detectChanges();
+
+    expect(graph.transform().scale).toBe(1);
+    expect(graph.renderedNodes()['usr'].x).toBe(450);
+    expect(graph.renderedNodes()['ops'].x).toBe(750);
+    expect(graph.renderedNodes()['usr'].y).toBe(graph.renderedNodes()['ops'].y);
+    expect(JSON.parse(localStorage.getItem('depmap-node-positions-v2') ?? '{}')).toEqual({
+      usr: { x: 450, y: 372.5 }, ops: { x: 750, y: 372.5 },
+    });
+  });
+
   it('enters viewport fullscreen, preserves map focus state, and exits with Escape', () => {
     const component = fixture.componentInstance;
     component.store.selectNode('ops');
@@ -222,6 +241,24 @@ describe('DepMap offline controls', () => {
     expect(document.documentElement.style.overflow).toBe('');
   });
 
+  it('toggles viewport fullscreen from the toolbar and updates its icon and label', () => {
+    const button = fixture.nativeElement.querySelector('.fullscreen-toggle') as HTMLButtonElement;
+    const expandIcon = button.querySelector('path')?.getAttribute('d');
+    expect(button.getAttribute('aria-label')).toBe('Pantalla completa');
+
+    button.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.fullscreen()).toBe(true);
+    expect(button.getAttribute('aria-label')).toBe('Salir de pantalla completa');
+    expect(button.querySelector('path')?.getAttribute('d')).not.toBe(expandIcon);
+
+    button.click();
+    fixture.detectChanges();
+    expect(fixture.componentInstance.fullscreen()).toBe(false);
+    expect(button.getAttribute('aria-label')).toBe('Pantalla completa');
+    expect(button.querySelector('path')?.getAttribute('d')).toBe(expandIcon);
+  });
+
   it('keeps graph full-map focus independent from the viewport fullscreen mode', () => {
     const component = fixture.componentInstance;
     component.store.toggleFullMap();
@@ -232,14 +269,29 @@ describe('DepMap offline controls', () => {
     expect(component.store.fullMap()).toBe(true);
   });
 
-  it('supports viewport fullscreen for the matrix and exits when switching to the list', () => {
+  it('keeps the matrix in the normal view with its detail toggle', () => {
     const component = fixture.componentInstance;
     component.activateView('matriz');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.fullscreen-toggle')).toBeNull();
+    const detailToggle = fixture.nativeElement.querySelector('.panel-toggle') as HTMLButtonElement;
+    const initialExpanded = detailToggle.getAttribute('aria-expanded');
+    detailToggle.click();
+    fixture.detectChanges();
+    expect(detailToggle.getAttribute('aria-expanded')).not.toBe(initialExpanded);
+    detailToggle.click();
+    fixture.detectChanges();
+    expect(detailToggle.getAttribute('aria-expanded')).toBe(initialExpanded);
+    component.enterFullscreen();
+    expect(component.fullscreen()).toBe(false);
+    component.activateView('mapa');
     component.enterFullscreen();
     expect(component.fullscreen()).toBe(true);
-    component.activateView('lista');
+    component.activateView('matriz');
+    fixture.detectChanges();
     expect(component.fullscreen()).toBe(false);
-    expect(component.store.view()).toBe('lista');
+    expect(component.store.view()).toBe('matriz');
+    expect(fixture.nativeElement.querySelector('.fullscreen-toggle')).toBeNull();
   });
 
   it('keeps Details functional as an overlay while fullscreen', () => {

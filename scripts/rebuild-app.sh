@@ -3,8 +3,8 @@ set -Eeuo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 project_dir="$(cd "${script_dir}/.." && pwd)"
-compose_file="${COMPOSE_FILE:-${project_dir}/docker-compose.yml}"
-env_file="${ENV_FILE:-${project_dir}/.env}"
+compose_file="${project_dir}/docker-compose.yml"
+env_file="${project_dir}/.env"
 
 if [[ ! -f "$compose_file" ]]; then
   echo "No se encontro el archivo Docker Compose: $compose_file" >&2
@@ -16,21 +16,29 @@ if [[ ! -f "$env_file" ]]; then
   exit 1
 fi
 
-compose=(docker compose --env-file "$env_file" -f "$compose_file")
+compose=(docker compose -p skill-hub-angular-java --env-file "$env_file" -f "$compose_file")
 
 "${compose[@]}" config --quiet
 
+echo "Levantando PostgreSQL si hace falta..."
+"${compose[@]}" up -d db
+
 db_id="$("${compose[@]}" ps -q db)"
 if [[ -z "$db_id" ]] || [[ "$(docker inspect --format '{{.State.Running}}' "$db_id")" != "true" ]]; then
-  echo "La base de datos no esta ejecutandose. Se cancela sin modificar contenedores." >&2
+  echo "La base de datos no quedo en ejecucion." >&2
   exit 1
 fi
 
-echo "Aplicando la migracion de Hydra (una sola vez, sale sola)..."
+echo "Verificando el esquema de Hydra..."
 "${compose[@]}" up hydra-migrate
+migrate_id="$("${compose[@]}" ps -a -q hydra-migrate)"
+if [[ -z "$migrate_id" ]] || [[ "$(docker inspect --format '{{.State.ExitCode}}' "$migrate_id")" != "0" ]]; then
+  echo "La migracion de Hydra fallo." >&2
+  exit 1
+fi
 
 echo "Levantando/actualizando Hydra..."
-"${compose[@]}" up -d hydra
+"${compose[@]}" up -d --no-deps hydra
 
 hydra_healthy=false
 for _ in {1..30}; do
@@ -59,8 +67,16 @@ if [[ "$hydra_healthy" != "true" ]]; then
   exit 1
 fi
 
+echo "Verificando las claves de Hydra..."
+"${compose[@]}" up --no-deps hydra-keys
+keys_id="$("${compose[@]}" ps -a -q hydra-keys)"
+if [[ -z "$keys_id" ]] || [[ "$(docker inspect --format '{{.State.ExitCode}}' "$keys_id")" != "0" ]]; then
+  echo "La provision de claves de Hydra fallo." >&2
+  exit 1
+fi
+
 echo "Construyendo las imagenes de backend y frontend..."
-"${compose[@]}" build --pull backend web
+"${compose[@]}" build backend web
 
 echo "Recreando solamente el backend..."
 "${compose[@]}" up -d --no-deps --force-recreate backend
@@ -96,5 +112,23 @@ fi
 echo "Backend saludable. Recreando solamente el frontend..."
 "${compose[@]}" up -d --no-deps --force-recreate web
 
+web_id="$("${compose[@]}" ps -q web)"
+if [[ -z "$web_id" ]] || [[ "$(docker inspect --format '{{.State.Running}}' "$web_id")" != "true" ]]; then
+  echo "El frontend no quedo en ejecucion." >&2
+  "${compose[@]}" logs --tail=200 web >&2
+  exit 1
+fi
+
+echo "Verificando el HTML servido por el nuevo contenedor web..."
+if ! "${compose[@]}" exec -T web wget -q -O /dev/null http://127.0.0.1:8080/; then
+  echo "El frontend no responde HTTP dentro del contenedor." >&2
+  "${compose[@]}" logs --tail=200 web >&2
+  exit 1
+fi
+
+"${compose[@]}" rm -f db-init hydra-migrate hydra-keys
+
 echo "Despliegue finalizado. PostgreSQL y su volumen no fueron recreados."
-"${compose[@]}" ps -a
+echo "Backend: $(docker inspect --format '{{.Image}}' "$backend_id")"
+echo "Frontend: $(docker inspect --format '{{.Image}}' "$web_id")"
+"${compose[@]}" ps

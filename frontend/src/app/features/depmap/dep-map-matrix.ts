@@ -91,13 +91,13 @@ export function calculateMatrixLayout(width: number, height: number, rows: numbe
     .mx thead th span { position:absolute; left:50%; bottom:50%; transform:translate(-50%,50%) rotate(-90deg); white-space:nowrap; font-weight:500; color:var(--text-muted); font-size:12px; }
     .mx thead th.corner { width:150px; } .mx thead th.tot { width:80px; }
     .mx tbody tr { height:var(--cell,40px); }
-    .mx tbody th { position:sticky; left:0; background:var(--surface); z-index:1; box-sizing:border-box; text-align:right; white-space:nowrap; font-weight:600; padding:0 12px 0 8px; height:40px; min-height:0; line-height:1; border-bottom:1px solid var(--border); width:150px; }
+    .mx tbody th { position:sticky; left:0; background:var(--surface); z-index:1; box-sizing:border-box; text-align:center; vertical-align:middle; white-space:nowrap; font-weight:600; padding:0 8px; height:40px; min-height:0; line-height:1; border-bottom:1px solid var(--border); width:150px; }
     .mx tbody td { box-sizing:border-box; height:40px; min-height:0; text-align:center; line-height:1; border-bottom:1px solid var(--border); padding:0; }
     .mx tbody tr:last-child th,.mx tbody tr:last-child td { border-bottom:0; }
     .cell { width:40px; height:36px; border-radius:8px; border:1px solid var(--border); background:var(--surface-2); color:var(--text-muted); display:inline-flex; align-items:center; justify-content:center; padding:0; font-weight:600; font-size:12.5px; }
     button.cell { cursor:pointer; } .cell.on { background:var(--dep-out); border-color:var(--dep-out); color:#fff; } .cell.on:hover { outline:2px solid var(--text); }
     .cell.self { background:transparent; border-style:dashed; cursor:default; } .tot { color:var(--text-muted); font-size:12.5px; padding:0 6px; text-align:center; vertical-align:middle; }
-    .mx tbody th.tot { color:var(--text-muted); font-weight:500; text-align:right; position:sticky; left:0; background:var(--surface); }
+    .mx tbody th.tot { color:var(--text-muted); font-weight:500; text-align:center; position:sticky; left:0; background:var(--surface); }
     .minerow th,.minecol { color:var(--dep-out); } .mx td.minecol .cell { box-shadow:0 0 0 2px color-mix(in srgb,var(--dep-in) 55%,transparent); }
     .mx tr.minerow .cell.on { box-shadow:0 0 0 2px color-mix(in srgb,var(--dep-out) 40%,transparent); }
     .hint { color:var(--text-muted); font-size:12.5px; padding:2px 12px 12px; max-width:90ch; } .out-text { color:var(--dep-out); } .in-text { color:var(--dep-in); }

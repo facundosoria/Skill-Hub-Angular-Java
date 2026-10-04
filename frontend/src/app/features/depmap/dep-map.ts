@@ -113,7 +113,7 @@ export function shouldFitMap(estimatedScale: number, currentlyFitting: boolean):
             <svg class="panel-toggle__icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="2.5" y="3" width="15" height="14" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M7 3v14" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>
             {{ (fullscreen() ? fullscreenDetailsOpen() : !store.panelCollapsed()) ? t().mapa.contraerDetalle : t().mapa.expandirDetalle }}
           </button>
-          <button type="button" class="fullscreen-toggle" [class.controls-hidden]="store.view() === 'lista'" [attr.aria-hidden]="store.view() === 'lista' ? 'true' : null" [disabled]="store.view() === 'lista'" [attr.aria-label]="t().mapa.pantallaCompleta" [title]="t().mapa.pantallaCompleta" (click)="enterFullscreen()">⛶</button>
+          @if (store.view() !== 'matriz') { <button type="button" class="fullscreen-toggle" [class.controls-hidden]="store.view() === 'lista'" [attr.aria-hidden]="store.view() === 'lista' ? 'true' : null" [disabled]="store.view() === 'lista'" [attr.aria-label]="fullscreen() ? t().mapa.salirPantallaCompleta : t().mapa.pantallaCompleta" [title]="fullscreen() ? t().mapa.salirPantallaCompleta : t().mapa.pantallaCompleta" (click)="toggleFullscreen()"><svg viewBox="0 0 24 24" aria-hidden="true">@if (fullscreen()) { <path d="M3 9h6V3M21 9h-6V3M3 15h6v6M21 15h-6v6" /> } @else { <path d="M8 3H3v5M16 3h5v5M3 16v5h5M21 16v5h-5" /> }</svg></button> }
           @if (fullscreen()) { <button uiButton variant="secondary" class="collapse-controls" type="button" [attr.aria-label]="t().mapa.ocultarControles" [title]="t().mapa.ocultarControles" (click)="floatingControlsCollapsed.set(true)">⌄</button> }
           </div>
         }
@@ -282,14 +282,15 @@ export class DepMap {
   }
   tabId(id: string): string { return `depmap-tab-${id}`; }
   panelId(id: string): string { return `depmap-panel-${id}`; }
-  activateView(id: 'mapa' | 'matriz' | 'lista'): void { if (id === 'lista' && this.fullscreen()) this.exitFullscreen(false); this.store.setView(id); }
+  activateView(id: 'mapa' | 'matriz' | 'lista'): void { if (id !== 'mapa' && this.fullscreen()) this.exitFullscreen(false); this.store.setView(id); }
   togglePanel(): void {
     if (this.fullscreen()) this.fullscreenDetailsOpen.update((open) => !open);
     else { this.store.togglePanel(); this.scheduleLayoutUpdate?.(); }
   }
   toggleMenu(menu: 'more' | 'filters'): void { this.openMenu.update((current) => current === menu ? null : menu); }
+  toggleFullscreen(): void { if (this.fullscreen()) this.exitFullscreen(); else this.enterFullscreen(); }
   enterFullscreen(): void {
-    if (this.store.view() === 'lista' || this.fullscreen()) return;
+    if (this.store.view() !== 'mapa' || this.fullscreen()) return;
     this.fullscreenScrollY = window.scrollY;
     this.bodyOverflowBeforeFullscreen = document.body.style.overflow;
     this.documentOverflowBeforeFullscreen = document.documentElement.style.overflow;

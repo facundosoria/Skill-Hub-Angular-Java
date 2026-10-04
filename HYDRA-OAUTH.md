@@ -194,22 +194,13 @@ metadata que recibe el cliente.
 1. Crear `.env` desde `.env.example` y completar secretos generados.
 2. Para HTTP local, usar `PUBLIC_BASE_URL=http://localhost:8087` y
    `COOKIE_SECURE=false`.
-3. Levantar PostgreSQL (el servicio `db-init` crea o reconcilia de forma
-   idempotente el rol y la base de Hydra, incluso sobre un volumen existente):
+3. Ejecutar el rebuild completo (el script levanta PostgreSQL y prepara Hydra):
 
    ```bash
-   docker compose --env-file .env up -d db
-   ```
-
-4. Ejecutar el rebuild completo:
-
-   ```bash
-   PUBLIC_BASE_URL=http://localhost:8087 \
-   COOKIE_SECURE=false \
    ./scripts/rebuild-app.sh
    ```
 
-5. Verificar servicios:
+4. Verificar servicios:
 
    ```bash
    docker compose --env-file .env ps
