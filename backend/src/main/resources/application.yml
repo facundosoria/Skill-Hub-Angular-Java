@@ -61,6 +61,9 @@ app:
     public-url: ${HYDRA_PUBLIC_URL:http://hydra:4444}
     mcp-resource-url: ${HYDRA_MCP_RESOURCE_URL:https://marketplace-utn.tech/api/mcp}
     protected-resource-metadata-url: ${HYDRA_PROTECTED_RESOURCE_METADATA_URL:https://marketplace-utn.tech/.well-known/oauth-protected-resource}
+  tailscale:
+    api-token: ${TAILSCALE_API_TOKEN:}
+    tailnet: ${TAILSCALE_TAILNET:}
 
 logging:
   level:

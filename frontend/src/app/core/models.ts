@@ -228,3 +228,55 @@ export interface AuditEvent {
   actorTeam: string | null;
   actorRole: string | null;
 }
+
+export interface InfraOverviewDto {
+  totalServices: number;
+  ok: number;
+  down: number;
+  degraded: number;
+  noData: number;
+  noAccess: number;
+  source: string;
+  lastUpdated: string;
+}
+
+export interface InfraServiceStatusDto {
+  serviceId: string;
+  name: string;
+  team: string;
+  port: number | null;
+  status: 'OK' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
+  reason: string;
+  node: string;
+  uptimeSeconds: number | null;
+  uptimeFormatted: string;
+  lastHeartbeatAt: string | null;
+  lastSeenRelative: string;
+  version: string | null;
+  availability24h: number | null;
+  degraded24h: number | null;
+  availability7d: number | null;
+  degraded7d: number | null;
+}
+
+export interface InfraStatusResponse {
+  summary: InfraOverviewDto;
+  services: InfraServiceStatusDto[];
+}
+
+export interface FrontendNodeDto {
+  hostname: string;
+  group: string | null;
+  name: string | null;
+  identityDeclared: boolean;
+  status: 'ONLINE' | 'OFFLINE';
+  lastSeenRelative: string;
+  firstSeenRelative: string;
+}
+
+export interface FrontendNodesStatusDto {
+  available: boolean;
+  source: 'tailscale_api' | 'no_configurado' | 'error';
+  lastSync: string | null;
+  nodes: FrontendNodeDto[];
+}
