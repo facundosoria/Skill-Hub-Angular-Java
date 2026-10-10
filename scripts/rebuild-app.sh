@@ -6,12 +6,20 @@ project_dir="$(cd "${script_dir}/.." && pwd)"
 compose_file="${project_dir}/docker-compose.yml"
 env_file="${project_dir}/.env"
 
-if [[ "$#" -ne 1 ]]; then
-  echo "Uso: ./scripts/rebuild-app.sh local|raspi|prod" >&2
+if [[ "$#" -lt 1 || "$#" -gt 2 ]]; then
+  echo "Uso: ./scripts/rebuild-app.sh local|raspi|prod [tailscale]" >&2
   exit 2
 fi
 
 target="$1"
+tailscale_opt_in=false
+if [[ "$#" -eq 2 ]]; then
+  [[ "$target" == prod && "$2" == tailscale ]] || {
+    echo "El modificador tailscale solo es válido como 'prod tailscale'." >&2
+    exit 2
+  }
+  tailscale_opt_in=true
+fi
 case "$target" in
   local)
     public_base_url="http://localhost:8087"
@@ -61,6 +69,45 @@ fi
 compose=(env "PUBLIC_BASE_URL=$public_base_url" "COOKIE_SECURE=$cookie_secure" "WEB_PORT=$web_port" "HYDRA_DEV_MODE=auto" "PGDATA_VOLUME_NAME=$db_volume_name" \
   docker compose -p "$compose_project" --env-file "$env_file" -f "$compose_file")
 
+base_compose=("${compose[@]}")
+if [[ "$tailscale_opt_in" == true ]]; then
+  # Keep the effective values simple to parse and pass: shell environment wins,
+  # otherwise require one literal KEY=value line in .env. No interpolation,
+  # quoting, escaping, whitespace or duplicate assignments are supported.
+  read_optin_value() {
+    local name="$1" value count
+    if [[ -n "${!name+x}" ]]; then
+      value="${!name}"
+    else
+      count="$(awk -v key="$name" 'index($0, key "=") == 1 { count++ } END { print count+0 }' "$env_file")"
+      if [[ "$count" != 1 ]]; then
+        echo "$name must be set exactly once in .env or exported in the environment." >&2
+        return 1
+      fi
+      value="$(awk -v key="$name" 'index($0, key "=") == 1 { sub(/^[^=]*=/, ""); print; exit }' "$env_file")"
+      if [[ "$value" == *'$'* || "$value" == *'\'* || "$value" == *'"'* || "$value" == *"'"* || "$value" =~ [[:space:]] ]]; then
+        echo "$name uses unsupported .env syntax; use one literal value or export it in the environment." >&2
+        return 1
+      fi
+    fi
+    printf '%s' "$value"
+  }
+  ts_authkey="$(read_optin_value TS_AUTHKEY)"
+  ts_hostname="$(read_optin_value TS_HOSTNAME)"
+  if [[ -z "$ts_authkey" ]]; then
+    echo "TS_AUTHKEY debe tener un valor no vacío en el entorno o en .env; su valor no se mostrará." >&2
+    exit 1
+  fi
+  if [[ ! "$ts_hostname" =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || (( ${#ts_hostname} > 63 )); then
+    echo "TS_HOSTNAME debe estar configurado explícitamente y tener formato DNS válido." >&2
+    exit 1
+  fi
+  # Export exactly the validated values to the Docker/Compose process. The
+  # authkey is never included in script output.
+  compose=(env "PUBLIC_BASE_URL=$public_base_url" "COOKIE_SECURE=$cookie_secure" "WEB_PORT=$web_port" "HYDRA_DEV_MODE=auto" "PGDATA_VOLUME_NAME=$db_volume_name" \
+    "TS_AUTHKEY=$ts_authkey" "TS_HOSTNAME=$ts_hostname" docker compose -p "$compose_project" --env-file "$env_file" -f "$compose_file" -f "${project_dir}/docker-compose.tailscale.yml")
+fi
+
 "${compose[@]}" config --quiet
 
 # En los hosts remotos, nunca crear silenciosamente un volumen vacío en lugar
@@ -104,6 +151,27 @@ if [[ "$target" != local ]]; then
       echo "Contenedor: ${current_bundle:-sin bundle}; dominio: ${public_bundle:-sin bundle}. Revisar el túnel/proxy." >&2
       exit 1
     fi
+  fi
+fi
+
+# All read-only production guards, including the live-domain check, have
+# completed. Only now may the opt-in path create/start a service container.
+if [[ "$tailscale_opt_in" == true ]]; then
+  mesh_original_id="$(docker ps -aq --filter 'label=com.docker.compose.service=mesh')"
+  if [[ -n "$mesh_original_id" ]]; then
+    echo "Se detectó un contenedor mesh preexistente ($mesh_original_id) en cualquier proyecto; resuélvalo manualmente antes de continuar para preservar identidad y propiedad." >&2
+    exit 1
+  fi
+  "${compose[@]}" up -d mesh
+  mesh_replacement_id="$("${compose[@]}" ps -q mesh)"
+  mesh_healthy=false
+  for _ in {1..60}; do
+    [[ -n "$mesh_replacement_id" ]] && [[ "$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$mesh_replacement_id" 2>/dev/null || true)" == healthy ]] && { mesh_healthy=true; break; }
+    sleep 2
+  done
+  if [[ "$mesh_healthy" != true ]]; then
+    echo "El sidecar Tailscale no quedó saludable; db y backend no fueron modificados. Puede requerir limpieza manual del sidecar." >&2
+    exit 1
   fi
 fi
 
@@ -231,7 +299,11 @@ for _ in {1..60}; do
   fi
 
   backend_state="$(docker inspect --format '{{.State.Status}}' "$backend_id")"
-  backend_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$backend_id")"
+  if [[ "$tailscale_opt_in" == true ]]; then
+    backend_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$backend_id" 2>/dev/null || true)"
+  else
+    backend_health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$backend_id")"
+  fi
 
   if [[ "$backend_health" == "healthy" ]]; then
     backend_healthy=true
@@ -248,6 +320,9 @@ done
 if [[ "$backend_healthy" != "true" ]]; then
   echo "El backend no quedo saludable. El frontend no sera recreado." >&2
   "${compose[@]}" logs --tail=200 backend >&2
+  if [[ "$tailscale_opt_in" == true ]]; then
+    echo "El fallo de mesh/red puede impedir o afectar Skill Hub; se requiere intervención del operador." >&2
+  fi
   exit 1
 fi
 

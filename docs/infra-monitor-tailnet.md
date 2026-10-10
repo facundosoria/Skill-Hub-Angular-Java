@@ -85,8 +85,25 @@ Notas de por qué así y no de otra forma:
 
 ## Cómo se activa en el stack
 
-    docker compose -p <proyecto> --env-file .env \
-      -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+    ./scripts/rebuild-app.sh prod tailscale
+
+Configure en el `.env` del host (permiso `0600`; nunca guardar en Git):
+
+- `TS_AUTHKEY`: key reusable, no efímera, etiquetada `tag:infra-monitor`.
+- `TS_HOSTNAME`: hostname DNS válido, explícito y único en la tailnet; elegirlo
+  tras comprobarlo administrativamente, sin que el script consulte Tailscale.
+- Para estas dos variables, use una sola asignación literal `NOMBRE=valor` en
+  `.env` (sin comillas, espacios, `$`/interpolación ni escapes con `\`), o
+  expórtelas en el entorno. Si están exportadas, el entorno prevalece. El script
+  valida esos valores y los pasa explícitamente a Compose. No se admiten valores
+  multilínea ni otras formas de dotenv; ante duplicados o sintaxis no soportada
+  el script falla cerrado.
+- `INFRA_ENABLED=true`, `INFRA_EUREKA_URL` y las allowlists
+  `INFRA_ALLOWED_HOSTS` / `INFRA_ALLOWED_PORTS` para los probes. Configurar la
+  URL y destinos reales según el entorno; no se asumen valores de red.
+
+`INFRA_TAILSCALE_ENABLED` es independiente: solo controla el listado opcional de
+dispositivos frontend mediante API y no activa el sidecar ni los probes.
 
 El overlay agrega el servicio `mesh` y pone al `backend` a compartir su
 namespace de red. Consecuencias que hay que tener presentes:
@@ -94,11 +111,16 @@ namespace de red. Consecuencias que hay que tener presentes:
 - **El backend pasa a depender del sidecar**: si la key es inválida o la tailnet
   no está, el contenedor `mesh` no queda healthy y el backend no arranca. Por eso
   el overlay es opt-in y no está en el `docker-compose.yml` base.
-- **DNS**: el overlay deja `127.0.0.11` (resolver embebido de Docker, para `db`,
+- **DNS**: el namespace compartido conserva `127.0.0.11` (resolver embebido de Docker, para `db`,
   `hydra`, `web`) primero y `100.100.100.100` (MagicDNS, para nombres de la
   tailnet) segundo. Si algo no resuelve, el orden o la lista se ajusta en el
   overlay, no en el compose base.
 - **Sin puertos publicados**: el sidecar solo da salida.
+- Si el sidecar no queda saludable, el script falla antes de iniciar db/backend;
+  puede ser necesaria una limpieza manual. Un servicio Compose `mesh`
+  preexistente detectado en el host hace fallar el preflight. No se garantiza
+  restauración automática: un fallo compartido de mesh/red puede impedir o
+  afectar el arranque de Skill Hub y requiere intervención del operador.
 
 ## Qué host de Eureka usar, y por qué no `hostName`
 

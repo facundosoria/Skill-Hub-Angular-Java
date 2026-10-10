@@ -4,9 +4,14 @@
 # management/actuator ports of microservices that live OUTSIDE the Docker
 # networks available on this host (other teams' machines).
 #
-# Usage (never as the default deploy path):
-#   docker compose -p <project> --env-file .env \
-#     -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+# Supported production command (never the default deploy path):
+#   ./scripts/rebuild-app.sh prod tailscale
+#
+# Invoking `docker compose -p <project> --env-file .env -f docker-compose.yml
+# -f docker-compose.tailscale.yml up -d` directly bypasses the script's
+# safeguards: key/hostname resolution and fail-closed preflight, backup and
+# schema checks. Direct invocation does not automatically restore the base
+# network. Do not use it in prod.
 #
 # It is an overlay on purpose: without the -f flag the stack behaves exactly as
 # before. With it, `backend` shares the sidecar network namespace, so the
@@ -25,7 +30,7 @@ services:
   mesh:
     image: tailscale/tailscale:v1.102.3
     restart: unless-stopped
-    hostname: ${TS_HOSTNAME:-skillhub-infra-monitor}
+    hostname: ${TS_HOSTNAME:?falta TS_HOSTNAME}
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:?falta TS_AUTHKEY (key reusable con tag:infra-monitor)}
       TS_STATE_DIR: /var/lib/tailscale
@@ -33,7 +38,7 @@ services:
       # Keep Docker's embedded resolver first (db, hydra, web are Docker names)
       # and MagicDNS second (tailnet names). accept-dns stays at the image
       # default so tailscaled does not overwrite resolv.conf on its own.
-      TS_EXTRA_ARGS: "--hostname=${TS_HOSTNAME:-skillhub-infra-monitor}"
+      TS_EXTRA_ARGS: "--hostname=${TS_HOSTNAME:?falta TS_HOSTNAME}"
     dns:
       - 127.0.0.11
       - 100.100.100.100
@@ -53,6 +58,7 @@ services:
 
   backend:
     network_mode: "service:mesh"
+    # Mesh DNS keeps Docker service lookups (db/hydra/web) before MagicDNS.
     depends_on:
       mesh:
         condition: service_healthy
