@@ -1,0 +1,61 @@
+# Tailnet overlay for Skill Hub (opt-in).
+#
+# Adds a Tailscale sidecar so the backend can reach Eureka (:8761) and the
+# management/actuator ports of microservices that live OUTSIDE the Docker
+# networks available on this host (other teams' machines).
+#
+# Usage (never as the default deploy path):
+#   docker compose -p <project> --env-file .env \
+#     -f docker-compose.yml -f docker-compose.tailscale.yml up -d
+#
+# It is an overlay on purpose: without the -f flag the stack behaves exactly as
+# before. With it, `backend` shares the sidecar network namespace, so the
+# sidecar must be healthy for the backend to start (see docs/infra-monitor-tailnet.md).
+#
+# Requirements before enabling:
+#   * TS_AUTHKEY in the environment: a reusable, NON-ephemeral key tagged
+#     `tag:infra-monitor` (see the doc for the exact key settings).
+#   * The ACL grants from `tag:infra-monitor` to Eureka and to the micros'
+#     management ports.
+#
+# No ports are published: the sidecar only provides outbound tailnet access to
+# the shared namespace, same shape proven by the platform's own tailscale node.
+
+services:
+  mesh:
+    image: tailscale/tailscale:v1.102.3
+    restart: unless-stopped
+    hostname: ${TS_HOSTNAME:-skillhub-infra-monitor}
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:?falta TS_AUTHKEY (key reusable con tag:infra-monitor)}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      # Keep Docker's embedded resolver first (db, hydra, web are Docker names)
+      # and MagicDNS second (tailnet names). accept-dns stays at the image
+      # default so tailscaled does not overwrite resolv.conf on its own.
+      TS_EXTRA_ARGS: "--hostname=${TS_HOSTNAME:-skillhub-infra-monitor}"
+    dns:
+      - 127.0.0.11
+      - 100.100.100.100
+    volumes:
+      - mesh_state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --json | grep -q '\"BackendState\": *\"Running\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  backend:
+    network_mode: "service:mesh"
+    depends_on:
+      mesh:
+        condition: service_healthy
+
+volumes:
+  mesh_state:

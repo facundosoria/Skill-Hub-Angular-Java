@@ -230,6 +230,7 @@ export class Shell {
       { path: '/keys', label: n.miKey },
       { path: '/docs', label: n.comoFunciona },
       { path: '/mapa', label: n.mapa },
+      { path: '/infra', label: n.infra },
     ];
     if (!this.isAdmin()) return base;
     return [

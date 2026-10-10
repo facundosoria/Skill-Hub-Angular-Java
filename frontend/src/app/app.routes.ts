@@ -143,6 +143,10 @@ export const routes: Routes = [
         loadComponent: () => import('./features/depmap/dep-map').then((m) => m.DepMap),
       },
       {
+        path: 'infra',
+        loadComponent: () => import('./features/infra/infra').then((m) => m.Infra),
+      },
+      {
         path: 'review',
         canActivate: [adminGuard],
         loadComponent: () => import('./features/review/review').then((m) => m.Review),

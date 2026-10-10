@@ -1,0 +1,59 @@
+# Isolated local smoke stack for the infra monitoring feature.
+#
+# Usage (from the repo root, Docker Desktop running):
+#   pwsh ./scripts/infra-smoke.ps1
+#
+# It is an ADDITIVE overlay on docker-compose.yml. It never changes the
+# production/local behaviour of that file: the compose project name, ports and
+# volume are all distinct, so the normal stack (localhost:8087) is untouched.
+#
+#   project : skillhub-infra-local
+#   web     : 127.0.0.1:18089
+#   db      : 127.0.0.1:15433  (own volume skillhub-infra-local-pgdata)
+#   hydra   : 127.0.0.1:18445
+#   fixture : 127.0.0.1:18090  (fake Eureka + actuator source)
+#
+# Cleanup: docker compose -p skillhub-infra-local down -v
+services:
+  db:
+    ports: !override
+      - "127.0.0.1:15433:5432"
+    volumes: !override
+      - infra_smoke_pgdata:/var/lib/postgresql/data
+
+  hydra:
+    entrypoint: !override ["hydra"]
+    command: !override ["serve", "all", "--dev"]
+    ports: !override
+      - "127.0.0.1:18445:4444"
+
+  backend:
+    environment:
+      INFRA_ENABLED: "true"
+      INFRA_EUREKA_URL: http://infra-fixture:8080/eureka
+      INFRA_INTERVAL: 10s
+      INFRA_ALLOWED_HOSTS: infra-fixture,127.0.0.1
+      INFRA_ALLOWED_PORTS: "8080"
+      INFRA_FAILURE_THRESHOLD: "2"
+      INFRA_RECOVERY_THRESHOLD: "1"
+      INFRA_RETENTION_DAYS: "90"
+
+  web:
+    ports: !override
+      - "127.0.0.1:18089:8080"
+
+  infra-fixture:
+    image: node:22-alpine
+    restart: unless-stopped
+    command: ["node", "/fixture/fixture.mjs"]
+    environment:
+      FIXTURE_PORT: "8080"
+      FIXTURE_HOST: infra-fixture
+      FIXTURE_MGMT_PORT: "8080"
+    volumes:
+      - ./e2e/infra/fixture.mjs:/fixture/fixture.mjs:ro
+    ports:
+      - "127.0.0.1:18090:8080"
+
+volumes:
+  infra_smoke_pgdata:

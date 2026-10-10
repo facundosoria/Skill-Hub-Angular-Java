@@ -41,6 +41,42 @@ app:
   timezone: ${APP_TZ:America/Argentina/Cordoba}
   usage:
     retention-days: ${USAGE_RETENTION_DAYS:90}
+  # Infra monitoring (feature: infra-monitor). Disabled by default: Skill Hub
+  # starts without any registry/eureka reachability and no network call happens
+  # at startup. Every knob below is externally configurable. The probe
+  # destination allowlist (allowed-hosts / allowed-ports) is mandatory before a
+  # registry-derived target is ever fetched.
+  infra:
+    enabled: ${INFRA_ENABLED:false}
+    eureka-url: ${INFRA_EUREKA_URL:}
+    interval: ${INFRA_INTERVAL:30s}
+    connect-timeout: ${INFRA_CONNECT_TIMEOUT:2s}
+    read-timeout: ${INFRA_READ_TIMEOUT:3s}
+    max-concurrency: ${INFRA_MAX_CONCURRENCY:4}
+    failure-threshold: ${INFRA_FAILURE_THRESHOLD:3}
+    recovery-threshold: ${INFRA_RECOVERY_THRESHOLD:2}
+    degrade-latency: ${INFRA_DEGRADE_LATENCY:1500ms}
+    stale-observation-grace: ${INFRA_STALE_GRACE:90s}
+    retention-days: ${INFRA_RETENTION_DAYS:90}
+    availability-window24h: ${INFRA_WINDOW_24H:24h}
+    availability-window7d: ${INFRA_WINDOW_7D:7d}
+    allowed-schemes:
+      - http
+      - https
+    allowed-hosts: ${INFRA_ALLOWED_HOSTS:}
+    allowed-ports: ${INFRA_ALLOWED_PORTS:8000,8001,8080,8081,8082,8083,8084,8085,8086,8087,8088,8090,8761,9090}
+    paths:
+      health: /actuator/health
+      prometheus: /actuator/prometheus
+    # Optional frontend-edge node listing through the Tailscale API. Pending:
+    # requires credentials and an agreed device/tag contract, so it stays
+    # disabled and reports an unavailable state rather than simulated nodes.
+    tailscale:
+      enabled: ${INFRA_TAILSCALE_ENABLED:false}
+      api-url: ${INFRA_TAILSCALE_API_URL:https://api.tailscale.com}
+      tailnet: ${INFRA_TAILSCALE_TAILNET:}
+      api-key: ${INFRA_TAILSCALE_API_KEY:}
+      tag-filter: tag:frontend-edge
   # Secreto de la cookie de sesion (jose HS256 en el original). >= 32 chars.
   session-secret: ${SESSION_SECRET:dev-only-session-secret-change-me-32c}
   # secure=true en la cookie solo en prod (el original mira NODE_ENV).
