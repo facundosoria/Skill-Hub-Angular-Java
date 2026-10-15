@@ -87,6 +87,11 @@ public class SessionService {
         for (Cookie c : cookies) {
             if (COOKIE.equals(c.getName())) { token = c.getValue(); break; }
         }
+        return readSession(token);
+    }
+
+    /** Reuses session validation without retaining a servlet request during streaming. */
+    public SessionPayload readSession(String token) {
         if (token == null || token.isEmpty()) return null;
         try {
             Claims c = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
@@ -104,6 +109,15 @@ public class SessionService {
      */
     public CurrentUser getCurrentUser(HttpServletRequest req) {
         SessionPayload session = readSession(req);
+        return getCurrentUserForSession(session);
+    }
+
+    /** Rechecks token expiry, account status and nonce using the existing validation path. */
+    public CurrentUser getCurrentUser(String token) {
+        return getCurrentUserForSession(readSession(token));
+    }
+
+    private CurrentUser getCurrentUserForSession(SessionPayload session) {
         if (session == null) return null;
         List<CurrentUser> rows = jdbc.query(
                 """
