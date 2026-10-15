@@ -37,6 +37,10 @@ export class GatewayLogStream {
     if (this.filters.levels.length) params.set('levels', this.filters.levels.join(','));
     if (this.filters.q) params.set('q', this.filters.q);
     if (this.filters.traceId) params.set('traceId', this.filters.traceId);
+    if (this.filters.route) params.set('route', this.filters.route);
+    if (this.filters.methods.length) params.set('method', this.filters.methods.join(','));
+    if (this.filters.statuses.length) params.set('status', this.filters.statuses.join(','));
+    if (this.filters.minDurationMs !== null) params.set('minDurationMs', String(this.filters.minDurationMs));
     const revision = ++this.revision;
     try {
       const source = this.factory(`/api/infra/logs/api-gateway/stream?${params}`);

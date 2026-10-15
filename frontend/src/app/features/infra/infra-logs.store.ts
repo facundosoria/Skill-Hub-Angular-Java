@@ -34,12 +34,15 @@ export class InfraLogsStore {
   readonly retrySeconds = signal(0);
   readonly loadingHistory = signal(false);
   readonly hasMoreBefore = signal(false);
+  readonly hasMoreAfter = signal(false);
+  readonly historyAt = signal<string | null>(null);
   readonly unavailable = signal(false);
   readonly errorCode = signal<'unavailable' | 'session' | 'access' | 'invalid' | null>(null);
 
   open(filters: LogFilters = EMPTY_FILTERS): void {
     if (!validFilters(filters)) { this.errorCode.set('invalid'); return; }
-    this.filters = { ...filters, levels: [...filters.levels] };
+    this.filters = { ...filters, levels: [...filters.levels], methods: [...filters.methods], statuses: [...filters.statuses] };
+    this.historyAt.set(null); this.hasMoreAfter.set(false);
     this.userPaused = false;
     const revision = this.stopTransport();
     this.buffer.clear(); this.entries.set([]); this.cursor = ''; this.before = null;
@@ -50,6 +53,14 @@ export class InfraLogsStore {
     void this.snapshot(revision).catch(error => this.handleError(error, revision));
   }
   refresh(): void { this.open(this.filters); }
+  jumpTo(at: string): void {
+    const revision = this.stopTransport();
+    this.userPaused = true; this.historyAt.set(at); this.buffer.clear(); this.entries.set([]);
+    this.cursor = ''; this.before = null; this.hasMoreBefore.set(false); this.hasMoreAfter.set(false);
+    this.status.set(null); this.errorCode.set(null); this.connection.set('loading');
+    void this.snapshot(revision, at).catch(error => this.handleError(error, revision));
+  }
+  goLive(): void { this.historyAt.set(null); this.userPaused = false; this.open(this.filters); }
   private async request<T>(request: Observable<T>, revision: number): Promise<T> {
     this.assertCurrent(revision);
     const value = await firstValueFrom(request.pipe(takeUntil(this.cancel)));
@@ -67,14 +78,16 @@ export class InfraLogsStore {
       (page.nextBefore !== null && !isCursor(page.nextBefore))) throw new Error('Invalid log page');
     for (const entry of page.entries) compareCursors(entry.id, page.headCursor);
   }
-  private async snapshot(revision: number): Promise<void> {
-    const page = await this.request(this.api.page(this.filters), revision);
+  private async snapshot(revision: number, at?: string): Promise<void> {
+    const page = await this.request(this.api.page(this.filters, at ? { at } : {}), revision);
     this.assertCurrent(revision); this.validatePage(page);
     this.buffer.clear(); this.applyPage(page);
     this.cursor = page.headCursor ?? ''; this.through = page.headCursor ?? ''; this.before = page.nextBefore;
     this.hasMoreBefore.set(page.hasMoreBefore);
+    this.hasMoreAfter.set(page.hasMoreAfter);
     if (page.headCursor === null) { this.waitForCollector(revision); return; }
-    if (this.visible && !this.userPaused) this.openStream();
+    if (at) { this.cursor = page.nextAfter ?? page.headCursor; this.connection.set('paused'); }
+    else if (this.visible && !this.userPaused) this.openStream();
   }
   private waitForCollector(revision: number): void {
     if (revision !== this.revision) return;
@@ -216,6 +229,17 @@ export class InfraLogsStore {
         const previousCount = this.newCount();
         this.merge(page.entries); this.newCount.set(previousCount);
         this.before = page.nextBefore; this.hasMoreBefore.set(page.hasMoreBefore);
+      })
+      .catch(error => this.handleError(error, revision))
+      .finally(() => { if (revision === this.revision) this.loadingHistory.set(false); });
+  }
+  loadNewer(): Promise<void> {
+    if (this.loadingHistory() || !this.hasMoreAfter() || !this.cursor) return Promise.resolve();
+    const revision = this.revision; this.loadingHistory.set(true);
+    return this.request(this.api.page(this.filters, { after: this.cursor, through: this.status()?.headCursor ?? undefined }), revision)
+      .then(page => {
+        this.assertCurrent(revision); this.validatePage(page); this.merge(page.entries);
+        this.cursor = page.nextAfter ?? this.cursor; this.hasMoreAfter.set(page.hasMoreAfter);
       })
       .catch(error => this.handleError(error, revision))
       .finally(() => { if (revision === this.revision) this.loadingHistory.set(false); });

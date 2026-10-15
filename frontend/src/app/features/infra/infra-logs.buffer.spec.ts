@@ -1,5 +1,5 @@
 import { LogBuffer } from './infra-logs.buffer';
-import { compareCursors, validFilters } from './infra-logs.models';
+import { compareCursors, EMPTY_FILTERS, validFilters } from './infra-logs.models';
 import { logEntry } from './infra-logs.fixtures';
 
 describe('Gateway log browser buffer', () => {
@@ -32,10 +32,10 @@ describe('Gateway log browser buffer', () => {
 });
 describe('Gateway log filters', () => {
   it('accepts only exposed levels, literal text up to 120 chars and exactly 32 hex trace chars', () => {
-    expect(validFilters({ levels: ['INFO', 'WARN'], q: 'a'.repeat(120), traceId: 'ABCDEF12'.repeat(4) })).toBe(true);
-    expect(validFilters({ levels: [], q: 'a'.repeat(121), traceId: '' })).toBe(false);
-    expect(validFilters({ levels: [], q: '', traceId: 'g'.repeat(32) })).toBe(false);
-    expect(validFilters({ levels: [], q: '', traceId: '1'.repeat(31) })).toBe(false);
-    expect(validFilters({ levels: ['DEBUG' as 'INFO'], q: '', traceId: '' })).toBe(false);
+    expect(validFilters({ ...EMPTY_FILTERS, levels: ['INFO', 'WARN'], q: 'a'.repeat(120), traceId: 'ABCDEF12'.repeat(4) })).toBe(true);
+    expect(validFilters({ ...EMPTY_FILTERS, q: 'a'.repeat(121) })).toBe(false);
+    expect(validFilters({ ...EMPTY_FILTERS, traceId: 'g'.repeat(32) })).toBe(false);
+    expect(validFilters({ ...EMPTY_FILTERS, traceId: '1'.repeat(31) })).toBe(false);
+    expect(validFilters({ ...EMPTY_FILTERS, levels: ['DEBUG' as 'INFO'] })).toBe(false);
   });
 });

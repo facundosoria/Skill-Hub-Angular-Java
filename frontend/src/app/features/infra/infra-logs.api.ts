@@ -9,9 +9,11 @@ export class InfraLogsApi {
 
   status() { return this.injector.get(Api).get<LogStatus>(`${this.path}/status`); }
 
-  page(filters: LogFilters, cursors: { before?: string; after?: string; through?: string } = {}) {
+  page(filters: LogFilters, cursors: { before?: string; after?: string; through?: string; at?: string } = {}) {
     return this.injector.get(Api).get<LogPage>(this.path, {
-      limit: 150, levels: filters.levels.join(','), q: filters.q, traceId: filters.traceId, ...cursors,
+      limit: 150, levels: filters.levels.join(','), q: filters.q, traceId: filters.traceId,
+      route: filters.route, method: filters.methods.join(','), status: filters.statuses.join(','),
+      minDurationMs: filters.minDurationMs ?? '', ...cursors,
     });
   }
 }

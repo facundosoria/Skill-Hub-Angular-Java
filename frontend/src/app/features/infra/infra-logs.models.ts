@@ -16,7 +16,9 @@ export interface LogEntry {
   lines: string[];
   redacted: true;
 }
-export interface LogFilters { levels: LogLevel[]; q: string; traceId: string }
+export type LogMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type LogStatusFilter = '2xx' | '3xx' | '4xx' | '5xx';
+export interface LogFilters { levels: LogLevel[]; q: string; traceId: string; route: string; methods: LogMethod[]; statuses: LogStatusFilter[]; minDurationMs: number | null }
 export interface LogStatus {
   sourceStatus: SourceStatus;
   generation: string | null;
@@ -49,10 +51,13 @@ export interface LogPage {
   entries: LogEntry[];
 }
 export type LogConnection = 'loading' | 'starting' | 'connecting' | 'live' | 'reconnecting' | 'polling' | 'paused' | 'hidden' | 'blocked' | 'error' | 'revoked';
-export const EMPTY_FILTERS: LogFilters = { levels: [], q: '', traceId: '' };
+export const EMPTY_FILTERS: LogFilters = { levels: [], q: '', traceId: '', route: '', methods: [], statuses: [], minDurationMs: null };
 export function validFilters(filters: LogFilters): boolean {
-  return filters.q.length <= 120 && (!filters.traceId || /^[\da-f]{32}$/i.test(filters.traceId)) &&
-    filters.levels.every(level => ['INFO', 'WARN', 'ERROR'].includes(level));
+  return filters.q.length <= 120 && filters.route.length <= 120 && !/[\u0000-\u001f\u007f]/.test(filters.route) && (!filters.traceId || /^[\da-f]{32}$/i.test(filters.traceId)) &&
+    (filters.minDurationMs === null || filters.minDurationMs >= 0 && filters.minDurationMs <= 600_000) &&
+    filters.levels.every(level => ['INFO', 'WARN', 'ERROR'].includes(level)) &&
+    filters.methods.every(method => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) &&
+    filters.statuses.every(status => ['2xx', '3xx', '4xx', '5xx'].includes(status));
 }
 export function isCursor(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 128 && /^[^:\s]+:\d+$/.test(value);

@@ -94,10 +94,13 @@ describe('Gateway log SSE wrapper', () => {
   it('encodes literal filters without regex or router state', () => {
     stream.stop();
     stream = new GatewayLogStream(url => { sources.push(new FakeLogSource(url)); return sources.at(-1)!; },
-      { levels: ['ERROR', 'WARN'], q: '<b>&text', traceId: 'A'.repeat(32) }, callbacks);
+      { ...EMPTY_FILTERS, levels: ['ERROR', 'WARN'], q: '<b>&text', traceId: 'A'.repeat(32),
+        route: '/api/example', methods: ['GET', 'POST'], statuses: ['4xx'], minDurationMs: 501 }, callbacks);
     stream.start();
     const query = new URL(sources.at(-1)!.url, 'http://fixture.invalid').searchParams;
     expect(query.get('q')).toBe('<b>&text'); expect(query.get('traceId')).toBe('A'.repeat(32));
     expect(query.get('levels')).toBe('ERROR,WARN');
+    expect(query.get('route')).toBe('/api/example'); expect(query.get('method')).toBe('GET,POST');
+    expect(query.get('status')).toBe('4xx'); expect(query.get('minDurationMs')).toBe('501');
   });
 });

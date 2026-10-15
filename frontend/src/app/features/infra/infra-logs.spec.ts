@@ -6,12 +6,14 @@ import { InfraLogs } from './infra-logs';
 import { InfraLogsStore } from './infra-logs.store';
 import { coldLogStatus, logEntry, logStatus } from './infra-logs.fixtures';
 import { LogConnection, LogEntry } from './infra-logs.models';
+import { EMPTY_FILTERS } from './infra-logs.models';
 
 function mockStore(entries: LogEntry[] = []) {
   return { entries: signal(entries), connection: signal<LogConnection>('live'), status: signal(logStatus()),
     lastEventAt: signal<string | null>(null), capacityLimited: signal(false), browserTruncated: signal(false),
     discontinuity: signal<'gap' | 'reset' | null>(null), newCount: signal(0), retrySeconds: signal(0),
     loadingHistory: signal(false), hasMoreBefore: signal(true), unavailable: signal(false),
+    hasMoreAfter: signal(false), historyAt: signal<string | null>(null),
     errorCode: signal<'unavailable' | 'session' | 'access' | 'invalid' | null>(null),
     open: vi.fn(), resume: vi.fn(), pause: vi.fn(), refresh: vi.fn(), loadOlder: vi.fn(async () => {}),
     setVisible: vi.fn(), acknowledgeNew: vi.fn(), destroy: vi.fn() };
@@ -45,7 +47,7 @@ describe('Gateway log panel', () => {
     const { fixture, panel } = await configure(mockStore([logEntry(150, { method: null, route: null, lines: [malicious, '<b>second line</b>'] })]));
     panel.selectedId.set('g7:150'); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('img')).toBeNull(); expect(fixture.nativeElement.querySelector('script')).toBeNull();
-    expect(fixture.nativeElement.querySelector('pre').textContent).toBe(malicious + '\n<b>second line</b>');
+    expect(fixture.nativeElement.querySelector('.log-continuations').textContent).toBe(malicious + '\n<b>second line</b>');
     expect(fixture.nativeElement.textContent).toContain(malicious);
     expect(fixture.nativeElement.querySelector('[role="list"]').getAttribute('aria-live')).toBe('off');
   });
@@ -66,6 +68,64 @@ describe('Gateway log panel', () => {
     expect(rows[2].querySelector('.log-request span')?.classList.contains('text-warning')).toBe(true);
     expect(rows[3].querySelector('.log-request span')?.classList.contains('text-danger')).toBe(true);
   });
+  it('shows full event details, copy actions, and trace filtering in the detail panel', async () => {
+    const entry = logEntry(8, { logger: 'com.example.gateway.LoggingFilter', event: 'REQUEST_COMPLETED',
+      status: 201, durationMs: 1201, reason: 'synthetic reason', lines: ['safe event line', 'continuation'] });
+    const { fixture, panel, store } = await configure(mockStore([entry]));
+    panel.detail(entry); fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('UTC:'); expect(text).toContain('Creado'); expect(text).toContain('Lenta');
+    expect(text).toContain('com.example.gateway.LoggingFilter'); expect(text).toContain('synthetic reason');
+    expect(text).toContain('2222222222222222'); expect(text).toContain('safe event line');
+    expect(fixture.nativeElement.querySelectorAll('.detail-copy').length).toBe(3);
+    expect(fixture.nativeElement.querySelector('.log-continuations')?.textContent).toContain('continuation');
+    const traceButton = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
+      .find(button => button.textContent?.includes('Ver solo esta traza'));
+    traceButton?.click();
+    expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, traceId: entry.traceId });
+  });
+  it('shows self-service route and repeated-error controls and changes displayed timezone in memory', async () => {
+    const entries = [logEntry(5, { level: 'ERROR', event: 'FAIL', route: '/api/users/{id}', status: 500 }),
+      logEntry(6, { level: 'ERROR', event: 'FAIL', route: '/api/users/{id}', status: 500 }), logEntry(7, { level: 'INFO' })];
+    const { fixture, panel } = await configure(mockStore(entries));
+    expect(panel.displayedGroups().map(group => group.entries.length)).toEqual([2, 1]);
+    expect(fixture.nativeElement.textContent).toContain('Rutas más frecuentes');
+    const row = fixture.nativeElement.querySelector('.log-row') as HTMLElement;
+    expect(row.querySelector('.route-chip')?.textContent).toBe('users');
+    expect(row.querySelector('button button')).toBeNull();
+    panel.toggleTimezone(); fixture.detectChanges();
+    expect(panel.timezone()).toBe('utc'); expect(fixture.nativeElement.textContent).toContain('UTC');
+    panel.toggleGrouping(); expect(panel.displayedGroups().map(group => group.entries.length)).toEqual([1, 1, 1]);
+    fixture.destroy();
+  });
+  it('opens the accessible help section and prepares report-ready copy for filtered loaded entries', async () => {
+    const entry = logEntry(8, { route: '/api/courses/{id}', status: 404, traceId: null });
+    const { fixture, panel } = await configure(mockStore([entry]));
+    const details = fixture.nativeElement.querySelector('details') as HTMLDetailsElement;
+    expect(details.open).toBe(false); details.querySelector('summary')?.dispatchEvent(new Event('click'));
+    expect(fixture.nativeElement.textContent).toContain('La ventana conserva hasta 6 horas');
+    const markdown = (await import('./infra-logs-diagnostics')).issueMarkdown([entry]);
+    expect(markdown).toContain('Hora local'); expect(markdown).toContain('Hora UTC'); expect(markdown).toContain('/api/courses/{id}');
+    expect(panel.stackLines(logEntry(9, { lines: ['at com.skillhub.Example.run(Example.java:1)', 'at java.base.Thread.run'] }))[0].applicationFrame).toBe(true);
+    fixture.destroy();
+  });
+  it('applies removable path, method, status, and duration filters server-side', async () => {
+    const { fixture, panel, store } = await configure(); store.open.mockClear();
+    panel.route.set('/api/example'); panel.methods.set(['POST']); panel.statuses.set(['4xx']); panel.minDurationMs.set(501);
+    panel.levels.set(['WARN']);
+    panel.applyFilters(); fixture.detectChanges();
+    expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, route: '/api/example', methods: ['POST'], statuses: ['4xx'], minDurationMs: 501, levels: ['WARN'] });
+    expect(fixture.nativeElement.textContent).toContain('Ruta: /api/example');
+    expect(fixture.nativeElement.textContent).toContain('Nivel: WARN');
+    panel.removeFilter('route'); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, levels: ['WARN'], methods: ['POST'], statuses: ['4xx'], minDurationMs: 501 });
+  });
+  it('summarizes status classes and applies a summary class when selected', async () => {
+    const entries = [logEntry(1, { status: 200, durationMs: 10 }), logEntry(2, { status: 404, level: 'WARN', durationMs: 20 }), logEntry(3, { status: 503, level: 'ERROR', durationMs: 30 })];
+    const { fixture, panel, store } = await configure(mockStore(entries));
+    expect(panel.summaryStats()).toMatchObject({ classes: { '2xx': 1, '3xx': 0, '4xx': 1, '5xx': 1 }, warningsErrors: 2, slowest: 30, average: 20 });
+    panel.applySummaryStatus('4xx'); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['4xx'] });
+    fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('4xx: 1');
+  });
   it('renders only a bounded window for 5000 events and offers pages of at most 150', async () => {
     const { fixture, panel } = await configure(mockStore(Array.from({ length: 5000 }, (_, index) => logEntry(index + 1))));
     expect(fixture.nativeElement.querySelectorAll('[role="listitem"]').length).toBeLessThanOrEqual(80);
@@ -78,8 +138,8 @@ describe('Gateway log panel', () => {
     panel.query.set('a'.repeat(121)); panel.applyFilters(); expect(store.open).not.toHaveBeenCalled();
     panel.query.set('literal.*'); panel.traceId.set('z'.repeat(32)); panel.applyFilters(); expect(store.open).not.toHaveBeenCalled();
     panel.traceId.set(' ' + 'A'.repeat(32) + ' '); panel.toggleLevel('WARN');
-    expect(store.open).toHaveBeenLastCalledWith({ levels: ['WARN'], q: 'literal.*', traceId: 'A'.repeat(32) });
-    panel.clearFilters(); expect(store.open).toHaveBeenLastCalledWith({ levels: [], q: '', traceId: '' });
+    expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, levels: ['WARN'], q: 'literal.*', traceId: 'A'.repeat(32) });
+    panel.clearFilters(); expect(store.open).toHaveBeenLastCalledWith(EMPTY_FILTERS);
   });
   it('debounces text changes by 300 ms and cancels pending filters on destruction', async () => {
     const { panel, store, fixture } = await configure(); vi.useFakeTimers(); store.open.mockClear();

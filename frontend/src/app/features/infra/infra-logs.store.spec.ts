@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import { coldLogPage, coldLogStatus, FakeLogSource, logEntry, logPage, logStatus } from './infra-logs.fixtures';
 import { InfraLogsStore, retryAfter } from './infra-logs.store';
 import { LOG_EVENT_SOURCE } from './infra-logs.stream';
+import { EMPTY_FILTERS } from './infra-logs.models';
 
 const BASE = '/api/infra/logs/api-gateway';
 async function settle() { for (let index = 0; index < 12; index++) await Promise.resolve(); }
@@ -101,6 +102,16 @@ describe('Gateway log data store', () => {
     sources[0].emit('logs', { entries: [logEntry(151)] }, 'g7:151');
     expect(store.entries().map(entry => entry.id)).toEqual(['g7:150', 'g7:151']);
   });
+  it('jumps to a timestamp without opening SSE and returns to live with a fresh head snapshot', async () => {
+    store.jumpTo('2026-10-14T06:50:58.000Z');
+    const historical = http.expectOne(req => req.url === BASE);
+    expect(historical.request.params.get('at')).toBe('2026-10-14T06:50:58.000Z');
+    historical.flush(logPage({ entries: [logEntry(149), logEntry(150)], hasMoreAfter: true })); await settle();
+    expect(store.historyAt()).toBe('2026-10-14T06:50:58.000Z'); expect(store.connection()).toBe('paused');
+    expect(store.hasMoreAfter()).toBe(true); expect(sources).toHaveLength(0);
+    store.goLive(); http.expectOne(req => req.url === BASE).flush(logPage()); await settle();
+    expect(store.historyAt()).toBeNull(); expect(sources).toHaveLength(1); expect(sources[0].url).toContain('after=g7%3A150');
+  });
   it('keeps history before/through independent of live checkpoints and deduplicates history', async () => {
     await start(); sources[0].emit('checkpoint', '', 'g7:180');
     const load = store.loadOlder(); const request = http.expectOne(req => req.url === BASE);
@@ -140,14 +151,14 @@ describe('Gateway log data store', () => {
   });
   it('cancels obsolete filter requests and sends only validated literal filters', async () => {
     store.open(); const previous = http.expectOne(req => req.url === BASE);
-    store.open({ levels: ['WARN', 'ERROR'], q: '<b>literal</b>', traceId: 'A'.repeat(32) });
+    store.open({ ...EMPTY_FILTERS, levels: ['WARN', 'ERROR'], q: '<b>literal</b>', traceId: 'A'.repeat(32) });
     expect(previous.cancelled).toBe(true);
     const request = http.expectOne(req => req.url === BASE);
     expect(request.request.params.get('q')).toBe('<b>literal</b>'); expect(request.request.params.get('traceId')).toBe('A'.repeat(32));
     expect(request.request.params.get('levels')).toBe('WARN,ERROR');
     request.flush(logPage({ entries: [] })); await settle();
     expect(store.entries()).toEqual([]); expect(sources).toHaveLength(1);
-    store.open({ levels: [], q: 'x'.repeat(121), traceId: '' }); http.expectNone(req => req.url === BASE);
+    store.open({ ...EMPTY_FILTERS, q: 'x'.repeat(121) }); http.expectNone(req => req.url === BASE);
     expect(store.errorCode()).toBe('invalid');
   });
   it('closes SSE while paused, counts pending ingestion and catches up on resume', async () => {
