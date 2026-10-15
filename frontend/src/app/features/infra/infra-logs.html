@@ -1,0 +1,114 @@
+<div uiCard>
+  <div class="space-y-4 border-b border-border bg-surface-2/40 p-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="font-semibold">api-gateway <span uiBadge [tone]="store.connection() === 'live' ? 'success' : 'neutral'">{{ connectionLabel() }}</span></h2>
+        <p class="mt-1 text-xs text-text-muted">{{ t().window }} · {{ t().privacy }}</p>
+        <p class="mt-1 text-xs text-text-muted">{{ t().lastEvent }}: {{ time(store.lastEventAt()) }}</p>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        @if (store.connection() === 'paused') {
+          <button type="button" uiButton variant="secondary" class="log-action" (click)="store.resume()">{{ t().resume }}</button>
+        } @else {
+          <button type="button" uiButton variant="secondary" class="log-action" (click)="store.pause()" [disabled]="store.connection() === 'loading' || store.connection() === 'revoked' || store.connection() === 'blocked'">{{ t().pause }}</button>
+        }
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="store.resume()" [disabled]="store.connection() === 'blocked' || store.connection() === 'revoked'">{{ t().retry }}</button>
+      </div>
+    </div>
+    <div class="log-filters">
+      <fieldset>
+        <legend class="mb-1 text-sm">{{ t().level }}</legend>
+        <div class="flex gap-3">
+          @for (level of ['INFO', 'WARN', 'ERROR']; track level) {
+            <label class="inline-flex min-h-11 items-center gap-1 text-sm"><input type="checkbox" [checked]="levels().includes($any(level))" (change)="toggleLevel($any(level))" />{{ level }}</label>
+          }
+        </div>
+      </fieldset>
+      <label class="text-sm">{{ t().text }}
+        <input uiInput class="mt-1" type="search" maxlength="120" [value]="query()" (input)="setQuery($any($event.target).value)" />
+      </label>
+      <label class="text-sm">{{ t().trace }}
+        <input uiInput class="mt-1 font-mono" type="text" maxlength="32" spellcheck="false" autocomplete="off" [value]="traceId()" [attr.aria-invalid]="invalid()" aria-describedby="logs-filter-error" (input)="setTrace($any($event.target).value)" />
+      </label>
+      <button type="button" uiButton variant="secondary" class="log-action self-end" (click)="clearFilters()">{{ t().clear }}</button>
+    </div>
+    @if (invalid()) { <p id="logs-filter-error" class="text-sm text-danger" role="alert">{{ t().invalidFilters }}</p> }
+  </div>
+  <div class="space-y-2 p-4 text-sm">
+    <p role="status" aria-live="polite" aria-atomic="true">
+      {{ connectionLabel() }}
+      @if (store.connection() === 'blocked' || store.connection() === 'reconnecting') { · {{ t().retryIn }} {{ store.retrySeconds() }} s }
+    </p>
+    @if (errorLabel()) {
+      <p class="text-danger" role="alert">
+        @if (store.errorCode() === 'session') { <a href="/login" class="underline">{{ errorLabel() }}</a> }
+        @else { {{ errorLabel() }} }
+      </p>
+    }
+    @if (store.status(); as status) {
+      <p class="text-text-muted">{{ t().coverage }}: {{ time(status.coverageStart) }} · {{ t().source }}: {{ t()[status.sourceStatus] }}</p>
+      @if (status.sourceStatus === 'disconnected') { <p class="text-warning">{{ t().sourceDisconnected }}</p> }
+      @if (status.sourceStatus === 'starting') { <p class="text-text-muted">{{ t().sourceStarting }}</p> }
+      @if (status.retentionTruncated || store.capacityLimited()) { <p class="text-warning">{{ t().retention }}</p> }
+    }
+    @if (store.browserTruncated()) { <p class="text-warning">{{ t().browserLimit }}</p> }
+    @if (store.discontinuity(); as discontinuity) {
+      <div class="flex flex-wrap items-center gap-2 text-warning">
+        <p>{{ t()[discontinuity] }}</p>
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="store.refresh()" [disabled]="store.connection() === 'blocked' || store.connection() === 'revoked'">{{ t().latest }}</button>
+      </div>
+    }
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="loadOlder()" [disabled]="!store.hasMoreBefore() || store.loadingHistory() || store.connection() === 'blocked' || store.connection() === 'revoked'">{{ store.loadingHistory() ? t().loading : t().older }}</button>
+      <button type="button" uiButton variant="secondary" class="log-action" [attr.aria-pressed]="accessible()" (click)="toggleAccessible()">{{ accessible() ? t().virtualView : t().accessibleView }}</button>
+    </div>
+  </div>
+  @if (store.connection() === 'loading') {
+    <p class="p-6 text-text-muted">{{ t().loading }}</p>
+  } @else if (!store.entries().length && !errorLabel()) {
+    <ui-empty-state [title]="filtered() ? t().emptyFiltered : t().empty" />
+  }
+  <div #viewport class="log-viewport" role="list" [attr.aria-label]="t().events" tabindex="0" aria-live="off" (scroll)="onScroll()">
+    <div role="presentation" [style.height.px]="topSpace()"></div>
+    @for (entry of visibleEntries(); track entry.id; let index = $index) {
+      <div role="listitem" class="log-row" [attr.aria-posinset]="rangeStart() + index + 1" [attr.aria-setsize]="store.entries().length">
+        <time class="log-time" [attr.datetime]="entry.timestamp" [attr.title]="time(entry.timestamp)">{{ time(entry.timestamp) }}</time>
+        <span uiBadge [tone]="tone(entry.level)">{{ entry.level }}</span>
+        <button type="button" class="log-message" [attr.data-log-id]="entry.id" (click)="detail(entry)" [attr.aria-label]="t().detail + ': ' + entry.logger + ' ' + summary(entry)">
+          <span class="log-logger">{{ entry.logger }}</span><span>{{ summary(entry) }}</span>
+        </button>
+        @if (entry.traceId) {
+          <button type="button" class="log-trace" (click)="copy(entry.traceId)" [attr.title]="entry.traceId" [attr.aria-label]="t().copyTrace + ': ' + entry.traceId"><span class="log-trace-id">{{ entry.traceId.slice(0, 8) }}… </span><span>{{ t().copy }}</span></button>
+        }
+      </div>
+    }
+    <div role="presentation" [style.height.px]="bottomSpace()"></div>
+  </div>
+  @if (accessible()) {
+    <div class="flex flex-wrap items-center justify-center gap-3 p-3">
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="changePage(-1)" [disabled]="pageIndex() === 0">{{ t().previous }}</button>
+      <span>{{ t().page }} {{ pageIndex() + 1 }} / {{ pageCount() }}</span>
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="changePage(1)" [disabled]="pageIndex() >= pageCount() - 1">{{ t().next }}</button>
+    </div>
+  }
+  @if (selected(); as entry) {
+    <section #detailPanel tabindex="-1" class="border-t border-border p-4" [attr.aria-label]="t().detail" (keydown.escape)="closeDetail()">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="font-semibold">{{ entry.logger }} · {{ t().detail }}</h3>
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="closeDetail()">{{ t().close }}</button>
+      </div>
+      <p class="mt-2 text-sm">{{ summary(entry) }}</p>
+      <pre class="log-detail">{{ entry.lines.join('\n') }}</pre>
+      @if (entry.traceId) { <p class="break-all font-mono text-xs">{{ t().trace }}: {{ entry.traceId }}</p> }
+      <button type="button" uiButton variant="secondary" class="log-action mt-3" (click)="copy(entry.lines.join('\n'))">{{ t().copyEvent }}</button>
+    </section>
+  }
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4 text-sm">
+    <p>{{ store.entries().length }} {{ t().loaded }} · {{ store.status()?.omittedCount ?? 0 }} {{ t().omitted }}</p>
+    <p>{{ t().autoScroll }}: {{ autoScroll() ? t().on : t().off }}</p>
+    @if (!autoScroll() || store.connection() === 'paused') {
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="goToEnd()">{{ store.newCount() }} {{ t().newEvents }} · {{ t().goToEnd }}</button>
+    }
+    <p role="status" aria-live="polite">{{ copyResult() ? t()[copyResult()!] : '' }}</p>
+  </div>
+</div>
