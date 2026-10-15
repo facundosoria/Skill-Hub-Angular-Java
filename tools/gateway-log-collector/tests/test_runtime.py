@@ -118,6 +118,26 @@ class RuntimeTests(unittest.TestCase):
         self.assertGreaterEqual(since, before - timedelta(hours=6))
         self.assertLess(since, before - timedelta(hours=6) + timedelta(seconds=3))
 
+    def test_skewed_stream_reconnect_rereads_all_three_source_records(self):
+        self.env["V1_SOURCE_STATE"] = str(self.directory)
+        self.writer()
+        reader = self.start("reader", "--socket", str(self.socket), "--docker",
+                            str(ROOT / "fixtures/fake-skew-docker.py"), env=self.env)
+        wait_until(lambda: self.current()["headSeq"] == 2)
+        generation = self.current()["generation"]
+        wait_until(lambda: int((self.directory / "attempt").read_text()) >= 2)
+        time.sleep(0.3)
+        reader.terminate()
+        self.assertEqual((b"", b""), reader.communicate(timeout=7))
+        wait_until(lambda: self.current()["sourceStatus"] == "disconnected")
+        manifest = validate_directory(self.output)
+        entries = [event for item in manifest["segments"]
+                   for event in complete_events(self.output / item["file"])]
+        self.assertEqual([200, 201, 202], sorted(event["status"] for event in entries))
+        self.assertNotEqual(generation, manifest["generation"])
+        self.assertEqual([1, 2, 3], [event["seq"] for event in entries])
+        self.assertTrue(all(manifest["generation"] in item["file"] for item in manifest["segments"]))
+
     def test_inspection_failure_still_marks_disconnected(self):
         self.writer()
         self.start("reader", "--socket", str(self.socket), "--docker", "/bin/false", env=self.env)

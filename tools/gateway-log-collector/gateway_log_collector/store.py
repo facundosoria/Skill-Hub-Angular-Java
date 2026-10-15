@@ -192,6 +192,9 @@ class Store:
         if when > now + timedelta(seconds=60) or when < now - timedelta(seconds=WINDOW):
             self.omit()
             return False
+        if self.cursor and when < instant(self.cursor) - timedelta(seconds=2):
+            # The global cursor cannot safely resume a stream outside its overlap.
+            self.continuous = False
         event = self.sanitizer.process_line(line)
         safe = project(event, 1) if event else None
         # Fingerprints contain only allowlisted data, never raw log values.

@@ -113,6 +113,9 @@ checkpoint stores the last processed source timestamp and bounded replay keys
 Each reconnect asks for at least two seconds of overlap. Same-time identical
 requests retain multiplicity; stdout and stderr are distinct. Ordering is arrival
 order from the CLI pipes, not a claimed global Docker ordering.
+An arrival more than two seconds behind the source cursor invalidates continuity.
+The next connection starts a new generation and rereads the full six-hour window,
+so a delayed stream is not skipped by the newer stream's reconnect cursor.
 
 The published cursor is `<generation>:<seq>`. A valid restart retains generation
 and increments sequence; a partial tail is removed before appending. Source

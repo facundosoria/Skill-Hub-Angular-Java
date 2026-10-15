@@ -191,6 +191,32 @@ class StoreTests(unittest.TestCase):
         self.assertFalse(self.store.process(raw, "stderr"))
         self.assertEqual(2, len(self.events()))
 
+    def test_skew_beyond_overlap_persists_uncertain_continuity_and_rereads_window(self):
+        self.send()
+        older = line("GET /actuator/health -> 201 (1 ms)").replace("12:34:56.123456789Z", "11:34:56Z")
+        self.assertTrue(self.store.process(older.encode(), "stderr"))
+        generation = self.store.generation
+        self.assertFalse(self.store.continuous)
+        self.store.close()
+        self.store = Store(self.root, clock=lambda: self.now)
+        since = self.store.connect("a" * 64)
+        self.assertEqual(self.now - timedelta(hours=6), instant(since))
+        self.assertNotEqual(generation, self.store.generation)
+        self.assertEqual([], self.manifest()["segments"])
+        self.assertTrue(self.send())
+        self.assertEqual(1, self.events()[0]["seq"])
+
+    def test_skew_within_overlap_preserves_generation_and_dedup(self):
+        self.send()
+        older = line("GET /actuator/health -> 201 (1 ms)").replace("12:34:56.123456789Z", "12:34:54.123456789Z")
+        self.assertTrue(self.store.process(older.encode(), "stderr"))
+        generation = self.store.generation
+        self.assertTrue(self.store.continuous)
+        self.store.connect("a" * 64)
+        self.assertEqual(generation, self.store.generation)
+        self.assertFalse(self.store.process(older.encode(), "stderr"))
+        self.assertEqual(2, len(self.events()))
+
     def test_new_container_new_generation_prior_files_not_advertised(self):
         self.send()
         old_generation = self.store.generation
