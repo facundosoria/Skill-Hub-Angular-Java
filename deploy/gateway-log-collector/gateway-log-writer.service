@@ -1,0 +1,47 @@
+[Unit]
+Description=Sanitized api-gateway journal writer
+Before=gateway-log-reader.service
+
+[Service]
+Type=simple
+User=tpi-log-writer
+Group=tpi-log-read
+SupplementaryGroups=tpi-log-pipe
+WorkingDirectory=/opt/gateway-log-collector
+Environment=PYTHONNOUSERSITE=1
+Environment=LOG_OUT_DIR=/var/lib/tpi-log-view/sanitized
+Environment=LOG_CONTAINER=api-gateway
+Environment=DOCKER_HOST=unix:///run/docker.sock
+Environment=DOCKER_CONFIG=/nonexistent
+EnvironmentFile=-/etc/gateway-log-collector.conf
+ExecStart=/usr/bin/python3 -B -m gateway_log_collector writer --out-dir ${LOG_OUT_DIR} --socket /run/gateway-log-collector/source.sock --socket-group tpi-log-pipe
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+UMask=0027
+RuntimeDirectory=gateway-log-collector
+RuntimeDirectoryMode=0710
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/tpi-log-view/sanitized
+InaccessiblePaths=-/run/docker.sock -/var/run/docker.sock -/var/lib/docker
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+LimitNOFILE=128
+MemoryMax=64M
+TasksMax=8
+
+[Install]
+WantedBy=multi-user.target
