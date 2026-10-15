@@ -9,7 +9,7 @@ from pathlib import Path
 import uuid
 
 from .sanitize import DOCKER_TIME, Sanitizer, valid_timestamp
-from .schema import SEGMENT_NAME, complete_events, encode, project, validate_directory
+from .schema import MAX_MANIFEST_BYTES, MAX_SEGMENTS, SEGMENT_NAME, complete_events, encode, project, validate_directory
 
 WINDOW = 21600
 MAX_BYTES = 64 * 1024 * 1024
@@ -258,7 +258,9 @@ class Store:
         self.head = event["seq"]
         self.last_event = event["timestamp"]
         # Capacity is enforced on every append, not only at the minute timer.
-        if self.retired_bytes + sum(item["size"] for item in self.segments) > self.max_bytes or self.retired_events + sum(item["count"] for item in self.segments) > self.max_events:
+        if (len(self.segments) > MAX_SEGMENTS or
+                self.retired_bytes + sum(item["size"] for item in self.segments) > self.max_bytes or
+                self.retired_events + sum(item["count"] for item in self.segments) > self.max_events):
             self.prune()
 
     def prune(self):
@@ -321,11 +323,6 @@ class Store:
         if self.active:
             self.active.flush()
             os.fsync(self.active.fileno())
-        atomic_json(self.private / "checkpoint.json", {
-            "generation": self.generation, "head": self.head, "nextIndex": self.next_index,
-            "container": self.container, "cursor": self.cursor, "keys": list(self.keys),
-            "omissions": list(self.omissions), "truncatedAt": self.truncated_at, "continuous": self.continuous,
-        }, 0o600)
         cutoff = now - timedelta(seconds=WINDOW)
         oldest_time = min((item["oldest"] for item in self.segments), default=cutoff)
         manifest = dict(version=1, service="api-gateway", policyVersion="r2-v1", generation=self.generation,
@@ -334,7 +331,29 @@ class Store:
                         oldestSeq=self.segments[0]["firstSeq"] if self.segments else 0, headSeq=self.head,
                         omittedCount=sum(count for _, count in self.omissions), retentionTruncated=self.truncated_at is not None,
                         segments=[{key: item[key] for key in ("file", "firstSeq", "lastSeq", "closed")} for item in self.segments])
+        remove = []
+        while len(manifest["segments"]) > MAX_SEGMENTS or len(encode(manifest)) > MAX_MANIFEST_BYTES:
+            if not self.segments:
+                raise ValueError("Manifest metadata exceeds capacity")
+            # Drop the oldest arrival sequences, keeping the current head usable.
+            item = self.segments[0]
+            if item is self.segments[-1]:
+                self._close_active()
+            self.segments.pop(0)
+            manifest["segments"].pop(0)
+            remove.append(self.directory / item["file"])
+            self.truncated_at = stamp(now)
+            oldest_time = min((item["oldest"] for item in self.segments), default=cutoff)
+            manifest.update(oldestSeq=self.segments[0]["firstSeq"] if self.segments else 0,
+                            windowStart=stamp(max(cutoff, oldest_time)), retentionTruncated=True)
+        atomic_json(self.private / "checkpoint.json", {
+            "generation": self.generation, "head": self.head, "nextIndex": self.next_index,
+            "container": self.container, "cursor": self.cursor, "keys": list(self.keys),
+            "omissions": list(self.omissions), "truncatedAt": self.truncated_at, "continuous": self.continuous,
+        }, 0o600)
         atomic_json(self.directory / "manifest.json", manifest)
+        for path in remove:
+            path.unlink(missing_ok=True)
         return manifest
 
     def tick(self):
