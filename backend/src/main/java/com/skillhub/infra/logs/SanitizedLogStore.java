@@ -326,7 +326,7 @@ public class SanitizedLogStore {
 
     synchronized LogsDto.Status status(int activeStreams, Instant blockedUntil) {
         prune();
-        if (manifest == null) return new LogsDto.Status("unavailable", null, null, null, null, 0, false, activeStreams, blockedUntil);
+        if (manifest == null) return new LogsDto.Status("starting", null, null, null, null, 0, false, activeStreams, blockedUntil);
         return new LogsDto.Status(sourceStatus(), manifest.generation(), coverageStart(), cursor(head()),
                 cursor(oldest()), manifest.omittedCount(), truncated || manifest.retentionTruncated(), activeStreams, blockedUntil);
     }
@@ -346,6 +346,12 @@ public class SanitizedLogStore {
     }
 
     synchronized LogsDto.Page page(LogsQuery query) {
+        if (manifest == null) {
+            if (query.before() != null || query.after() != null || query.through() != null) throw LogsException.expired();
+            return new LogsDto.Page("api-gateway", null, clock.instant(), RETENTION_SECONDS,
+                    null, "starting", null, null, null, false, 0,
+                    null, null, null, null, false, false, List.of());
+        }
         requireAvailable();
         validate(query.before());
         validate(query.after());

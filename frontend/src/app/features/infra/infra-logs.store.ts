@@ -61,6 +61,8 @@ export class InfraLogsStore {
   }
   private validatePage(page: LogPage): void {
     decodeEntries(page.entries);
+    if (page.headCursor === null && page.oldestCursor === null && page.nextAfter === null &&
+      page.nextBefore === null && !page.entries.length && !page.hasMoreBefore && !page.hasMoreAfter) return;
     if (!isCursor(page.headCursor) || !isCursor(page.nextAfter) || !isCursor(page.oldestCursor) ||
       (page.nextBefore !== null && !isCursor(page.nextBefore))) throw new Error('Invalid log page');
     for (const entry of page.entries) compareCursors(entry.id, page.headCursor);
@@ -69,9 +71,21 @@ export class InfraLogsStore {
     const page = await this.request(this.api.page(this.filters), revision);
     this.assertCurrent(revision); this.validatePage(page);
     this.buffer.clear(); this.applyPage(page);
-    this.cursor = page.headCursor; this.through = page.headCursor; this.before = page.nextBefore;
+    this.cursor = page.headCursor ?? ''; this.through = page.headCursor ?? ''; this.before = page.nextBefore;
     this.hasMoreBefore.set(page.hasMoreBefore);
+    if (page.headCursor === null) { this.waitForCollector(revision); return; }
     if (this.visible && !this.userPaused) this.openStream();
+  }
+  private waitForCollector(revision: number): void {
+    if (revision !== this.revision) return;
+    revision = this.stopTransport();
+    this.cursor = ''; this.through = ''; this.before = null; this.hasMoreBefore.set(false);
+    this.errorCode.set(null); this.connection.set(this.userPaused ? 'paused' : this.visible ? 'starting' : 'hidden');
+    if (this.userPaused) { this.watchPaused(revision); return; }
+    if (!this.visible) return;
+    this.timer = setTimeout(() => {
+      void this.snapshot(revision).catch(error => this.handleError(error, revision));
+    }, Math.round(5000 * (0.8 + Math.random() * 0.4)));
   }
   private applyPage(page: LogPage): void {
     const previous = this.status();
@@ -103,7 +117,7 @@ export class InfraLogsStore {
     if (compareCursors(cursor, this.cursor) >= 0) this.cursor = cursor;
   }
   private openStream(revision = this.revision): void {
-    if (revision !== this.revision || !this.visible || this.userPaused || this.connection() === 'revoked') return;
+    if (revision !== this.revision || !this.visible || this.userPaused || this.connection() === 'revoked' || !isCursor(this.cursor)) return;
     this.stream?.stop();
     clearTimeout(this.timer);
     this.connection.set('connecting'); this.errorCode.set(null);
@@ -119,6 +133,7 @@ export class InfraLogsStore {
       },
       checkpoint: cursor => this.confirmCursor(cursor),
       status: status => {
+        if (status.headCursor === null) { this.applyStatus(status); this.waitForCollector(revision); return; }
         if (status.generation !== this.cursor.split(':')[0]) { this.discontinuity.set('reset'); this.refresh(); return; }
         this.applyStatus(status); this.connection.set('live');
       },
@@ -140,6 +155,7 @@ export class InfraLogsStore {
       const blocked = this.blockedDelay(status);
       if (blocked > 0) { this.wait(revision, blocked); return null; }
       await this.catchUp(revision, status.headCursor);
+      if (revision !== this.revision) return null;
       if (attempt >= 5) { this.startPolling(revision); return null; }
       return 0;
     } catch (error) {
@@ -157,7 +173,8 @@ export class InfraLogsStore {
   private blockedDelay(status: LogStatus): number {
     return status.accountBlockedUntil ? Math.max(0, Date.parse(status.accountBlockedUntil) - Date.now()) : 0;
   }
-  private async catchUp(revision: number, through: string): Promise<void> {
+  private async catchUp(revision: number, through: string | null): Promise<void> {
+    if (through === null) { this.waitForCollector(revision); return; }
     if (!isCursor(through)) throw new Error('Invalid recovery cursor');
     if (this.cursor.split(':')[0] !== through.split(':')[0]) throw new HttpErrorResponse({ status: 409 });
     if (compareCursors(this.cursor, through) >= 0) return;
@@ -165,6 +182,7 @@ export class InfraLogsStore {
     while (more) {
       const page = await this.request(this.api.page(this.filters, { after: this.cursor, through }), revision);
       this.assertCurrent(revision); this.validatePage(page);
+      if (page.nextAfter === null) { this.applyPage(page); this.waitForCollector(revision); return; }
       if (compareCursors(page.nextAfter, this.cursor) <= 0 || compareCursors(page.nextAfter, through) > 0) {
         throw new Error('Recovery cursor did not advance');
       }
@@ -194,6 +212,7 @@ export class InfraLogsStore {
     return this.request(this.api.page(this.filters, { before: this.before, through: this.through }), revision)
       .then(page => {
         this.assertCurrent(revision); this.validatePage(page);
+        if (page.headCursor === null) { this.applyPage(page); this.waitForCollector(revision); return; }
         const previousCount = this.newCount();
         this.merge(page.entries); this.newCount.set(previousCount);
         this.before = page.nextBefore; this.hasMoreBefore.set(page.hasMoreBefore);
@@ -225,7 +244,8 @@ export class InfraLogsStore {
       this.assertCurrent(revision); this.applyStatus(status);
       const blocked = this.blockedDelay(status);
       if (blocked > 0) { this.wait(revision, blocked); return; }
-      if (!this.cursor) await this.snapshot(revision);
+      if (status.headCursor === null) this.waitForCollector(revision);
+      else if (!this.cursor) await this.snapshot(revision);
       else { await this.catchUp(revision, status.headCursor); this.openStream(revision); }
     }).catch(error => this.handleError(error, revision));
   }

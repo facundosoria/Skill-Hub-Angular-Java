@@ -41,7 +41,7 @@ class InfraLogsControllerIntegrationTest {
         limiter = new LogsAccessLimiter(clock);
         streams = new InfraLogStreams(properties, store, limiter, sessions, LogFixtures.MAPPER, clock,
                 () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(900_000L));
-        mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(store, streams, limiter))
+        mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(store, streams, limiter, properties))
                 .setCustomArgumentResolvers(new AuthPrincipalResolver(sessions))
                 .addInterceptors(new PasswordChangeInterceptor(sessions))
                 .setControllerAdvice(new LogsExceptionHandler())
@@ -90,17 +90,20 @@ class InfraLogsControllerIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(limiter.blockedUntil(user.id())).isNotNull();
     }
 
-    @Test void absentSourceIs503WhileStatusReportsUnavailable() throws Exception {
+    @Test void absentSourceSnapshotAndStatusReportStartingWithNullableCursors() throws Exception {
         Files.delete(dir.resolve("manifest.json"));
         var unavailable = new SanitizedLogStore(properties, LogFixtures.MAPPER, new LogFixtures.MutableClock(), 1000, 10);
         unavailable.refresh();
-        mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(unavailable, streams, limiter))
+        mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(unavailable, streams, limiter, properties))
                 .setCustomArgumentResolvers(new AuthPrincipalResolver(sessions)).setControllerAdvice(new LogsExceptionHandler())
                 .addFilters(new LogsRequestFilter(properties, LogFixtures.MAPPER)).build();
-        mvc.perform(get(LogsRequestFilter.BASE)).andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("SOURCE_UNAVAILABLE"));
+        mvc.perform(get(LogsRequestFilter.BASE)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceStatus").value("starting"))
+                .andExpect(jsonPath("$.headCursor").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.entries").isEmpty());
         mvc.perform(get(LogsRequestFilter.BASE + "/status")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.sourceStatus").value("unavailable"));
+                .andExpect(jsonPath("$.sourceStatus").value("starting"))
+                .andExpect(jsonPath("$.generation").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test void disabledEndpointsAre404BeforeAuthenticationAndReaderStaysDormant() throws Exception {
@@ -117,6 +120,18 @@ class InfraLogsControllerIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(dormant.status(0, null).generation()).isNull();
     }
 
+    @Test void disabledControllersAlsoRejectRequestsWithoutTheFilter() throws Exception {
+        properties.setEnabled(false);
+        var guarded = MockMvcBuilders.standaloneSetup(new InfraLogsController(store, streams, limiter, properties))
+                .setCustomArgumentResolvers(new AuthPrincipalResolver(sessions))
+                .setControllerAdvice(new LogsExceptionHandler()).build();
+        for (String suffix : new String[]{"", "/status", "/stream"}) {
+            guarded.perform(get(LogsRequestFilter.BASE + suffix)).andExpect(status().isNotFound())
+                    .andExpect(header().string("Cache-Control", LogsRequestFilter.CACHE_CONTROL))
+                    .andExpect(jsonPath("$.code").value("LOGS_DISABLED"));
+        }
+    }
+
     @Test void streamUsesAsyncMvcAndLastEventIdBeforeAdmission() throws Exception {
         mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:1").header("Last-Event-ID", "g7:3"))
                 .andExpect(status().isOk()).andExpect(request().asyncStarted())
@@ -124,7 +139,7 @@ class InfraLogsControllerIntegrationTest {
                 .andExpect(header().string("Cache-Control", LogsRequestFilter.CACHE_CONTROL));
         mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:3").header("Last-Event-ID", "g9:1")
                         .accept("text/event-stream"))
-                .andExpect(status().isConflict()).andExpect(content().contentType("application/json"));
+                .andExpect(status().isConflict()).andExpect(content().contentType("application/json;charset=UTF-8"));
     }
 
     @Test void sseMvcSerializesReplayLiveKeepaliveAndRevocation() throws Exception {
@@ -176,7 +191,7 @@ class InfraLogsControllerIntegrationTest {
         streams.stop();
         streams = new InfraLogStreams(properties, freshStore, limiter, sessions, LogFixtures.MAPPER, clock,
                 () -> new org.springframework.web.servlet.mvc.method.annotation.SseEmitter(900_000L));
-        mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(freshStore, streams, limiter))
+        mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(freshStore, streams, limiter, properties))
                 .setCustomArgumentResolvers(new AuthPrincipalResolver(sessions)).setControllerAdvice(new LogsExceptionHandler())
                 .addFilters(new LogsRequestFilter(properties, LogFixtures.MAPPER)).build();
         var result = mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:1"))

@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { EMPTY_FILTERS } from './infra-logs.models';
 import { GatewayLogStream, LogStreamCallbacks } from './infra-logs.stream';
-import { FakeLogSource, logEntry, logStatus } from './infra-logs.fixtures';
+import { coldLogStatus, FakeLogSource, logEntry, logStatus } from './infra-logs.fixtures';
 
 describe('Gateway log SSE wrapper', () => {
   let sources: FakeLogSource[];
@@ -18,6 +18,16 @@ describe('Gateway log SSE wrapper', () => {
   });
   afterEach(() => { stream.stop(); vi.useRealTimers(); });
 
+  it('passes cold nullable status to the store without confirming its inherited ID', () => {
+    sources[0].emit('status', coldLogStatus(), 'g7:999');
+    expect(callbacks.status).toHaveBeenCalledWith(coldLogStatus()); expect(cursor).toBe('g7:150');
+    expect(callbacks.recover).not.toHaveBeenCalled();
+  });
+  it('passes unknown source status to the view without triggering transport recovery', () => {
+    const status = { ...logStatus(), ...JSON.parse('{"sourceStatus":"unexpected"}') };
+    sources[0].emit('status', status);
+    expect(callbacks.status).toHaveBeenCalledWith(status); expect(callbacks.recover).not.toHaveBeenCalled();
+  });
   it('reopens a new source with the last applied checkpoint, never inherited status IDs', async () => {
     sources[0].emit('logs', { entries: [logEntry(151)] }, 'g7:151');
     sources[0].emit('checkpoint', '', 'g7:160');

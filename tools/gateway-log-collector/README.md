@@ -95,6 +95,12 @@ with `retentionTruncated=true` for six hours after a capacity cut. During an app
 or atomic replacement, allow temporary headroom of one event plus checkpoint and
 manifest files; reserve at least 80 MiB on disk. The 64 MiB cap refers to NDJSON
 segments, not filesystem overhead or the Docker source logs.
+The current generation also retains at most 512 advertised segments and a
+256 KiB manifest, matching the backend reader. Exceeding either limit prunes
+the oldest arrival sequences and sets `retentionTruncated=true`; removal is
+published atomically before the segment files are deleted. The schema validator
+rejects directories whose manifest exceeds either limit. Out-of-order source
+timestamps still close segments at the existing ten-minute span boundary.
 
 Age pruning runs every minute even while idle. A segment is removed when its
 oldest event is older than six hours, so coverage can be shortened by up to ten
@@ -113,6 +119,9 @@ checkpoint stores the last processed source timestamp and bounded replay keys
 Each reconnect asks for at least two seconds of overlap. Same-time identical
 requests retain multiplicity; stdout and stderr are distinct. Ordering is arrival
 order from the CLI pipes, not a claimed global Docker ordering.
+An arrival more than two seconds behind the source cursor invalidates continuity.
+The next connection starts a new generation and rereads the full six-hour window,
+so a delayed stream is not skipped by the newer stream's reconnect cursor.
 
 The published cursor is `<generation>:<seq>`. A valid restart retains generation
 and increments sequence; a partial tail is removed before appending. Source

@@ -1,9 +1,10 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
+import { I18n } from '../../core/i18n/i18n';
 import { InfraLogs } from './infra-logs';
 import { InfraLogsStore } from './infra-logs.store';
-import { logEntry, logStatus } from './infra-logs.fixtures';
+import { coldLogStatus, logEntry, logStatus } from './infra-logs.fixtures';
 import { LogConnection, LogEntry } from './infra-logs.models';
 
 function mockStore(entries: LogEntry[] = []) {
@@ -16,6 +17,7 @@ function mockStore(entries: LogEntry[] = []) {
     setVisible: vi.fn(), acknowledgeNew: vi.fn(), destroy: vi.fn() };
 }
 describe('Gateway log panel', () => {
+  afterEach(() => { TestBed.inject(I18n).setLocale('es'); });
   async function configure(store = mockStore()) {
     await TestBed.configureTestingModule({ imports: [InfraLogs] })
       .overrideComponent(InfraLogs, { set: { providers: [{ provide: InfraLogsStore, useValue: store }] } }).compileComponents();
@@ -23,6 +25,21 @@ describe('Gateway log panel', () => {
     await fixture.whenStable(); fixture.detectChanges();
     return { fixture, store, panel: fixture.componentInstance };
   }
+  it.each(['es', 'en'] as const)('renders the cold source and nullable coverage in %s', async locale => {
+    const { fixture, store } = await configure(); TestBed.inject(I18n).setLocale(locale);
+    store.status.set(coldLogStatus()); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain(locale === 'es' ? 'Esperando al colector de logs…' : 'Waiting for the log collector…');
+    expect(fixture.nativeElement.textContent).not.toContain('Invalid Date');
+    fixture.destroy(); TestBed.inject(I18n).setLocale('es');
+  });
+  it.each(['unavailable', 'unexpected', 'loadError', '__proto__'])('renders generic source text for unknown status %s', async sourceStatus => {
+    const { fixture, store } = await configure();
+    store.status.set({ ...logStatus(), ...JSON.parse(JSON.stringify({ sourceStatus })) }); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Estado de la fuente desconocido');
+    TestBed.inject(I18n).setLocale('en'); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).toContain('Unknown source status');
+    fixture.destroy(); TestBed.inject(I18n).setLocale('es');
+  });
   it('renders HTML and ANSI payloads as text in both summaries and multiline details', async () => {
     const malicious = '<img src=x onerror="alert(1)"><script>fixture</script>\u001b[31mERROR';
     const { fixture, panel } = await configure(mockStore([logEntry(150, { method: null, route: null, lines: [malicious, '<b>second line</b>'] })]));

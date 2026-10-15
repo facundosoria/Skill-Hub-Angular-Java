@@ -57,7 +57,7 @@ export class GatewayLogStream {
       });
       listen('status', event => {
         const status = JSON.parse(event.data) as LogStatus;
-        if (!['healthy', 'starting', 'disconnected'].includes(status.sourceStatus) || !isCursor(status.headCursor)) {
+        if (typeof status.sourceStatus !== 'string' || (status.headCursor !== null && !isCursor(status.headCursor))) {
           throw new Error('Invalid stream status');
         }
         this.callbacks.status(status);

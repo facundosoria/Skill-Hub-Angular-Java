@@ -2,7 +2,7 @@ import { HttpErrorResponse, HttpHeaders, provideHttpClient } from '@angular/comm
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
-import { FakeLogSource, logEntry, logPage, logStatus } from './infra-logs.fixtures';
+import { coldLogPage, coldLogStatus, FakeLogSource, logEntry, logPage, logStatus } from './infra-logs.fixtures';
 import { InfraLogsStore, retryAfter } from './infra-logs.store';
 import { LOG_EVENT_SOURCE } from './infra-logs.stream';
 
@@ -25,6 +25,76 @@ describe('Gateway log data store', () => {
     expect(request.request.params.get('limit')).toBe('150'); expect(request.request.withCredentials).toBe(true);
     request.flush(logPage()); await settle();
   }
+  it('accepts a cold JSON snapshot without errors or SSE and retries until a healthy snapshot', async () => {
+    store.open(); http.expectOne(req => req.url === BASE).flush(coldLogPage()); await settle();
+    expect(store.status()).toEqual(coldLogStatus()); expect(store.errorCode()).toBeNull();
+    expect(store.connection()).toBe('starting'); expect(sources).toHaveLength(0);
+    await store.loadOlder(); http.expectNone(req => req.url.startsWith(BASE));
+    await vi.advanceTimersByTimeAsync(5000);
+    let request = http.expectOne(req => req.url === BASE);
+    expect(request.request.params.has('after')).toBe(false); expect(request.request.params.has('through')).toBe(false);
+    request.flush(coldLogPage()); await settle(); expect(store.errorCode()).toBeNull(); expect(sources).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    request = http.expectOne(req => req.url === BASE); request.flush(logPage()); await settle();
+    expect(store.status()?.sourceStatus).toBe('healthy'); expect(store.entries()).toHaveLength(1);
+    expect(sources).toHaveLength(1); expect(sources[0].url).toContain('after=g7%3A150');
+  });
+  it.each(['recovery', 'resume', 'polling', 'heartbeat'])('waits for a fresh snapshot on cold status during %s', async path => {
+    await start();
+    if (path === 'polling') {
+      for (const delay of [3000, 6000, 12000, 30000]) {
+        sources.at(-1)!.emit('error'); http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+        await vi.advanceTimersByTimeAsync(delay);
+      }
+      sources.at(-1)!.emit('error'); http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+      await vi.advanceTimersByTimeAsync(5000);
+    } else if (path === 'resume') { store.pause(); store.resume(); }
+    else if (path === 'heartbeat') { sources[0].emit('status', coldLogStatus()); }
+    else { sources[0].emit('error'); }
+    if (path !== 'heartbeat') { http.expectOne(BASE + '/status').flush(coldLogStatus()); await settle(); }
+    const count = sources.length;
+    expect(store.status()?.sourceStatus).toBe('starting'); expect(store.errorCode()).toBeNull();
+    expect(store.connection()).toBe('starting'); expect(sources.at(-1)!.closed).toBe(true);
+    http.expectNone(req => req.url === BASE);
+    await vi.advanceTimersByTimeAsync(5000);
+    const request = http.expectOne(req => req.url === BASE);
+    expect(request.request.params.has('after')).toBe(false);
+    request.flush(logPage()); await settle(); expect(sources).toHaveLength(count + 1);
+    expect(sources.at(-1)!.url).toContain('after=g7%3A150'); expect(store.errorCode()).toBeNull();
+  });
+  it.each(['history', 'catch-up', 'paused history'])('handles a cold JSON page during %s without confirming a null cursor', async path => {
+    await start();
+    if (path === 'paused history') store.pause();
+    let history: Promise<void> | undefined;
+    if (path === 'catch-up') {
+      sources[0].emit('gap', { code: 'REPLAY_LIMIT', after: 'g7:150', through: 'g7:200' });
+    } else history = store.loadOlder();
+    http.expectOne(req => req.url === BASE).flush(coldLogPage()); await history; await settle();
+    expect(store.status()?.headCursor).toBeNull(); expect(store.errorCode()).toBeNull();
+    expect(store.hasMoreBefore()).toBe(false); expect(sources).toHaveLength(1); expect(sources[0].closed).toBe(true);
+    if (path === 'paused history') {
+      expect(store.connection()).toBe('paused');
+      await vi.advanceTimersByTimeAsync(5000); http.expectNone(req => req.url.startsWith(BASE));
+      await vi.advanceTimersByTimeAsync(10_000);
+      http.expectOne(BASE + '/status').flush(coldLogStatus()); await settle();
+      expect(store.connection()).toBe('paused');
+    } else {
+      expect(store.connection()).toBe('starting'); await vi.advanceTimersByTimeAsync(5000);
+      const request = http.expectOne(req => req.url === BASE);
+      expect(request.request.params.has('after')).toBe(false); expect(request.request.params.has('through')).toBe(false);
+      request.flush(logPage()); await settle(); expect(sources).toHaveLength(2);
+    }
+  });
+  it('cancels cold snapshot retries while hidden, paused or destroyed', async () => {
+    store.open(); http.expectOne(req => req.url === BASE).flush(coldLogPage()); await settle();
+    store.setVisible(false); await vi.advanceTimersByTimeAsync(60_000); http.expectNone(req => req.url.startsWith(BASE));
+    store.setVisible(true); http.expectOne(BASE + '/status').flush(coldLogStatus()); await settle();
+    store.pause(); await vi.advanceTimersByTimeAsync(15_000);
+    http.expectOne(BASE + '/status').flush(coldLogStatus()); await settle();
+    expect(store.connection()).toBe('paused'); expect(store.errorCode()).toBeNull(); expect(sources).toHaveLength(0);
+    store.resume(); http.expectOne(BASE + '/status').flush(coldLogStatus()); await settle();
+    store.destroy(); await vi.advanceTimersByTimeAsync(60_000); http.expectNone(req => req.url.startsWith(BASE));
+  });
   it('opens SSE strictly after the snapshot head and deduplicates replayed IDs', async () => {
     await start(); expect(sources[0].url).toContain('after=g7%3A150');
     sources[0].emit('logs', { entries: [logEntry(150), logEntry(151)] }, 'g7:151');

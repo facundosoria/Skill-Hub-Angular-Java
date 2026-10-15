@@ -13,6 +13,8 @@ MANIFEST_KEYS = frozenset(("version", "service", "policyVersion", "generation",
                            "lastEventAt", "windowStart", "oldestSeq", "headSeq",
                            "omittedCount", "retentionTruncated", "segments"))
 SEGMENT_NAME = re.compile(r"seg-(g[0-9a-f]+)-([0-9]{6})\.ndjson")
+MAX_SEGMENTS = 512
+MAX_MANIFEST_BYTES = 256 * 1024
 EVENTS = {"REQUEST_COMPLETED", "UNEXPECTED_ERROR", "JWT_REJECTED",
           "SESSION_UNVERIFIABLE", "LOG_MESSAGE_OMITTED"}
 
@@ -93,9 +95,15 @@ def complete_events(path):
 
 def validate_directory(directory):
     directory = Path(directory)
-    manifest = json.loads((directory / "manifest.json").read_text())
+    with (directory / "manifest.json").open("rb") as source:
+        payload = source.read(MAX_MANIFEST_BYTES + 1)
+    if len(payload) > MAX_MANIFEST_BYTES:
+        raise ValueError("Oversize manifest")
+    manifest = json.loads(payload)
     if set(manifest) != MANIFEST_KEYS:
         raise ValueError("Invalid manifest fields")
+    if len(manifest["segments"]) > MAX_SEGMENTS:
+        raise ValueError("Too many manifest segments")
     if manifest["version"] != 1 or manifest["service"] != "api-gateway" or manifest["policyVersion"] != POLICY_VERSION:
         raise ValueError("Invalid manifest policy")
     if not re.fullmatch(r"g[0-9a-f]+", manifest["generation"]):

@@ -10,6 +10,8 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.http.server.PathContainer;
+import org.springframework.web.util.ServletRequestPathUtils;
 
 import java.io.IOException;
 import java.util.Map;
@@ -31,7 +33,9 @@ public class LogsRequestFilter extends OncePerRequestFilter {
     }
 
     @Override protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI().substring(request.getContextPath().length());
+        String path = ServletRequestPathUtils.parseAndCache(request).pathWithinApplication().elements().stream()
+                .map(element -> element instanceof PathContainer.PathSegment segment ? segment.valueToMatch() : element.value())
+                .collect(java.util.stream.Collectors.joining());
         return !path.equals(BASE) && !path.startsWith(BASE + "/");
     }
 
@@ -40,8 +44,8 @@ public class LogsRequestFilter extends OncePerRequestFilter {
         response.setHeader("Cache-Control", CACHE_CONTROL);
         if (!properties.isEnabled()) {
             response.setStatus(404);
-            response.setContentType("application/json");
-            mapper.writeValue(response.getWriter(), Map.of("code", "LOGS_DISABLED", "message", "Los logs no están habilitados."));
+            response.setContentType("application/json;charset=UTF-8");
+            mapper.writeValue(response.getOutputStream(), Map.of("code", "LOGS_DISABLED", "message", "Los logs no están habilitados."));
             return;
         }
         request.setAttribute(RAW_QUERY, request.getQueryString());

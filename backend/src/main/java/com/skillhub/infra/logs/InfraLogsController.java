@@ -16,15 +16,19 @@ public class InfraLogsController {
     private final SanitizedLogStore store;
     private final InfraLogStreams streams;
     private final LogsAccessLimiter limiter;
+    private final InfraLogsProperties properties;
 
-    public InfraLogsController(SanitizedLogStore store, InfraLogStreams streams, LogsAccessLimiter limiter) {
+    public InfraLogsController(SanitizedLogStore store, InfraLogStreams streams, LogsAccessLimiter limiter,
+                               InfraLogsProperties properties) {
         this.store = store;
         this.streams = streams;
         this.limiter = limiter;
+        this.properties = properties;
     }
 
     @GetMapping
     public LogsDto.Page page(@AuthPrincipal CurrentUser user, HttpServletRequest request) {
+        requireEnabled();
         LogsQuery query = LogsQuery.parse(parameters(request), rawQuery(request), false, null);
         limiter.history(user.id());
         return store.page(query);
@@ -32,6 +36,7 @@ public class InfraLogsController {
 
     @GetMapping("/status")
     public LogsDto.Status status(@AuthPrincipal CurrentUser user, HttpServletRequest request) {
+        requireEnabled();
         LogsQuery.validateStatus(parameters(request), rawQuery(request));
         limiter.history(user.id());
         return store.status(limiter.activeStreams(), limiter.blockedUntil(user.id()));
@@ -39,6 +44,7 @@ public class InfraLogsController {
 
     @GetMapping(value = "/stream", produces = "text/event-stream")
     public SseEmitter stream(@AuthPrincipal CurrentUser user, HttpServletRequest request, HttpServletResponse response) {
+        requireEnabled();
         LogsQuery query = LogsQuery.parse(parameters(request), rawQuery(request), true, request.getHeader("Last-Event-ID"));
         String token = null;
         if (request.getCookies() != null) {
@@ -48,6 +54,10 @@ public class InfraLogsController {
         }
         response.setHeader("X-Accel-Buffering", "no");
         return streams.open(user, token, query);
+    }
+
+    private void requireEnabled() {
+        if (!properties.isEnabled()) throw new LogsException(404, "LOGS_DISABLED", "Los logs no están habilitados.");
     }
 
     private String rawQuery(HttpServletRequest request) {

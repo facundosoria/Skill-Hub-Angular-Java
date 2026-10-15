@@ -42,6 +42,14 @@ export class InfraLogs implements OnDestroy {
     Math.max(0, this.store.entries().length - this.rangeStart() - this.visibleEntries().length) * this.rowHeight);
   readonly filtered = computed(() => !!this.query() || !!this.traceId() || this.levels().length > 0);
   readonly connectionLabel = computed(() => this.t()[this.store.connection()]);
+  readonly sourceLabel = computed(() => {
+    switch (this.store.status()?.sourceStatus) {
+      case 'healthy': return this.t().healthy;
+      case 'disconnected': return this.t().disconnected;
+      case 'starting': return this.t().starting;
+      default: return this.t().sourceUnknown;
+    }
+  });
   readonly errorLabel = computed(() => {
     const code = this.store.errorCode();
     return code ? this.t()[code === 'unavailable' ? 'loadError' : code === 'session' ? 'sessionError' : code === 'access' ? 'accessError' : 'invalidFilters'] : '';

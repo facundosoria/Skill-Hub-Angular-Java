@@ -129,6 +129,62 @@ class StoreTests(unittest.TestCase):
         self.assertLessEqual(sum(path.stat().st_size for path in self.root.glob("seg-*")), 1000)
         self.assertTrue(self.manifest()["retentionTruncated"])
 
+    def test_out_of_order_segments_are_pruned_to_manifest_segment_limit(self):
+        for index in range(514):
+            timestamp = "11:35:00Z" if index % 2 else "12:35:00Z"
+            raw = line("GET /api/users/fixture-id -> 200 (1 ms)").replace("12:34:56.123456789Z", timestamp)
+            self.assertTrue(self.store.process(raw.encode()))
+            self.assertLessEqual(len(self.store.segments), 512)
+        manifest = self.manifest()
+        self.assertEqual(514, manifest["headSeq"])
+        self.assertEqual(512, len(manifest["segments"]))
+        self.assertEqual(3, manifest["oldestSeq"])
+        self.assertTrue(manifest["retentionTruncated"])
+        self.assertEqual(512, len(list(self.root.glob("seg-*"))))
+        self.assertLessEqual((self.root / "manifest.json").stat().st_size, 256 * 1024)
+        generation = manifest["generation"]
+        self.store.close()
+        self.store = Store(self.root, clock=lambda: self.now)
+        self.assertEqual(generation, self.store.generation)
+        self.assertEqual(512, len(self.events()))
+
+    def test_manifest_byte_limit_prunes_oldest_segments_and_recovers(self):
+        self.store.segment_bytes = 600
+        # Fixed-size production metadata hits the segment limit first; lower the
+        # byte budget to exercise the independent manifest-size pruning path.
+        with patch("gateway_log_collector.store.MAX_MANIFEST_BYTES", 900, create=True):
+            for duration in range(5):
+                self.send(f"GET /actuator/health -> 200 ({duration} ms)")
+            manifest = self.manifest()
+            self.assertLessEqual((self.root / "manifest.json").stat().st_size, 900)
+            self.assertTrue(manifest["retentionTruncated"])
+            self.assertGreater(manifest["oldestSeq"], 1)
+            self.assertEqual(5, manifest["headSeq"])
+            self.assertEqual(len(manifest["segments"]), len(list(self.root.glob("seg-*"))))
+            self.store.close()
+            self.store = Store(self.root, clock=lambda: self.now)
+            self.assertEqual(manifest["generation"], self.store.generation)
+            self.assertTrue(self.manifest()["retentionTruncated"])
+
+    def test_validator_rejects_more_than_512_manifest_segments(self):
+        self.send()
+        manifest = self.manifest()
+        manifest["segments"] *= 513
+        (self.root / "manifest.json").write_bytes(encode(manifest))
+        with self.assertRaisesRegex(ValueError, "Too many manifest segments"):
+            validate_directory(self.root)
+
+    def test_validator_enforces_256_kib_manifest_byte_boundary(self):
+        self.send()
+        payload = encode(self.manifest())
+        path = self.root / "manifest.json"
+        path.write_bytes(payload + b" " * (256 * 1024 - len(payload)))
+        validate_directory(self.root)
+        with path.open("ab") as output:
+            output.write(b" ")
+        with self.assertRaisesRegex(ValueError, "Oversize manifest"):
+            validate_directory(self.root)
+
     def test_capacity_includes_unadvertised_generations(self):
         self.store.max_events = 2
         self.send()
@@ -189,6 +245,32 @@ class StoreTests(unittest.TestCase):
         self.store.connect("a" * 64)
         self.assertFalse(self.store.process(raw, "stdout"))
         self.assertFalse(self.store.process(raw, "stderr"))
+        self.assertEqual(2, len(self.events()))
+
+    def test_skew_beyond_overlap_persists_uncertain_continuity_and_rereads_window(self):
+        self.send()
+        older = line("GET /actuator/health -> 201 (1 ms)").replace("12:34:56.123456789Z", "11:34:56Z")
+        self.assertTrue(self.store.process(older.encode(), "stderr"))
+        generation = self.store.generation
+        self.assertFalse(self.store.continuous)
+        self.store.close()
+        self.store = Store(self.root, clock=lambda: self.now)
+        since = self.store.connect("a" * 64)
+        self.assertEqual(self.now - timedelta(hours=6), instant(since))
+        self.assertNotEqual(generation, self.store.generation)
+        self.assertEqual([], self.manifest()["segments"])
+        self.assertTrue(self.send())
+        self.assertEqual(1, self.events()[0]["seq"])
+
+    def test_skew_within_overlap_preserves_generation_and_dedup(self):
+        self.send()
+        older = line("GET /actuator/health -> 201 (1 ms)").replace("12:34:56.123456789Z", "12:34:54.123456789Z")
+        self.assertTrue(self.store.process(older.encode(), "stderr"))
+        generation = self.store.generation
+        self.assertTrue(self.store.continuous)
+        self.store.connect("a" * 64)
+        self.assertEqual(generation, self.store.generation)
+        self.assertFalse(self.store.process(older.encode(), "stderr"))
         self.assertEqual(2, len(self.events()))
 
     def test_new_container_new_generation_prior_files_not_advertised(self):
