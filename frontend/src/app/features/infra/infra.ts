@@ -1,4 +1,7 @@
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { InfraLogsApi } from './infra-logs.api';
+import { InfraLogs } from './infra-logs';
 import { firstValueFrom } from 'rxjs';
 import { InfraService, type InfraAvailability, type InfraStateName, type InfraStateView } from '../../core/infra';
 import { I18n } from '../../core/i18n/i18n';
@@ -13,7 +16,7 @@ import { UI } from '../../shared/ui';
  */
 @Component({
   selector: 'app-infra',
-  imports: [...UI],
+  imports: [...UI, InfraLogs],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="space-y-6">
@@ -27,6 +30,26 @@ import { UI } from '../../shared/ui';
         </button>
       </div>
 
+      @if (logsEnabled()) {
+        <div role="tablist" [attr.aria-label]="t().infra.logs.tabs" class="flex gap-2">
+          @for (tab of ['state', 'logs']; track tab) {
+            <button type="button" uiButton variant="secondary" role="tab" [id]="'infra-tab-' + tab"
+              [attr.aria-controls]="'infra-panel-' + tab" [attr.aria-selected]="activeTab() === tab"
+              [class.ring-2]="activeTab() === tab" [class.ring-accent]="activeTab() === tab"
+              [attr.tabindex]="activeTab() === tab ? 0 : -1" (click)="activeTab.set($any(tab))"
+              (keydown)="onTabKeydown($event)">
+              {{ tab === 'state' ? t().infra.logs.stateTab : t().infra.logs.logsTitle }}
+            </button>
+          }
+        </div>
+      }
+      @if (activeTab() === 'logs' && logsEnabled()) {
+        <section id="infra-panel-logs" role="tabpanel" aria-labelledby="infra-tab-logs">
+          <app-infra-logs (disabled)="hideLogs()" />
+        </section>
+      } @else {
+        <div id="infra-panel-state" [attr.role]="logsEnabled() ? 'tabpanel' : null"
+          [attr.aria-labelledby]="logsEnabled() ? 'infra-tab-state' : null" class="contents">
       @if (loading()) {
         <div class="h-64 animate-pulse rounded-[var(--radius-lg)] border border-border bg-surface-2" aria-label="{{ t().infra.cargando }}"></div>
       } @else if (error() || !state()) {
@@ -135,12 +158,18 @@ import { UI } from '../../shared/ui';
           </div>
         </section>
       }
+        </div>
+      }
     </div>
   `,
 })
 export class Infra {
   private service = inject(InfraService);
   private i18n = inject(I18n);
+  private logsApi = inject(InfraLogsApi);
+  private destroyRef = inject(DestroyRef);
+  logsEnabled = signal(false);
+  activeTab = signal<'state' | 'logs'>('state');
 
   t = this.i18n.t;
   state = signal<InfraStateView | null>(null);
@@ -154,10 +183,31 @@ export class Infra {
   load(): void {
     this.loading.set(true);
     this.error.set(false);
+    this.probeLogs();
     firstValueFrom(this.service.state())
       .then((s) => this.state.set(s))
       .catch(() => this.error.set(true))
       .finally(() => this.loading.set(false));
+  }
+
+  private probeLogs(): void {
+    try {
+      this.logsApi.status().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+        next: () => this.logsEnabled.set(true),
+        error: (error) => { if (error.status === 404) this.hideLogs(); },
+      });
+    } catch { /* The state view also works without a logs HTTP provider. */ }
+  }
+
+  hideLogs(): void { this.logsEnabled.set(false); this.activeTab.set('state'); }
+
+  onTabKeydown(event: KeyboardEvent): void {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const next = event.key === 'Home' ? 'state' : event.key === 'End' ? 'logs' :
+      this.activeTab() === 'state' ? 'logs' : 'state';
+    this.activeTab.set(next);
+    (event.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>('#infra-tab-' + next)?.focus();
   }
 
   stateTone(state: InfraStateName): 'success' | 'danger' | 'warning' | 'neutral' {
