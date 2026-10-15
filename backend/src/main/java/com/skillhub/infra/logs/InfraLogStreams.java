@@ -104,15 +104,13 @@ public class InfraLogStreams {
                 }
                 if (clock.millis() - connection.lastProgress > 15_000 && connection.sending.get()) {
                     // Release admission immediately; emitter timeout also bounds servlet lifetime.
-                    connection.release();
-                    connection.emitter.complete();
+                    connection.abort(new IOException("Log stream write timed out"));
                     continue;
                 }
                 connection.poll();
                 connection.drain();
             } catch (RuntimeException e) {
-                connection.release();
-                connection.emitter.complete();
+                connection.abort(e);
             }
         }
     }
@@ -239,7 +237,7 @@ public class InfraLogStreams {
         void drain() {
             if (released.get() || !sending.compareAndSet(false, true)) return;
             try { senders.execute(this::send); }
-            catch (RejectedExecutionException e) { sending.set(false); release(); emitter.complete(); }
+            catch (RejectedExecutionException e) { sending.set(false); abort(e); }
         }
 
         void send() {
@@ -266,11 +264,16 @@ public class InfraLogStreams {
                     if (next.terminal()) { release(); emitter.complete(); return; }
                 }
             } catch (IOException | RuntimeException e) {
-                release();
-                emitter.complete();
+                abort(e);
             } finally {
                 sending.set(false);
             }
+        }
+
+        void abort(Throwable error) {
+            release();
+            // Spring MVC completes the async result without flushing the stalled transport.
+            emitter.completeWithError(error);
         }
 
         void release() {
@@ -283,7 +286,7 @@ public class InfraLogStreams {
 
     @PreDestroy void stop() {
         if (scheduler != null) scheduler.shutdownNow();
-        for (Connection connection : connections) { connection.release(); connection.emitter.complete(); }
+        for (Connection connection : connections) { connection.abort(new IOException("Log stream stopped")); }
         senders.shutdownNow();
     }
 }

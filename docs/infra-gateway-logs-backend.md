@@ -59,7 +59,9 @@ Pages scan at most 5,000 events/two seconds and return actual scan cursors.
 Opening quotas are 12/minute (burst 3), history/status 30/minute (burst 5), two
 streams/account and 100 total. Queues are bounded by 500 events/256 KiB, batches
 by 50 events/32 KiB, and replay by 1,000 events/1 MiB. Sender workers are capped
-at 16 with 200 pending jobs. Session JWT expiry, active account and password
+at 16 with 200 pending jobs. Stalled writes and rejected sender jobs release
+admission and complete the async request with an error, without flushing from
+the publisher. Session JWT expiry, active account and password
 nonce are rechecked every 15 seconds using the existing session service. A
 stream has a 15-minute servlet timeout.
 
