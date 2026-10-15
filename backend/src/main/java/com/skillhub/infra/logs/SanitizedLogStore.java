@@ -353,6 +353,7 @@ public class SanitizedLogStore {
                     null, null, null, null, false, false, List.of());
         }
         requireAvailable();
+        if (query.at() != null) return pageAt(query);
         validate(query.before());
         validate(query.after());
         validate(query.through());
@@ -382,6 +383,33 @@ public class SanitizedLogStore {
                 coverageStart(), sourceStatus(), manifest.lastSourceContactAt(), manifest.lastEventAt(), "r2-v1",
                 truncated || manifest.retentionTruncated(), manifest.omittedCount(), cursor(head()), cursor(oldest()),
                 nextBefore, nextAfter, earlier != null, forward && later != null && later <= through, List.copyOf(found));
+    }
+
+    private LogsDto.Page pageAt(LogsQuery query) {
+        List<LogsDto.Entry> matching = entries.values().stream().map(Stored::entry).filter(query::matches)
+                .sorted(java.util.Comparator.comparing(LogsDto.Entry::timestamp).thenComparing(LogsDto.Entry::id)).toList();
+        if (matching.isEmpty()) return pageWithAtEntries(query, matching, List.of(), false, false);
+        Instant latest = matching.getLast().timestamp();
+        List<LogsDto.Entry> candidates;
+        if (query.at().isAfter(latest)) candidates = matching.subList(Math.max(0, matching.size() - query.limit()), matching.size());
+        else if (coverageStart() != null && query.at().isBefore(coverageStart())) candidates = matching;
+        else candidates = matching.stream().filter(entry -> !entry.timestamp().isBefore(query.at())).toList();
+        List<LogsDto.Entry> page = candidates.stream().limit(query.limit()).toList();
+        boolean hasMoreAfter = candidates.size() > page.size();
+        boolean hasMoreBefore = !page.isEmpty() && matching.stream().anyMatch(entry -> entry.timestamp().isBefore(page.getFirst().timestamp()));
+        return pageWithAtEntries(query, matching, page, hasMoreBefore, hasMoreAfter);
+    }
+
+    private LogsDto.Page pageWithAtEntries(LogsQuery query, List<LogsDto.Entry> matching, List<LogsDto.Entry> page,
+                                            boolean hasMoreBefore, boolean hasMoreAfter) {
+        String nextBefore = page.isEmpty() ? cursor(oldest()) : page.stream().map(LogsDto.Entry::id)
+                .min(java.util.Comparator.comparingLong(id -> Long.parseLong(id.substring(id.indexOf(':') + 1)))).orElse(cursor(oldest()));
+        String nextAfter = page.isEmpty() ? cursor(head()) : page.stream().map(LogsDto.Entry::id)
+                .max(java.util.Comparator.comparingLong(id -> Long.parseLong(id.substring(id.indexOf(':') + 1)))).orElse(cursor(head()));
+        return new LogsDto.Page("api-gateway", manifest.generation(), clock.instant(), RETENTION_SECONDS,
+                coverageStart(), sourceStatus(), manifest.lastSourceContactAt(), manifest.lastEventAt(), "r2-v1",
+                truncated || manifest.retentionTruncated(), manifest.omittedCount(), cursor(head()), cursor(oldest()),
+                nextBefore, nextAfter, hasMoreBefore, hasMoreAfter, page);
     }
 
     synchronized Replay replay(LogsQuery.Cursor after, int maximum) {

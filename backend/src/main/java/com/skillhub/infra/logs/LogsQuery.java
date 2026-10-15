@@ -1,16 +1,23 @@
 package com.skillhub.infra.logs;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 public record LogsQuery(int limit, Set<String> levels, String q, String traceId,
-                        Cursor before, Cursor after, Cursor through) {
+                        Cursor before, Cursor after, Cursor through, Instant at, String route,
+                        Set<String> methods, Set<String> statuses, Long minDurationMs) {
     private static final Set<String> LEVELS = Set.of("INFO", "WARN", "ERROR");
-    private static final Set<String> HISTORY = Set.of("limit", "levels", "q", "traceId", "before", "after", "through");
-    private static final Set<String> STREAM = Set.of("levels", "q", "traceId", "after");
+    private static final Set<String> METHODS = Set.of("GET", "POST", "PUT", "PATCH", "DELETE");
+    private static final Set<String> STATUS_CLASSES = Set.of("2xx", "3xx", "4xx", "5xx");
+    private static final Set<String> HISTORY = Set.of("limit", "levels", "q", "traceId", "before", "after", "through",
+            "at", "route", "method", "status", "minDurationMs");
+    private static final Set<String> STREAM = Set.of("levels", "q", "traceId", "after", "route", "method", "status", "minDurationMs");
 
     public record Cursor(String generation, long seq) {
         public static Cursor parse(String value) {
@@ -56,8 +63,43 @@ public record LogsQuery(int limit, Set<String> levels, String q, String traceId,
         String afterValue = stream && lastEventId != null && !lastEventId.isEmpty() ? lastEventId : value(parameters, "after");
         Cursor after = Cursor.parse(afterValue);
         Cursor through = Cursor.parse(value(parameters, "through"));
-        if (before != null && after != null || stream && after == null) throw LogsException.invalidQuery();
-        return new LogsQuery(limit, Set.copyOf(levels), q == null ? null : q.toLowerCase(Locale.ROOT), traceId, before, after, through);
+        String atValue = value(parameters, "at");
+        Instant at = null;
+        if (atValue != null) {
+            try { at = OffsetDateTime.parse(atValue).toInstant(); }
+            catch (DateTimeParseException e) { throw LogsException.invalidQuery(); }
+        }
+        String routeValue = value(parameters, "route");
+        if (routeValue != null && (routeValue.codePointCount(0, routeValue.length()) > 120 ||
+                routeValue.chars().anyMatch(Character::isISOControl))) throw LogsException.invalidQuery();
+        Set<String> methods = csv(value(parameters, "method"), METHODS);
+        Set<String> statuses = new HashSet<>();
+        String statusValue = value(parameters, "status");
+        if (statusValue != null) for (String status : statusValue.split(",", -1)) {
+            if (!STATUS_CLASSES.contains(status) && (!status.matches("[1-5][0-9]{2}"))) throw LogsException.invalidQuery();
+            statuses.add(status);
+        }
+        Long minDurationMs = null;
+        String durationValue = value(parameters, "minDurationMs");
+        if (durationValue != null) {
+            try { minDurationMs = Long.parseLong(durationValue); }
+            catch (NumberFormatException e) { throw LogsException.invalidQuery(); }
+            if (minDurationMs < 0 || minDurationMs > 600_000) throw LogsException.invalidQuery();
+        }
+        if (before != null && after != null || at != null && (before != null || after != null || through != null) || stream && after == null) throw LogsException.invalidQuery();
+        return new LogsQuery(limit, Set.copyOf(levels), q == null ? null : q.toLowerCase(Locale.ROOT), traceId,
+                before, after, through, at, routeValue == null ? null : routeValue.toLowerCase(Locale.ROOT),
+                methods, Set.copyOf(statuses), minDurationMs);
+    }
+
+    private static Set<String> csv(String value, Set<String> allowed) {
+        if (value == null) return Set.of();
+        Set<String> result = new HashSet<>();
+        for (String item : value.split(",", -1)) {
+            if (!allowed.contains(item)) throw LogsException.invalidQuery();
+            result.add(item);
+        }
+        return Set.copyOf(result);
     }
 
     static void validateStatus(Map<String, String[]> parameters, String rawQuery) {
@@ -71,6 +113,11 @@ public record LogsQuery(int limit, Set<String> levels, String q, String traceId,
     boolean matches(LogsDto.Entry entry) {
         return levels.contains(entry.level())
                 && (q == null || entry.lines().getFirst().toLowerCase(Locale.ROOT).contains(q))
-                && (traceId == null || traceId.equalsIgnoreCase(entry.traceId()));
+                && (traceId == null || traceId.equalsIgnoreCase(entry.traceId()))
+                && (route == null || entry.route() != null && entry.route().toLowerCase(Locale.ROOT).contains(route))
+                && (methods.isEmpty() || methods.contains(entry.method()))
+                && (statuses.isEmpty() || entry.status() != null && (statuses.contains(Integer.toString(entry.status())) ||
+                    statuses.contains((entry.status() / 100) + "xx")))
+                && (minDurationMs == null || entry.durationMs() != null && entry.durationMs() >= minDurationMs);
     }
 }

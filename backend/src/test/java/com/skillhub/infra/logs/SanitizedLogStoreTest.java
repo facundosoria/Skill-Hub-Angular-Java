@@ -47,6 +47,31 @@ class SanitizedLogStoreTest {
         assertThat(LogFixtures.MAPPER.readTree(json).get("entries").get(0).size()).isEqualTo(14);
     }
 
+    @Test void routeMethodStatusAndMinimumDurationFiltersCombineOnSanitizedFields() {
+        var routeAndMethod = store.page(LogFixtures.query("route", "EXAMPLE/{id}", "method", "GET"));
+        assertThat(routeAndMethod.entries()).extracting(LogsDto.Entry::id).containsExactly("g7:1", "g7:2");
+        var statuses = store.page(LogFixtures.query("status", "4xx,500"));
+        assertThat(statuses.entries()).extracting(LogsDto.Entry::id).containsExactly("g7:2", "g7:3");
+        var combined = store.page(LogFixtures.query("levels", "WARN", "route", "example", "method", "GET",
+                "status", "404", "minDurationMs", "19", "q", "GET", "traceId", "11111111111111111111111111111111"));
+        assertThat(combined.entries()).isEmpty();
+        assertThat(store.page(LogFixtures.query("minDurationMs", "19")).entries())
+                .extracting(LogsDto.Entry::id).containsExactly("g7:2");
+        for (String[] pair : new String[][]{{"route", "x".repeat(121)}, {"route", "bad\nroute"},
+                {"method", "HEAD"}, {"status", "4xx,99"}, {"minDurationMs", "-1"}, {"minDurationMs", "600001"}}) {
+            assertThatThrownBy(() -> LogFixtures.query(pair)).isInstanceOf(LogsException.class);
+        }
+    }
+
+    @Test void atSelectsAscendingPageClampsCoverageAndReturnsNewestForFutureInstant() {
+        var page = store.page(LogFixtures.query("at", "2026-10-14T06:50:58Z", "limit", "2"));
+        assertThat(page.entries()).extracting(LogsDto.Entry::id).containsExactly("g7:2", "g7:3");
+        assertThat(store.page(LogFixtures.query("at", "2026-10-13T23:00:00Z", "limit", "2")).entries())
+                .extracting(LogsDto.Entry::id).containsExactly("g7:1", "g7:2");
+        assertThat(store.page(LogFixtures.query("at", "2026-10-14T08:00:00Z", "limit", "2")).entries())
+                .extracting(LogsDto.Entry::id).containsExactly("g7:2", "g7:3");
+    }
+
     @Test void finalPartialLineWaitsForNewlineWithoutDuplicateDelivery() throws Exception {
         Files.writeString(dir.resolve(LogFixtures.FILE), LogFixtures.event(1, "INFO", "First") + "\n" + LogFixtures.event(2, "INFO", "Second"));
         store = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 32 * 1024 * 1024, 100_000);

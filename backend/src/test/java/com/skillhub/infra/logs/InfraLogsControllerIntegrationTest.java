@@ -83,6 +83,20 @@ class InfraLogsControllerIntegrationTest {
         mvc.perform(get(LogsRequestFilter.BASE + "/stream")).andExpect(status().isBadRequest());
     }
 
+    @Test void jumpToInstantReturnsFilteredAscendingPageAndRejectsCursorCombination() throws Exception {
+        mvc.perform(get(LogsRequestFilter.BASE).param("at", "2026-10-14T06:50:58Z").param("limit", "2"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.entries[0].id").value("g7:2"))
+                .andExpect(jsonPath("$.entries[1].id").value("g7:3"));
+        mvc.perform(get(LogsRequestFilter.BASE).param("at", "not-an-instant"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        mvc.perform(get(LogsRequestFilter.BASE).param("at", "2026-01-01T12:01:00Z").param("before", "g7:3"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        mvc.perform(get(LogsRequestFilter.BASE).param("at", "2026-01-01T12:01:00Z").param("through", "g7:3"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+        mvc.perform(get(LogsRequestFilter.BASE).param("at", "2026-01-01T12:01:00Z").param("after", "g7:1"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
+    }
+
     @Test void accountQuotaIs429WithRetryAfterAndStatusReflectsBlocking() throws Exception {
         for (int i = 0; i < 5; i++) mvc.perform(get(LogsRequestFilter.BASE)).andExpect(status().isOk());
         mvc.perform(get(LogsRequestFilter.BASE)).andExpect(status().isTooManyRequests())
@@ -140,6 +154,17 @@ class InfraLogsControllerIntegrationTest {
         mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:3").header("Last-Event-ID", "g9:1")
                         .accept("text/event-stream"))
                 .andExpect(status().isConflict()).andExpect(content().contentType("application/json;charset=UTF-8"));
+    }
+
+    @Test void streamAppliesTheSameSanitizedFieldFiltersAsHistory() throws Exception {
+        var result = mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:1").param("status", "404")
+                        .param("route", "EXAMPLE").param("method", "GET"))
+                .andExpect(status().isOk()).andExpect(request().asyncStarted()).andReturn();
+        org.awaitility.Awaitility.await().atMost(java.time.Duration.ofSeconds(3)).untilAsserted(() ->
+                org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentAsString())
+                        .contains("\"id\":\"g7:2\"").doesNotContain("\"id\":\"g7:3\""));
+        mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:1").param("unknown", "x"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_QUERY"));
     }
 
     @Test void sseMvcSerializesReplayLiveKeepaliveAndRevocation() throws Exception {
