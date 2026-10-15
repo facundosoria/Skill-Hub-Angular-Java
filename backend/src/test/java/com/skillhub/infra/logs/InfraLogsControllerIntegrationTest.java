@@ -90,17 +90,20 @@ class InfraLogsControllerIntegrationTest {
         org.assertj.core.api.Assertions.assertThat(limiter.blockedUntil(user.id())).isNotNull();
     }
 
-    @Test void absentSourceIs503WhileStatusReportsUnavailable() throws Exception {
+    @Test void absentSourceSnapshotAndStatusReportStartingWithNullableCursors() throws Exception {
         Files.delete(dir.resolve("manifest.json"));
         var unavailable = new SanitizedLogStore(properties, LogFixtures.MAPPER, new LogFixtures.MutableClock(), 1000, 10);
         unavailable.refresh();
         mvc = MockMvcBuilders.standaloneSetup(new InfraLogsController(unavailable, streams, limiter, properties))
                 .setCustomArgumentResolvers(new AuthPrincipalResolver(sessions)).setControllerAdvice(new LogsExceptionHandler())
                 .addFilters(new LogsRequestFilter(properties, LogFixtures.MAPPER)).build();
-        mvc.perform(get(LogsRequestFilter.BASE)).andExpect(status().isServiceUnavailable())
-                .andExpect(jsonPath("$.code").value("SOURCE_UNAVAILABLE"));
+        mvc.perform(get(LogsRequestFilter.BASE)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.sourceStatus").value("starting"))
+                .andExpect(jsonPath("$.headCursor").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.entries").isEmpty());
         mvc.perform(get(LogsRequestFilter.BASE + "/status")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.sourceStatus").value("unavailable"));
+                .andExpect(jsonPath("$.sourceStatus").value("starting"))
+                .andExpect(jsonPath("$.generation").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test void disabledEndpointsAre404BeforeAuthenticationAndReaderStaysDormant() throws Exception {

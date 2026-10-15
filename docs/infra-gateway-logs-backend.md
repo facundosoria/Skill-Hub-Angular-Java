@@ -39,8 +39,11 @@ Authenticated GET routes under `/api/infra/logs/api-gateway`:
   case-insensitive `q` (120 characters), hexadecimal `traceId`, exclusive
   `before` or `after`, and optional inclusive `through`.
 - `/status`: source status and cursors, retention and admission state; no query
-  parameters and no entries. A cold unavailable source is reported here as
-  `sourceStatus=unavailable`; history and stream then return 503. A lost/stale
+  parameters and no entries. With no readable manifest, status and snapshot
+  return 200 with `sourceStatus=starting`, null generation/coverage/cursors,
+  and an empty snapshot (`policyVersion`, last-contact and last-event times
+  are null too). A stream still requires a valid cursor and available source.
+  A lost/stale
   source with retained history returns data with `sourceStatus=disconnected`.
 - `/stream`: required `after` and the same filters. `Last-Event-ID` overrides
   `after`. SSE sends `retry: 3000`, logs/checkpoints, status and 15-second

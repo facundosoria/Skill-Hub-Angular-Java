@@ -101,11 +101,48 @@ class SanitizedLogStoreTest {
         assertThat(store.page(LogFixtures.query()).sourceStatus()).isEqualTo("disconnected");
         var cold = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 1000, 10);
         cold.refresh();
-        assertThat(cold.status(0, null).sourceStatus()).isEqualTo("unavailable");
-        assertThatThrownBy(() -> cold.page(LogFixtures.query())).isInstanceOf(LogsException.class);
+        assertThat(cold.status(0, null).sourceStatus()).isEqualTo("starting");
+        assertThat(cold.page(LogFixtures.query()).sourceStatus()).isEqualTo("starting");
         Files.writeString(dir.resolve("manifest.json"), "{broken");
         cold.refresh();
-        assertThatThrownBy(() -> cold.page(LogFixtures.query())).isInstanceOf(LogsException.class);
+        assertThat(cold.page(LogFixtures.query()).sourceStatus()).isEqualTo("starting");
+    }
+
+    @Test void coldMissingCorruptAndUnreadableManifestsReturnNullableStartingSnapshots() throws Exception {
+        Files.delete(dir.resolve("manifest.json"));
+        for (int state = 0; state < 3; state++) {
+            if (state == 1) Files.writeString(dir.resolve("manifest.json"), "{broken");
+            if (state == 2) {
+                Files.delete(dir.resolve("manifest.json"));
+                Files.createDirectory(dir.resolve("manifest.json"));
+            }
+            var cold = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 1000, 10);
+            cold.refresh();
+            var status = cold.status(2, clock.instant());
+            assertThat(status.sourceStatus()).isEqualTo("starting");
+            assertThat(status.generation()).isNull();
+            assertThat(status.coverageStart()).isNull();
+            assertThat(status.headCursor()).isNull();
+            assertThat(status.oldestCursor()).isNull();
+            assertThat(status.activeStreams()).isEqualTo(2);
+            assertThat(status.accountBlockedUntil()).isEqualTo(clock.instant());
+            var snapshot = cold.page(LogFixtures.query());
+            assertThat(snapshot.sourceStatus()).isEqualTo("starting");
+            assertThat(snapshot.generation()).isNull();
+            assertThat(snapshot.coverageStart()).isNull();
+            assertThat(snapshot.headCursor()).isNull();
+            assertThat(snapshot.oldestCursor()).isNull();
+            assertThat(snapshot.nextBefore()).isNull();
+            assertThat(snapshot.nextAfter()).isNull();
+            assertThat(snapshot.lastSourceContactAt()).isNull();
+            assertThat(snapshot.lastEventAt()).isNull();
+            assertThat(snapshot.policyVersion()).isNull();
+            assertThat(snapshot.omittedCount()).isZero();
+            assertThat(snapshot.entries()).isEmpty();
+            assertThat(snapshot.hasMoreBefore()).isFalse();
+            assertThat(snapshot.hasMoreAfter()).isFalse();
+            assertThat(LogFixtures.MAPPER.writeValueAsString(snapshot)).doesNotContain("unavailable");
+        }
     }
 
     @Test void symlinksAndInvalidManifestSchemaAreRejected() throws Exception {
