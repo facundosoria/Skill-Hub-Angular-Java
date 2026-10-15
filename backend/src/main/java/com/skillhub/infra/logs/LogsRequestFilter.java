@@ -44,8 +44,8 @@ public class LogsRequestFilter extends OncePerRequestFilter {
         response.setHeader("Cache-Control", CACHE_CONTROL);
         if (!properties.isEnabled()) {
             response.setStatus(404);
-            response.setContentType("application/json");
-            mapper.writeValue(response.getWriter(), Map.of("code", "LOGS_DISABLED", "message", "Los logs no están habilitados."));
+            response.setContentType("application/json;charset=UTF-8");
+            mapper.writeValue(response.getOutputStream(), Map.of("code", "LOGS_DISABLED", "message", "Los logs no están habilitados."));
             return;
         }
         request.setAttribute(RAW_QUERY, request.getQueryString());

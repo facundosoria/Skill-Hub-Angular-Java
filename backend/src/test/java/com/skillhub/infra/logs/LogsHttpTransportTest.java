@@ -31,6 +31,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -158,4 +161,25 @@ class LogsHttpTransportTest {
                 .allSatisfy(message -> assertThat(message).doesNotContain("synthetic-query-sentinel"));
     }
 
+    @Test void disabledAndAdviceErrorsUseExplicitUtf8WithAccentedMessages() throws Exception {
+        for (String suffix : new String[]{"", "/status", "/stream"}) {
+            var response = get(LogsRequestFilter.BASE + suffix);
+            assertThat(response.statusCode()).isEqualTo(404);
+            assertUtf8Error(response, "Los logs no están habilitados.");
+        }
+        properties.setEnabled(true);
+        when(sessions.getCurrentUser(any(HttpServletRequest.class))).thenReturn(null);
+        assertUtf8Error(get(LogsRequestFilter.BASE), "Tu sesión venció. Volvé a ingresar.");
+        when(sessions.getCurrentUser(any(HttpServletRequest.class))).thenReturn(
+                new CurrentUser("synthetic-account", "student", "Student", "Team", "user", true));
+        // Exercise the existing password-change interceptor.
+        assertUtf8Error(get(LogsRequestFilter.BASE), "Debés cambiar tu contraseña para acceder a los logs.");
+    }
+
+    private void assertUtf8Error(HttpResponse<byte[]> response, String message) throws Exception {
+        assertThat(response.headers().firstValue("Content-Type")).contains("application/json;charset=UTF-8");
+        String json = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(response.body())).toString();
+        assertThat(LogFixtures.MAPPER.readTree(json).path("message").asText()).isEqualTo(message);
+    }
 }

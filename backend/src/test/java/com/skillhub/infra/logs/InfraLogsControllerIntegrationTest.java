@@ -136,7 +136,7 @@ class InfraLogsControllerIntegrationTest {
                 .andExpect(header().string("Cache-Control", LogsRequestFilter.CACHE_CONTROL));
         mvc.perform(get(LogsRequestFilter.BASE + "/stream").param("after", "g7:3").header("Last-Event-ID", "g9:1")
                         .accept("text/event-stream"))
-                .andExpect(status().isConflict()).andExpect(content().contentType("application/json"));
+                .andExpect(status().isConflict()).andExpect(content().contentType("application/json;charset=UTF-8"));
     }
 
     @Test void sseMvcSerializesReplayLiveKeepaliveAndRevocation() throws Exception {

@@ -51,7 +51,8 @@ Normal and equivalent matrix/percent-encoded routes honor the feature flag and
 hide query diagnostics; encoded slashes are rejected by the default connector.
 Responses use `Cache-Control: private, no-store, no-transform`; SSE also uses
 `X-Accel-Buffering: no`. Errors contain `code` and a Spanish `message`; 429
-includes `Retry-After`. Unknown/duplicate parameters and queries over 2 KiB are
+includes `Retry-After`. JSON errors explicitly use `application/json;charset=UTF-8`.
+Unknown/duplicate parameters and queries over 2 KiB are
 rejected. Literal search queries are hidden from servlet/MVC query diagnostics;
 the ingress must also omit query strings for these routes from access logs.
 
