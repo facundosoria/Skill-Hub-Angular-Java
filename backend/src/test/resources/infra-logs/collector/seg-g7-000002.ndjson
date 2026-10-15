@@ -1,0 +1,1 @@
+{"durationMs":null,"event":"JWT_REJECTED","level":"WARN","logger":"SessionValidator","message":"JWT_REJECTED reason=session-closed","method":null,"policyVersion":"r2-v1","reason":"session-closed","route":null,"seq":2,"spanId":"1234567890abcdef","status":null,"timestamp":"2026-01-01T12:34:56.123456789Z","traceId":"1234567890abcdef1234567890abcdef"}

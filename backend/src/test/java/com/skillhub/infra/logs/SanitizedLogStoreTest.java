@@ -1,0 +1,189 @@
+package com.skillhub.infra.logs;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
+import static org.assertj.core.api.Assertions.*;
+
+class SanitizedLogStoreTest {
+    @TempDir Path dir;
+    LogFixtures.MutableClock clock;
+    SanitizedLogStore store;
+
+    @BeforeEach void setup() throws Exception {
+        LogFixtures.copy(dir);
+        clock = new LogFixtures.MutableClock();
+        store = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 32 * 1024 * 1024, 100_000);
+        store.refresh();
+    }
+
+    @Test void snapshotAndPaginationPreserveScannedCursorsAndAscendingOrder() {
+        var snapshot = store.page(LogFixtures.query("limit", "2"));
+        assertThat(snapshot.entries()).extracting(LogsDto.Entry::id).containsExactly("g7:2", "g7:3");
+        assertThat(snapshot.nextBefore()).isEqualTo("g7:2");
+        assertThat(snapshot.nextAfter()).isEqualTo("g7:3");
+        assertThat(snapshot.hasMoreBefore()).isTrue();
+        assertThat(store.page(LogFixtures.query("before", "g7:2", "through", "g7:3")).entries())
+                .extracting(LogsDto.Entry::id).containsExactly("g7:1");
+        var forward = store.page(LogFixtures.query("after", "g7:1", "limit", "1"));
+        assertThat(forward.nextAfter()).isEqualTo("g7:2");
+        assertThat(forward.hasMoreAfter()).isTrue();
+        var noMatches = store.page(LogFixtures.query("after", "g7:1", "q", "absent"));
+        assertThat(noMatches.entries()).isEmpty();
+        assertThat(noMatches.nextAfter()).isEqualTo("g7:3");
+        assertThat(noMatches.hasMoreAfter()).isFalse();
+    }
+
+    @Test void literalFiltersAndTraceMatchingNeverExposeUnknownFields() throws Exception {
+        var page = store.page(LogFixtures.query("q", "GET /API/EXAMPLE/{ID}", "traceId", "11111111111111111111111111111111"));
+        assertThat(page.entries()).hasSize(1);
+        assertThat(store.page(LogFixtures.query("q", ".*")).entries()).isEmpty();
+        assertThat(store.page(LogFixtures.query("levels", "ERROR")).entries()).hasSize(1);
+        String json = LogFixtures.MAPPER.writeValueAsString(page);
+        assertThat(json).doesNotContain("unexpected", "synthetic-private-value", "message", "traceparent", "policyVersion\":\"r2-v1\",\"unexpected");
+        assertThat(LogFixtures.MAPPER.readTree(json).get("entries").get(0).size()).isEqualTo(14);
+    }
+
+    @Test void finalPartialLineWaitsForNewlineWithoutDuplicateDelivery() throws Exception {
+        Files.writeString(dir.resolve(LogFixtures.FILE), LogFixtures.event(1, "INFO", "First") + "\n" + LogFixtures.event(2, "INFO", "Second"));
+        store = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 32 * 1024 * 1024, 100_000);
+        store.refresh();
+        assertThat(store.size()).isEqualTo(1);
+        assertThat(store.page(LogFixtures.query()).headCursor()).isEqualTo("g7:1");
+        Files.writeString(dir.resolve(LogFixtures.FILE), "\n", java.nio.file.StandardOpenOption.APPEND);
+        store.refresh();
+        store.refresh();
+        assertThat(store.size()).isEqualTo(2);
+    }
+
+    @Test void scanStopsAtFiveThousandEvenWithoutMatches() throws Exception {
+        LogFixtures.events(dir, 5100);
+        store = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 32 * 1024 * 1024, 100_000);
+        store.refresh();
+        var page = store.page(LogFixtures.query("q", "never"));
+        assertThat(page.entries()).isEmpty();
+        assertThat(page.nextBefore()).isEqualTo("g7:101");
+        assertThat(page.hasMoreBefore()).isTrue();
+        var next = store.page(LogFixtures.query("before", page.nextBefore(), "q", "never"));
+        assertThat(next.hasMoreBefore()).isFalse();
+    }
+
+    @Test void capacityAndTtlBoundTheRingAndExpireCursors() {
+        store = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 800, 2);
+        store.refresh();
+        assertThat(store.payloadBytes()).isLessThanOrEqualTo(800);
+        assertThat(store.size()).isLessThanOrEqualTo(2);
+        assertThat(store.page(LogFixtures.query()).capacityLimited()).isTrue();
+        assertThatThrownBy(() -> store.page(LogFixtures.query("after", "g7:1"))).isInstanceOf(LogsException.class);
+        clock.advance(21601);
+        store.refresh();
+        assertThat(store.size()).isZero();
+    }
+
+    @Test void newGenerationDropsIndexAndRejectsPreviousCursors() throws Exception {
+        var manifest = LogFixtures.manifest(dir);
+        manifest.put("generation", "g8").put("headSeq", 1);
+        var segment = (com.fasterxml.jackson.databind.node.ObjectNode) manifest.withArray("segments").get(0);
+        segment.put("file", "seg-g8-000001.ndjson").put("lastSeq", 1);
+        Files.writeString(dir.resolve("seg-g8-000001.ndjson"), LogFixtures.event(1, "WARN", "New generation") + "\n");
+        LogFixtures.manifest(dir, manifest);
+        store.refresh();
+        assertThat(store.page(LogFixtures.query()).entries()).extracting(LogsDto.Entry::id).containsExactly("g8:1");
+        assertThatThrownBy(() -> store.page(LogFixtures.query("after", "g7:3"))).isInstanceOf(LogsException.class);
+    }
+
+    @Test void absentOrCorruptManifestFailsClosedButRetainedHistorySurvivesDisconnect() throws Exception {
+        Files.delete(dir.resolve("manifest.json"));
+        store.refresh();
+        assertThat(store.page(LogFixtures.query()).sourceStatus()).isEqualTo("disconnected");
+        var cold = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 1000, 10);
+        cold.refresh();
+        assertThat(cold.status(0, null).sourceStatus()).isEqualTo("unavailable");
+        assertThatThrownBy(() -> cold.page(LogFixtures.query())).isInstanceOf(LogsException.class);
+        Files.writeString(dir.resolve("manifest.json"), "{broken");
+        cold.refresh();
+        assertThatThrownBy(() -> cold.page(LogFixtures.query())).isInstanceOf(LogsException.class);
+    }
+
+    @Test void symlinksAndInvalidManifestSchemaAreRejected() throws Exception {
+        Files.delete(dir.resolve(LogFixtures.FILE));
+        Files.createSymbolicLink(dir.resolve(LogFixtures.FILE), dir.resolve("manifest.json"));
+        var cold = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 1000, 10);
+        cold.refresh();
+        assertThatThrownBy(() -> cold.page(LogFixtures.query())).isInstanceOf(LogsException.class);
+        var manifest = LogFixtures.manifest(dir);
+        manifest.put("version", 2);
+        LogFixtures.manifest(dir, manifest);
+        cold.refresh();
+        assertThat(cold.status(0, null).sourceStatus()).isEqualTo("disconnected");
+    }
+
+    @Test void deletedSegmentsShortenWindowAndDisabledStoreNeverOpensSource() throws Exception {
+        Files.delete(dir.resolve(LogFixtures.FILE));
+        store.refresh();
+        assertThat(store.size()).isZero();
+        assertThat(store.status(0, null).retentionTruncated()).isTrue();
+        var properties = LogFixtures.properties(dir);
+        properties.setEnabled(false);
+        var disabled = new SanitizedLogStore(properties, LogFixtures.MAPPER, clock, 1000, 10);
+        disabled.refresh();
+        assertThat(disabled.status(0, null).generation()).isNull();
+    }
+
+    @Test void rejectsAllInvalidQueriesAndCursors() {
+        for (String[] pair : new String[][]{{"other", "x"}, {"limit", "0"}, {"limit", "151"}, {"levels", "DEBUG"},
+                {"traceId", "bad"}, {"after", "../path"}, {"after", "g7:9223372036854775808"}, {"q", "x".repeat(121)}}) {
+            assertThatThrownBy(() -> LogFixtures.query(pair)).isInstanceOf(LogsException.class);
+        }
+        assertThatThrownBy(() -> LogFixtures.query("before", "g7:1", "after", "g7:2")).isInstanceOf(LogsException.class);
+        assertThatThrownBy(() -> LogsQuery.parse(Map.of(), "q=" + "x".repeat(2048), false, null)).isInstanceOf(LogsException.class);
+        assertThatThrownBy(() -> LogsQuery.parse(Map.of("q", new String[]{"a", "b"}), null, false, null)).isInstanceOf(LogsException.class);
+        for (String cursor : new String[]{"g8:3", "g7:4"}) {
+            assertThatThrownBy(() -> store.page(LogFixtures.query("after", cursor))).isInstanceOf(LogsException.class);
+        }
+    }
+
+    @Test void collectorFixtureIsCompatibleWithTheSharedSchema() throws Exception {
+        Path collector = Files.createDirectory(dir.resolve("collector"));
+        for (String file : java.util.List.of("manifest.json", "seg-g7-000001.ndjson", "seg-g7-000002.ndjson")) {
+            try (var input = getClass().getResourceAsStream("/infra-logs/collector/" + file)) {
+                Files.copy(input, collector.resolve(file));
+            }
+        }
+        var fixtureClock = java.time.Clock.fixed(java.time.Instant.parse("2026-01-01T12:35:00Z"), java.time.ZoneOffset.UTC);
+        var reader = new SanitizedLogStore(LogFixtures.properties(collector), LogFixtures.MAPPER, fixtureClock, 10000, 10);
+        reader.refresh();
+        assertThat(reader.page(LogFixtures.query()).entries()).hasSize(2);
+        assertThat(reader.page(LogFixtures.query()).sourceStatus()).isEqualTo("disconnected");
+    }
+
+    @Test void invalidEventsAndOversizedLinesAreDrainedWithoutLeakingTheirFields() throws Exception {
+        var invalid = (com.fasterxml.jackson.databind.node.ObjectNode) LogFixtures.MAPPER.readTree(LogFixtures.event(2, "WARN", "Synthetic"));
+        invalid.put("spanId", "invalid");
+        String content = LogFixtures.event(1, "INFO", "Valid") + "\n" + invalid + "\n"
+                + "x".repeat(9000) + LogFixtures.event(2, "WARN", "Suffix must not become an event") + "\n"
+                + LogFixtures.event(3, "DEBUG", "Hidden") + "\n";
+        Files.writeString(dir.resolve(LogFixtures.FILE), content);
+        var reader = new SanitizedLogStore(LogFixtures.properties(dir), LogFixtures.MAPPER, clock, 10000, 10);
+        reader.refresh();
+        assertThat(reader.page(LogFixtures.query()).entries()).extracting(LogsDto.Entry::id).containsExactly("g7:1");
+    }
+
+    @Test void tailAheadOfManifestWaitsUntilTheManifestPublishesItsSequence() throws Exception {
+        Files.writeString(dir.resolve(LogFixtures.FILE), LogFixtures.event(4, "INFO", "Awaiting manifest") + "\n",
+                java.nio.file.StandardOpenOption.APPEND);
+        store.refresh();
+        assertThat(store.page(LogFixtures.query()).headCursor()).isEqualTo("g7:3");
+        var manifest = LogFixtures.manifest(dir);
+        manifest.put("headSeq", 4);
+        ((com.fasterxml.jackson.databind.node.ObjectNode) manifest.withArray("segments").get(0)).put("lastSeq", 4);
+        LogFixtures.manifest(dir, manifest);
+        store.refresh();
+        store.refresh();
+        assertThat(store.page(LogFixtures.query()).entries()).hasSize(4);
+        assertThat(store.page(LogFixtures.query()).headCursor()).isEqualTo("g7:4");
+    }
+}

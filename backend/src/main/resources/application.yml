@@ -47,6 +47,9 @@ app:
   # destination allowlist (allowed-hosts / allowed-ports) is mandatory before a
   # registry-derived target is ever fetched.
   infra:
+    logs:
+      enabled: ${APP_INFRA_LOGS_ENABLED:false}
+      dir: ${APP_INFRA_LOGS_DIR:/var/lib/tpi-log-view/sanitized}
     enabled: ${INFRA_ENABLED:false}
     eureka-url: ${INFRA_EUREKA_URL:}
     interval: ${INFRA_INTERVAL:30s}
