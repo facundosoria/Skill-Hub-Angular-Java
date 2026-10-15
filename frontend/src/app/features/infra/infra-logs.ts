@@ -3,7 +3,7 @@ import { I18n } from '../../core/i18n/i18n';
 import { UI } from '../../shared/ui';
 import { LogEntry, LogLevel, LogMethod, LogStatusFilter, validFilters } from './infra-logs.models';
 import { InfraLogsStore } from './infra-logs.store';
-import { explainLog, statusName } from './infra-logs-explanations';
+import { explainLog, hasSpecificExplanation, statusName } from './infra-logs-explanations';
 import { downloadFilename, groupEntries, issueMarkdown, LogGroup, routeInsights, routeSegment, toCsv, toText } from './infra-logs-diagnostics';
 
 @Component({
@@ -211,10 +211,13 @@ export class InfraLogs implements OnDestroy {
     const next = entries[index + delta]; if (next) this.selectedId.set(next.id);
   }
   explanation(entry: LogEntry) { return explainLog(entry); }
+  showRowExplanation(entry: LogEntry): boolean {
+    return hasSpecificExplanation(entry) && (entry.level === 'WARN' || entry.level === 'ERROR' ||
+      (entry.status !== null && entry.status >= 400) || entry.event === 'JWT_REJECTED' || entry.event === 'UNEXPECTED_ERROR');
+  }
   language(value: { es: string; en: string }): string { return value[this.i18n.locale()]; }
   relativeTime(timestamp: string): string {
-    const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(timestamp)) / 60_000));
-    return minutes < 1 ? 'ahora' : `hace ${minutes} min`;
+    return Date.now() - Date.parse(timestamp) < 60_000 ? 'ahora' : this.time(timestamp);
   }
   jumpToDate(): void { if (this.jumpValue()) { this.autoScroll.set(false); this.selectedId.set(null); this.store.jumpTo(new Date(this.jumpValue()).toISOString()); } }
   jumpPreset(minutes: number): void { const date = new Date(Date.now() - minutes * 60_000); this.jumpValue.set(new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)); this.jumpToDate(); }
@@ -261,6 +264,10 @@ export class InfraLogs implements OnDestroy {
     const frameIndex = entry.lines.findIndex(line => /\bat com\.[\w.$]+\(/.test(line));
     return entry.lines.map((text, index) => ({ text, applicationFrame: index === frameIndex }));
   }
+  continuationLines(entry: LogEntry): { text: string; applicationFrame: boolean }[] {
+    return this.stackLines(entry).filter((line, index) => index > 0 && line.text !== entry.lines[0]);
+  }
+  continuationText(entry: LogEntry): string { return this.continuationLines(entry).map(line => line.text).join('\n'); }
   closeDetail(): void {
     const id = this.selectedId(); this.selectedId.set(null);
     queueMicrotask(() => {

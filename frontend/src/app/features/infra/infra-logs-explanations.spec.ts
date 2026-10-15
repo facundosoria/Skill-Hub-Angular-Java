@@ -11,11 +11,14 @@ describe('gateway log explanations', () => {
   });
   it('explains known gateway events and uses neutral copy for unknown events', () => {
     expect(explainLog(logEntry(1, { status: 500, event: 'UNEXPECTED_ERROR' })).meaning.es).toContain('no controlado');
-    expect(explainLog(logEntry(1, { status: null, event: 'UNLISTED_EVENT' })).meaning.es).toContain('No hay una explicación');
+    expect(explainLog(logEntry(1, { status: null, event: 'UNLISTED_EVENT' })).meaning.es).toContain('resume información registrada');
   });
   it('labels requested common HTTP statuses in both locales', () => {
     expect(statusName(201, 'es')).toBe('Creado');
     expect(statusName(503, 'es')).toBe('Servicio no disponible');
     expect(statusName(404, 'en')).toBe('Not found');
+  });
+  it('explains unmapped 4xx statuses without using the neutral fallback', () => {
+    expect(explainLog(logEntry(1, { status: 418 })).meaning.es).toContain('rechazó la solicitud');
   });
 });

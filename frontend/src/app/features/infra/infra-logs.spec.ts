@@ -47,7 +47,7 @@ describe('Gateway log panel', () => {
     const { fixture, panel } = await configure(mockStore([logEntry(150, { method: null, route: null, lines: [malicious, '<b>second line</b>'] })]));
     panel.selectedId.set('g7:150'); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('img')).toBeNull(); expect(fixture.nativeElement.querySelector('script')).toBeNull();
-    expect(fixture.nativeElement.querySelector('.log-continuations').textContent).toBe(malicious + '\n<b>second line</b>');
+    expect(fixture.nativeElement.querySelector('.log-continuations').textContent).toBe('<b>second line</b>');
     expect(fixture.nativeElement.textContent).toContain(malicious);
     expect(fixture.nativeElement.querySelector('[role="list"]').getAttribute('aria-live')).toBe('off');
   });
@@ -57,6 +57,7 @@ describe('Gateway log panel', () => {
       logEntry(2, { status: 302 }),
       logEntry(3, { status: 404 }),
       logEntry(4, { status: 500 }),
+      logEntry(5, { level: 'WARN', status: 200, event: 'UNLISTED_EVENT' }),
     ];
     const { fixture } = await configure(mockStore(entries));
     const rows = Array.from(fixture.nativeElement.querySelectorAll('.log-row')) as HTMLElement[];
@@ -67,6 +68,11 @@ describe('Gateway log panel', () => {
     expect(rows[1].querySelector('.log-request span')?.classList.contains('text-text-muted')).toBe(true);
     expect(rows[2].querySelector('.log-request span')?.classList.contains('text-warning')).toBe(true);
     expect(rows[3].querySelector('.log-request span')?.classList.contains('text-danger')).toBe(true);
+    expect(rows[0].querySelector('.log-meaning')).toBeNull();
+    expect(rows[1].querySelector('.log-meaning')).toBeNull();
+    expect(rows[2].querySelector('.log-meaning')?.textContent).toContain('ruta no existe');
+    expect(rows[3].querySelector('.log-meaning')?.textContent).toContain('falló el servidor');
+    expect(rows[4].querySelector('.log-meaning')).toBeNull();
   });
   it('shows full event details, copy actions, and trace filtering in the detail panel', async () => {
     const entry = logEntry(8, { logger: 'com.example.gateway.LoggingFilter', event: 'REQUEST_COMPLETED',
@@ -77,6 +83,7 @@ describe('Gateway log panel', () => {
     expect(text).toContain('UTC:'); expect(text).toContain('Creado'); expect(text).toContain('Lenta');
     expect(text).toContain('com.example.gateway.LoggingFilter'); expect(text).toContain('synthetic reason');
     expect(text).toContain('2222222222222222'); expect(text).toContain('safe event line');
+    expect(text).toContain('Nivel'); expect(text).not.toContain('Nivel (sin selección: todos)');
     expect(fixture.nativeElement.querySelectorAll('.detail-copy').length).toBe(3);
     expect(fixture.nativeElement.querySelector('.log-continuations')?.textContent).toContain('continuation');
     const traceButton = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
@@ -134,6 +141,10 @@ describe('Gateway log panel', () => {
     expect(panel.summaryStats()).toMatchObject({ classes: { '2xx': 1, '3xx': 0, '4xx': 1, '5xx': 1 }, warningsErrors: 2, slowest: 30, average: 20 });
     panel.applySummaryStatus('4xx'); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['4xx'] });
     fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('4xx: 1');
+    const summary = Array.from(fixture.nativeElement.querySelectorAll('.summary-chip') as NodeListOf<HTMLButtonElement>)
+      .find(button => button.textContent?.startsWith('4xx'))!;
+    expect(summary.getAttribute('aria-pressed')).toBe('true');
+    expect(summary.classList.contains('is-selected')).toBe(true);
   });
   it('renders only a bounded window for 5000 events and offers pages of at most 150', async () => {
     const { fixture, panel } = await configure(mockStore(Array.from({ length: 5000 }, (_, index) => logEntry(index + 1))));
@@ -187,6 +198,38 @@ describe('Gateway log panel', () => {
     const text = fixture.nativeElement.textContent;
     expect(text).toContain('fuente de logs está desconectada'); expect(text).toContain('historial ya no está disponible');
     expect(text).toContain('límite del navegador'); expect(text).toContain('hueco en la conexión');
+  });
+  it('does not show a retention warning for an empty starting collector', async () => {
+    const { fixture, store } = await configure();
+    store.entries.set([]); store.status.set(logStatus({ sourceStatus: 'starting', retentionTruncated: true }));
+    store.capacityLimited.set(false); fixture.detectChanges();
+    expect(fixture.nativeElement.textContent).not.toContain('Parte del historial ya no está disponible');
+  });
+  it('keeps compact filter controls and the follow/help disclosures collapsed', async () => {
+    const { fixture, panel } = await configure();
+    const follow = fixture.nativeElement.querySelector('.log-toolbar details') as HTMLDetailsElement;
+    expect(follow).not.toBeNull(); expect(follow.open).toBe(false);
+    expect(fixture.nativeElement.querySelectorAll('.log-filter-row').length).toBe(2);
+    panel.toggleMethod('GET'); fixture.detectChanges();
+    const getChip = Array.from(fixture.nativeElement.querySelectorAll('.log-method-chip') as NodeListOf<HTMLButtonElement>)
+      .find(button => button.textContent?.trim() === 'GET');
+    expect(getChip?.getAttribute('aria-pressed')).toBe('true'); expect(getChip?.classList.contains('is-selected')).toBe(true);
+  });
+  it('shows related events with a count and keeps continuation lines distinct from the main line', async () => {
+    const traceId = '1'.repeat(32);
+    const entries = [logEntry(1, { traceId, lines: ['main', 'main', 'continuation'] }), logEntry(2, { traceId })];
+    const { fixture, panel } = await configure(mockStore(entries));
+    panel.detail(entries[0]); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.log-continuations')?.textContent).toBe('continuation');
+    expect(fixture.nativeElement.querySelector('.related-count')?.textContent).toContain('2');
+    expect(fixture.nativeElement.querySelectorAll('.related-events button').length).toBe(2);
+    expect(fixture.nativeElement.querySelector('.detail-actions')?.textContent).toContain('Copiar evento');
+    expect(fixture.nativeElement.querySelector('.detail-actions')?.textContent).toContain('Copiar para un issue');
+    expect(fixture.nativeElement.querySelector('.detail-actions')?.textContent).toContain('Ver solo esta traza');
+  });
+  it('uses an absolute timestamp instead of keeping the relative label at now', async () => {
+    const { panel } = await configure();
+    expect(panel.relativeTime(new Date(Date.now() - 60_001).toISOString())).not.toBe('ahora');
   });
   it('renders errors and quota waits and disables early live retry', async () => {
     const { fixture, store } = await configure(); store.errorCode.set('session'); store.connection.set('revoked'); fixture.detectChanges();

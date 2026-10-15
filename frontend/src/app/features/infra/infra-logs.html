@@ -19,58 +19,52 @@
       </div>
     </div>
     <div class="log-filters">
-      <fieldset>
-        <legend class="mb-1 text-sm">{{ t().level }}</legend>
-        <div class="flex gap-3">
+      <div class="log-filter-row log-filter-primary">
+        <fieldset><legend>{{ t().level }}</legend><div class="log-levels">
           @for (level of ['INFO', 'WARN', 'ERROR']; track level) {
-            <label class="inline-flex min-h-11 items-center gap-1 text-sm"><input type="checkbox" [checked]="levels().includes($any(level))" (change)="toggleLevel($any(level))" />{{ level }}</label>
+            <label class="log-level-option"><input type="checkbox" [checked]="levels().includes($any(level))" (change)="toggleLevel($any(level))" />{{ level }}</label>
           }
-        </div>
-      </fieldset>
-      <label class="text-sm">{{ t().text }}
-        <input uiInput class="mt-1" type="search" maxlength="120" [value]="query()" (input)="setQuery($any($event.target).value)" />
-      </label>
-      <label class="text-sm">{{ t().trace }}
-        <input uiInput class="mt-1 font-mono" type="text" maxlength="32" spellcheck="false" autocomplete="off" [value]="traceId()" [attr.aria-invalid]="invalid()" aria-describedby="logs-filter-error" (input)="setTrace($any($event.target).value)" />
-      </label>
-      <label class="text-sm">{{ t().route }}
-        <input uiInput class="mt-1" type="search" maxlength="120" list="log-route-suggestions" [value]="route()" (input)="setRoute($any($event.target).value)" />
-        <datalist id="log-route-suggestions">@for (suggestion of routeSuggestions(); track suggestion) { <option [value]="suggestion"></option> }</datalist>
-      </label>
-      <fieldset><legend>{{ t().method }}</legend><div class="flex flex-wrap gap-2">
-        @for (method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']; track method) { <button type="button" uiButton variant="secondary" class="log-action" [attr.aria-pressed]="methods().includes($any(method))" (click)="toggleMethod($any(method))">{{ method }}</button> }
-      </div></fieldset>
-      <fieldset><legend>{{ t().status }}</legend><div class="flex flex-wrap gap-2">
-        @for (item of [{ id: '2xx', label: '2xx OK' }, { id: '3xx', label: '3xx Redirección' }, { id: '4xx', label: '4xx Error del cliente' }, { id: '5xx', label: '5xx Error del servidor' }]; track item.id) { <button type="button" uiButton variant="secondary" class="log-action" [attr.aria-pressed]="statuses().includes($any(item.id))" (click)="toggleStatus($any(item.id))">{{ item.label }}</button> }
-      </div></fieldset>
-      <label class="text-sm">{{ t().slowerThan }}
-        <select uiInput class="mt-1" [value]="minDurationMs() ?? ''" (change)="setMinDuration($any($event.target).value)">
-          <option value="">{{ t().allDurations }}</option><option value="201">200 ms</option><option value="501">500 ms</option><option value="1001">1 s</option><option value="3001">3 s</option>
-        </select>
-      </label>
-      <button type="button" uiButton variant="secondary" class="log-action self-end" (click)="clearFilters()">{{ t().clear }}</button>
-    </div>
-    <div class="flex flex-wrap gap-2">
-      <button type="button" uiButton variant="secondary" class="log-action" (click)="preset('errors')">{{ t().onlyErrors }}</button>
-      <button type="button" uiButton variant="secondary" class="log-action" (click)="preset('slow')">{{ t().onlySlow }}</button>
-      <button type="button" uiButton variant="secondary" class="log-action" (click)="preset('rejected')">{{ t().onlyRejected }}</button>
-    </div>
-    <div class="rounded-lg border border-border p-3 text-sm">
-      <h3 class="font-semibold">{{ t().followRequests }}</h3>
-      <p class="text-text-muted">{{ t().followHint }}</p>
-      <div class="mt-2 flex flex-wrap items-end gap-2">
-        <label>{{ t().jumpDate }}<input uiInput class="mt-1" type="datetime-local" [value]="jumpValue()" [min]="datetimeLocal(store.status()?.coverageStart ?? null)" [max]="nowLocal()" (input)="jumpValue.set($any($event.target).value)" /></label>
-        <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpToDate()" [disabled]="!jumpValue()">{{ t().go }}</button>
-        <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpPreset(15)">{{ t().ago15min }}</button>
-        <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpPreset(60)">{{ t().ago1hour }}</button>
-        <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpPreset(180)">{{ t().ago3hours }}</button>
+        </div></fieldset>
+        <label>{{ t().text }}<input uiInput class="mt-1 w-full" type="search" maxlength="120" [value]="query()" (input)="setQuery($any($event.target).value)" /></label>
+        <label>{{ t().route }}<input uiInput class="mt-1 w-full" type="search" maxlength="120" list="log-route-suggestions" [value]="route()" (input)="setRoute($any($event.target).value)" /><datalist id="log-route-suggestions">@for (suggestion of routeSuggestions(); track suggestion) { <option [value]="suggestion"></option> }</datalist></label>
+        <label>{{ t().trace }}<input uiInput class="mt-1 w-full font-mono" type="text" maxlength="32" spellcheck="false" autocomplete="off" [value]="traceId()" [attr.aria-invalid]="invalid()" aria-describedby="logs-filter-error" (input)="setTrace($any($event.target).value)" /></label>
       </div>
-      <p class="mt-1 text-xs text-text-muted">{{ t().sixHourHint }}</p>
+      <div class="log-filter-row log-filter-secondary">
+        <fieldset><legend>{{ t().method }}</legend><div class="log-chip-row">
+          @for (method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']; track method) { <button type="button" class="log-chip log-method-chip" [class.is-selected]="methods().includes($any(method))" [attr.aria-pressed]="methods().includes($any(method))" (click)="toggleMethod($any(method))">{{ method }}</button> }
+        </div></fieldset>
+        <fieldset><legend>{{ t().status }}</legend><div class="log-chip-row">
+          @for (item of [{ id: '2xx', label: '2xx OK' }, { id: '3xx', label: '3xx Redirección' }, { id: '4xx', label: '4xx Error del cliente' }, { id: '5xx', label: '5xx Error del servidor' }]; track item.id) { <button type="button" class="log-chip" [class.is-selected]="statuses().includes($any(item.id))" [attr.aria-pressed]="statuses().includes($any(item.id))" (click)="toggleStatus($any(item.id))">{{ item.label }}</button> }
+        </div></fieldset>
+        <label class="log-duration">{{ t().slowerThan }}<select uiInput class="mt-1 w-full" [value]="minDurationMs() ?? ''" (change)="setMinDuration($any($event.target).value)"><option value="">{{ t().allDurations }}</option><option value="201">200 ms</option><option value="501">500 ms</option><option value="1001">1 s</option><option value="3001">3 s</option></select></label>
+        <div class="log-presets" aria-label="{{ t().presets }}">
+          <button type="button" class="log-chip" (click)="preset('errors')">{{ t().onlyErrors }}</button>
+          <button type="button" class="log-chip" (click)="preset('slow')">{{ t().onlySlow }}</button>
+          <button type="button" class="log-chip" (click)="preset('rejected')">{{ t().onlyRejected }}</button>
+        </div>
+        <button type="button" class="log-chip log-clear" (click)="clearFilters()">{{ t().clear }}</button>
+      </div>
     </div>
-    <details class="rounded-lg border border-border p-3 text-sm">
-      <summary class="min-h-11 cursor-pointer font-semibold">{{ t().howRead }}</summary>
-      <div class="space-y-2 pt-2 text-text-muted"><p>{{ t().helpLevels }}</p><p>{{ t().helpStates }}</p><p>{{ t().helpRetention }}</p><p>{{ t().helpPrivacy }}</p><p>{{ t().helpSource }}</p><p>{{ t().helpRevocation }}</p><p>{{ t().helpGlossary }}</p></div>
-    </details>
+    <div class="log-toolbar text-sm">
+      <details class="log-disclosure">
+        <summary>{{ t().followRequests }}</summary>
+        <div class="log-disclosure-content">
+          <p class="text-text-muted">{{ t().followHint }}</p>
+          <div class="mt-2 flex flex-wrap items-end gap-2">
+            <label>{{ t().jumpDate }}<input uiInput class="mt-1" type="datetime-local" [value]="jumpValue()" [min]="datetimeLocal(store.status()?.coverageStart ?? null)" [max]="nowLocal()" (input)="jumpValue.set($any($event.target).value)" /></label>
+            <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpToDate()" [disabled]="!jumpValue()">{{ t().go }}</button>
+            <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpPreset(15)">{{ t().ago15min }}</button>
+            <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpPreset(60)">{{ t().ago1hour }}</button>
+            <button type="button" uiButton variant="secondary" class="log-action" (click)="jumpPreset(180)">{{ t().ago3hours }}</button>
+          </div>
+          <p class="mt-1 text-xs text-text-muted">{{ t().sixHourHint }}</p>
+        </div>
+      </details>
+      <details class="log-disclosure">
+        <summary>{{ t().howRead }}</summary>
+        <div class="log-disclosure-content space-y-2 text-text-muted"><p>{{ t().helpLevels }}</p><p>{{ t().helpStates }}</p><p>{{ t().helpRetention }}</p><p>{{ t().helpPrivacy }}</p><p>{{ t().helpSource }}</p><p>{{ t().helpRevocation }}</p><p>{{ t().helpGlossary }}</p></div>
+      </details>
+    </div>
     @if (store.historyAt(); as historyAt) { <p class="rounded bg-warning/10 p-2 text-sm" role="status">{{ t().historyFrom }} {{ time(historyAt) }}</p> }
     @if (activeFilterLabels().length) { <div class="flex flex-wrap gap-2" [attr.aria-label]="t().activeFilters">
       @for (filter of activeFilterLabels(); track filter.name) { <button type="button" class="rounded-full border border-border px-3 py-1 text-xs" (click)="removeFilter(filter.name)" [attr.aria-label]="t().removeFilter + ' ' + filter.label">{{ filter.label }} ×</button> }
@@ -92,7 +86,7 @@
       <p class="text-text-muted">{{ t().coverage }}: {{ time(status.coverageStart) }} · {{ t().source }}: {{ sourceLabel() }}</p>
       @if (status.sourceStatus === 'disconnected') { <p class="text-warning">{{ t().sourceDisconnected }} · {{ t().lastEvent }}: {{ time(store.lastEventAt()) }}</p> }
       @if (status.sourceStatus === 'starting') { <p class="text-text-muted">{{ t().sourceStarting }}</p> }
-      @if (status.retentionTruncated || store.capacityLimited()) { <p class="text-warning">{{ t().retention }}</p> }
+      @if (status.sourceStatus !== 'starting' && (status.retentionTruncated || store.capacityLimited())) { <p class="text-warning">{{ t().retention }}</p> }
     }
     @if (store.browserTruncated()) { <p class="text-warning">{{ t().browserLimit }}</p> }
     @if (store.discontinuity(); as discontinuity) {
@@ -108,8 +102,8 @@
       <button type="button" uiButton variant="secondary" class="log-action" [attr.aria-pressed]="accessible()" (click)="toggleAccessible()">{{ accessible() ? t().virtualView : t().accessibleView }}</button>
     </div>
   </div>
-  <div class="flex flex-wrap gap-3 border-b border-border p-3 text-sm" aria-label="Resumen de eventos">
-    @for (status of ['2xx', '3xx', '4xx', '5xx']; track status) { <button type="button" class="underline" (click)="applySummaryStatus($any(status))">{{ status }}: {{ summaryStats().classes[status] }}</button> }
+  <div class="log-summary" aria-label="Resumen de eventos">
+    @for (status of ['2xx', '3xx', '4xx', '5xx']; track status) { <button type="button" class="summary-chip" [class.is-selected]="statuses().includes($any(status))" [attr.aria-pressed]="statuses().includes($any(status))" (click)="applySummaryStatus($any(status))">{{ status }}: {{ summaryStats().classes[status] }}</button> }
     <span>{{ t().warningsErrors }}: {{ summaryStats().warningsErrors }}</span>
     <span>{{ t().slowest }}: {{ summaryStats().slowest ?? '—' }} ms</span>
     <span>{{ t().average }}: {{ summaryStats().average ?? '—' }} ms</span>
@@ -120,8 +114,8 @@
   </section>
   @if (routeStats().length) {
     <section class="grid gap-3 border-b border-border p-3 text-sm md:grid-cols-2" aria-label="{{ t().routeFrequency }} / {{ t().routeErrors }}">
-      <div><h3 class="font-semibold">{{ t().routeFrequency }}</h3><table class="w-full text-left"><thead><tr><th>{{ t().route }}</th><th>{{ t().routeCount }}</th></tr></thead><tbody>@for (item of frequentRoutes(); track item.route) { <tr><td><button type="button" class="min-h-11 break-all text-left underline" (click)="filterRoute(item.route)">{{ item.route }}</button></td><td>{{ item.count }}</td></tr> }</tbody></table></div>
-      <div><h3 class="font-semibold">{{ t().routeErrors }}</h3><table class="w-full text-left"><thead><tr><th>{{ t().route }}</th><th>{{ t().routeErrorCount }}</th></tr></thead><tbody>@for (item of errorRoutes(); track item.route) { <tr><td><button type="button" class="min-h-11 break-all text-left underline" (click)="filterRoute(item.route)">{{ item.route }}</button></td><td>{{ item.errorCount }}</td></tr> }</tbody></table></div>
+      <div><h3 class="font-semibold">{{ t().routeFrequency }}</h3><table class="route-stats-table"><thead><tr><th>{{ t().route }}</th><th>{{ t().routeCount }}</th></tr></thead><tbody>@for (item of frequentRoutes(); track item.route) { <tr><td><button type="button" class="route-stat-link" (click)="filterRoute(item.route)">{{ item.route }}</button></td><td class="route-stat-number">{{ item.count }}</td></tr> }</tbody></table></div>
+      <div><h3 class="font-semibold">{{ t().routeErrors }}</h3><table class="route-stats-table"><thead><tr><th>{{ t().route }}</th><th>{{ t().routeErrorCount }}</th></tr></thead><tbody>@for (item of errorRoutes(); track item.route) { <tr><td><button type="button" class="route-stat-link" (click)="filterRoute(item.route)">{{ item.route }}</button></td><td class="route-stat-number">{{ item.errorCount }}</td></tr> }</tbody></table></div>
     </section>
   }
   @if (store.connection() === 'loading') {
@@ -149,7 +143,7 @@
               @if (entry.durationMs != null) { · {{ entry.durationMs }} ms }
             </span>
           } @else { <span>{{ summary(entry) }}</span> }
-          <span class="log-meaning">{{ language(explanation(entry).meaning) }}</span>
+          @if (showRowExplanation(entry)) { <span class="log-meaning">{{ language(explanation(entry).meaning) }}</span> }
         </button>
         @if (routePart(entry); as segment) { <button type="button" class="route-chip" (click)="filterPathSegment(segment)" [attr.aria-label]="t().route + ': ' + segment">{{ segment }}</button> }
         @if (group.entries.length > 1) { <button type="button" class="log-group-toggle" (click)="toggleExpanded(group)" [attr.aria-expanded]="expandedGroup() === group.key" [attr.aria-label]="t().collapseGroup">{{ group.entries.length }} {{ t().groupDetails }} · {{ t().firstEvent }} {{ time(groupTimes(group).first) }} · {{ t().lastGroupEvent }} {{ time(groupTimes(group).last) }}</button> }
@@ -190,15 +184,15 @@
         @if (hasSpanId(entry)) { <div><dt>Span ID</dt><dd class="break-all font-mono">{{ entry.spanId }} <button type="button" uiButton variant="secondary" class="detail-copy" (click)="copy(entry.spanId!)">{{ t().copy }}</button></dd></div> }
       </dl>
       @if (entry.redacted) { <p class="mt-3 text-sm text-text-muted">{{ t().redactedNote }}</p> }
-      <div class="mt-3"><button type="button" uiButton variant="secondary" class="log-action" (click)="copyIssue(entry)">{{ t().copyIssue }}</button></div>
-      @if (hasTraceId(entry)) { <div class="mt-3"><h4 class="font-semibold">{{ t().relatedTrace }}</h4><button type="button" uiButton variant="secondary" class="log-action" (click)="filterByTrace(entry)">{{ t().showRelated }}</button><ul>@for (related of relatedEntries(entry); track related.id) { <li><button type="button" class="underline" (click)="detail(related)">{{ time(related.timestamp) }} · {{ related.event }} · {{ related.status ?? '—' }}</button></li> }</ul></div> }
-      <div class="mt-2"><h4 class="text-sm font-semibold">{{ t().sanitizedLine }}</h4><pre class="log-detail log-raw-line">{{ entry.lines[0] }}</pre></div>
-      <div class="mt-3"><h4 class="text-sm font-semibold">{{ t().continuation }}</h4><pre class="log-detail log-continuations">@for (line of stackLines(entry); track $index) {<span [class.application-frame]="line.applicationFrame">{{ line.text }}</span>@if (!$last) {<span>&#10;</span>}}</pre>
-        <button type="button" uiButton variant="secondary" class="detail-copy mt-2" (click)="copy(entry.lines.join('\n'))">{{ t().copyLines }}</button></div>
-      <div class="mt-3 flex flex-wrap gap-2">
-        @if (hasTraceId(entry)) { <button type="button" uiButton variant="secondary" class="log-action" (click)="filterByTrace(entry)">{{ t().traceOnly }}</button> }
+      <div class="detail-actions">
         <button type="button" uiButton variant="secondary" class="log-action" (click)="copy(eventJson(entry))">{{ t().copyEvent }}</button>
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="copyIssue(entry)">{{ t().copyIssue }}</button>
+        @if (hasTraceId(entry)) { <button type="button" uiButton variant="secondary" class="log-action" (click)="filterByTrace(entry)">{{ t().traceOnly }}</button> }
       </div>
+      @if (hasTraceId(entry)) { <div class="mt-3"><h4 class="font-semibold">{{ t().relatedTrace }} <span class="related-count">({{ relatedEntries(entry).length }})</span></h4><button type="button" uiButton variant="secondary" class="log-action" (click)="filterByTrace(entry)">{{ t().showRelated }}</button><ul class="related-events mt-2">@for (related of relatedEntries(entry); track related.id) { <li><button type="button" class="related-event" (click)="detail(related)">{{ time(related.timestamp) }} · {{ related.event }} · {{ related.status ?? '—' }}</button></li> }</ul></div> }
+      <div class="mt-2"><h4 class="text-sm font-semibold">{{ t().sanitizedLine }}</h4><pre class="log-detail log-raw-line">{{ entry.lines[0] }}</pre></div>
+      @if (continuationLines(entry).length) { <div class="mt-3"><h4 class="text-sm font-semibold">{{ t().continuation }}</h4><pre class="log-detail log-continuations">@for (line of continuationLines(entry); track $index) {<span [class.application-frame]="line.applicationFrame">{{ line.text }}</span>@if (!$last) {<span>&#10;</span>}}</pre>
+        <button type="button" uiButton variant="secondary" class="detail-copy mt-2" (click)="copy(continuationText(entry))">{{ t().copyLines }}</button></div> }
     </section>
   }
   <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4 text-sm">
