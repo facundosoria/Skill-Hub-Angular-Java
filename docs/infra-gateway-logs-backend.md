@@ -47,6 +47,8 @@ Authenticated GET routes under `/api/infra/logs/api-gateway`:
   keepalives. Replay overflow emits `gap`, an expired/new-generation cursor
   emits `reset`, and session revocation emits `access-revoked`, then closes.
 
+Normal and equivalent matrix/percent-encoded routes honor the feature flag and
+hide query diagnostics; encoded slashes are rejected by the default connector.
 Responses use `Cache-Control: private, no-store, no-transform`; SSE also uses
 `X-Accel-Buffering: no`. Errors contain `code` and a Spanish `message`; 429
 includes `Retry-After`. Unknown/duplicate parameters and queries over 2 KiB are
