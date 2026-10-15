@@ -7,9 +7,40 @@ logs. `app.infra.logs.enabled` defaults to `false` (`APP_INFRA_LOGS_ENABLED`);
 (`APP_INFRA_LOGS_DIR`). Disabled routes return 404 before authentication and do
 not open source files. This feature is independent of `app.infra.enabled`.
 
-Mount the entire dedicated collector directory read-only. Backend UID/GID 1001
-must be able to traverse the directory and read files (0750/0640, with an
-appropriate reader group or ACL). Symlinks are rejected. Only filenames listed
+Mount the entire dedicated collector directory read-only. The overlay requires
+`INFRA_LOGS_GID`, the numeric host GID of `tpi-log-read`, and adds it as a
+supplementary group to backend UID/GID 1001. The directory and files keep their
+0750/0640 permissions; the backend does not need root or the Docker group.
+Resolve and validate the GID before composing:
+
+```sh
+export INFRA_LOGS_GID="$(getent group tpi-log-read | cut -d: -f3)"
+case "$INFRA_LOGS_GID" in ''|*[!0-9]*) echo 'Set the numeric gid of tpi-log-read' >&2; exit 1 ;; esac
+```
+
+Recommended before activation, after the collector publishes its first
+manifest: verify actual file opens as UID 1001 with that supplementary GID on
+the host (adjust the directory if using `INFRA_LOGS_DIR`). This prints no log
+contents and changes no ownership or permissions:
+
+```sh
+sudo setpriv --reuid=1001 --regid=1001 --groups="$INFRA_LOGS_GID" --no-new-privs \
+  python3 - /var/lib/tpi-log-view/sanitized <<'PY'
+import json
+from pathlib import Path
+import sys
+root = Path(sys.argv[1])
+manifest = json.loads((root / 'manifest.json').read_bytes())
+for segment in manifest['segments']:
+    with (root / segment['file']).open('rb') as source:
+        source.read(1)
+print('Sanitized log files are readable as UID 1001')
+PY
+```
+
+The container still needs the correct read-only bind mount and host directory
+traversal permissions. Compose validation alone cannot prove those permissions.
+Symlinks are rejected. Only filenames listed
 in the current manifest are opened; no client input selects a path. Unknown
 event fields never enter the API DTO. Incomplete final lines wait for the next
 poll. Generation changes discard the index; removed segments shorten coverage.

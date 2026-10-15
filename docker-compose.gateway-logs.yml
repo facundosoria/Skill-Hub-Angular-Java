@@ -1,6 +1,8 @@
 # Opt-in sanitized gateway log source. Append this file to the complete existing overlay chain.
 services:
   backend:
+    group_add:
+      - ${INFRA_LOGS_GID:?set the numeric gid of tpi-log-read}
     environment:
       APP_INFRA_LOGS_ENABLED: "true"
       APP_INFRA_LOGS_DIR: /var/lib/tpi-log-view/sanitized
