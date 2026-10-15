@@ -1,0 +1,3 @@
+# Fixed operator-owned configuration; never populated from an HTTP request.
+LOG_CONTAINER=api-gateway
+LOG_OUT_DIR=/var/lib/tpi-log-view/sanitized

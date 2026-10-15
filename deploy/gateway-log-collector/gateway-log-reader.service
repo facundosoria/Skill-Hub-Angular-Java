@@ -1,0 +1,46 @@
+[Unit]
+Description=Fixed api-gateway Docker log source
+Requires=gateway-log-writer.service
+After=gateway-log-writer.service docker.service
+
+[Service]
+Type=simple
+User=tpi-log-source
+Group=tpi-log-pipe
+SupplementaryGroups=docker
+WorkingDirectory=/opt/gateway-log-collector
+Environment=PYTHONNOUSERSITE=1
+Environment=LOG_OUT_DIR=/var/lib/tpi-log-view/sanitized
+Environment=LOG_CONTAINER=api-gateway
+Environment=DOCKER_HOST=unix:///run/docker.sock
+Environment=DOCKER_CONFIG=/nonexistent
+EnvironmentFile=-/etc/gateway-log-collector.conf
+ExecStart=/usr/bin/python3 -B -m gateway_log_collector reader --docker /usr/bin/docker --container ${LOG_CONTAINER} --socket /run/gateway-log-collector/source.sock
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=10
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadOnlyPaths=/run/gateway-log-collector
+InaccessiblePaths=-/var/lib/tpi-log-view -/var/lib/docker
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectKernelLogs=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+LimitCORE=0
+LimitNOFILE=128
+MemoryMax=64M
+TasksMax=32
+
+[Install]
+WantedBy=multi-user.target
