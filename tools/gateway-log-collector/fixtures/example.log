@@ -1,0 +1,4 @@
+2026-01-01T12:34:56.123456789Z 12:34:56.123  INFO [api-gateway,1234567890abcdef1234567890abcdef,1234567890abcdef,fictitiousRequestSecret] a.e.u.f.t.p.a.filters.LoggingFilter - GET /api/users/profile/fictional%40example.invalid?token=fictitiousQuerySecret -> 200 (17 ms)
+2026-01-01T12:34:56.123456789Z 12:34:56.123  WARN [api-gateway,1234567890abcdef1234567890abcdef,1234567890abcdef,fictitiousRequestSecret] a.e.u.f.t.p.a.security.SessionValidator - JWT_REJECTED reason=session-closed sub=fictitiousPerson
+2026-01-01T12:34:56.123456789Z 12:34:56.123 ERROR [api-gateway,,,] a.e.u.f.t.p.a.w.GatewayErrorHandler - UNEXPECTED_ERROR POST /api/invitations/accept/fictitiousInvitationSecret
+Caused by: java.lang.Exception: Cookie: fu_at=fictitiousCookieSecret
