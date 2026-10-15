@@ -21,6 +21,13 @@ export function logPage(overrides: Partial<LogPage> = {}): LogPage {
     nextBefore: 'g7:150', nextAfter: 'g7:150', hasMoreBefore: true, hasMoreAfter: false,
     entries: [logEntry()], ...overrides };
 }
+// Cold HTTP bodies follow the backend response shape with the clarified starting status.
+export function coldLogStatus(): LogStatus {
+  return JSON.parse('{"sourceStatus":"starting","generation":null,"coverageStart":null,"headCursor":null,"oldestCursor":null,"omittedCount":0,"retentionTruncated":false,"activeStreams":0,"accountBlockedUntil":null}');
+}
+export function coldLogPage(): LogPage {
+  return JSON.parse('{"service":"api-gateway","generation":null,"generatedAt":"2026-10-14T06:51:00Z","retentionSeconds":21600,"coverageStart":null,"sourceStatus":"starting","lastSourceContactAt":null,"lastEventAt":null,"policyVersion":null,"capacityLimited":false,"omittedCount":0,"headCursor":null,"oldestCursor":null,"nextBefore":null,"nextAfter":null,"hasMoreBefore":false,"hasMoreAfter":false,"entries":[]}');
+}
 export class FakeLogSource implements LogEventSource {
   private listeners = new Map<string, ((event: MessageEvent<string>) => void)[]>();
   closed = false;

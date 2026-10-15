@@ -19,10 +19,10 @@ export interface LogEntry {
 export interface LogFilters { levels: LogLevel[]; q: string; traceId: string }
 export interface LogStatus {
   sourceStatus: SourceStatus;
-  generation: string;
-  coverageStart: string;
-  headCursor: string;
-  oldestCursor: string;
+  generation: string | null;
+  coverageStart: string | null;
+  headCursor: string | null;
+  oldestCursor: string | null;
   omittedCount: number;
   retentionTruncated: boolean;
   activeStreams: number;
@@ -30,25 +30,25 @@ export interface LogStatus {
 }
 export interface LogPage {
   service: 'api-gateway';
-  generation: string;
+  generation: string | null;
   generatedAt: string;
   retentionSeconds: number;
-  coverageStart: string;
+  coverageStart: string | null;
   sourceStatus: SourceStatus;
   lastSourceContactAt: string | null;
   lastEventAt: string | null;
-  policyVersion: string;
+  policyVersion: string | null;
   capacityLimited: boolean;
   omittedCount: number;
-  headCursor: string;
-  oldestCursor: string;
+  headCursor: string | null;
+  oldestCursor: string | null;
   nextBefore: string | null;
-  nextAfter: string;
+  nextAfter: string | null;
   hasMoreBefore: boolean;
   hasMoreAfter: boolean;
   entries: LogEntry[];
 }
-export type LogConnection = 'loading' | 'connecting' | 'live' | 'reconnecting' | 'polling' | 'paused' | 'hidden' | 'blocked' | 'error' | 'revoked';
+export type LogConnection = 'loading' | 'starting' | 'connecting' | 'live' | 'reconnecting' | 'polling' | 'paused' | 'hidden' | 'blocked' | 'error' | 'revoked';
 export const EMPTY_FILTERS: LogFilters = { levels: [], q: '', traceId: '' };
 export function validFilters(filters: LogFilters): boolean {
   return filters.q.length <= 120 && (!filters.traceId || /^[\da-f]{32}$/i.test(filters.traceId)) &&

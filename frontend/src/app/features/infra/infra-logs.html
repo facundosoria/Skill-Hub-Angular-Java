@@ -46,7 +46,7 @@
       </p>
     }
     @if (store.status(); as status) {
-      <p class="text-text-muted">{{ t().coverage }}: {{ time(status.coverageStart) }} · {{ t().source }}: {{ t()[status.sourceStatus] }}</p>
+      <p class="text-text-muted">{{ t().coverage }}: {{ time(status.coverageStart) }} · {{ t().source }}: {{ sourceLabel() }}</p>
       @if (status.sourceStatus === 'disconnected') { <p class="text-warning">{{ t().sourceDisconnected }}</p> }
       @if (status.sourceStatus === 'starting') { <p class="text-text-muted">{{ t().sourceStarting }}</p> }
       @if (status.retentionTruncated || store.capacityLimited()) { <p class="text-warning">{{ t().retention }}</p> }
