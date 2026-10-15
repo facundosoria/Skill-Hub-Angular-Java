@@ -75,10 +75,17 @@
         <time class="log-time" [attr.datetime]="entry.timestamp" [attr.title]="time(entry.timestamp)">{{ time(entry.timestamp) }}</time>
         <span uiBadge [tone]="tone(entry.level)">{{ entry.level }}</span>
         <button type="button" class="log-message" [attr.data-log-id]="entry.id" (click)="detail(entry)" [attr.aria-label]="t().detail + ': ' + entry.logger + ' ' + summary(entry)">
-          <span class="log-logger">{{ entry.logger }}</span><span>{{ summary(entry) }}</span>
+          <span class="log-logger">{{ entry.logger }}</span>
+          @if (entry.method && entry.route) {
+            <span class="log-request">
+              {{ entry.method }} {{ entry.route }}
+              @if (entry.status != null) { · <span [class]="statusClass(entry.status)">{{ entry.status }}</span> }
+              @if (entry.durationMs != null) { · {{ entry.durationMs }} ms }
+            </span>
+          } @else { <span>{{ summary(entry) }}</span> }
         </button>
-        @if (entry.traceId) {
-          <button type="button" class="log-trace" (click)="copy(entry.traceId)" [attr.title]="entry.traceId" [attr.aria-label]="t().copyTrace + ': ' + entry.traceId"><span class="log-trace-id">{{ entry.traceId.slice(0, 8) }}… </span><span>{{ t().copy }}</span></button>
+        @if (hasTraceId(entry)) {
+          <button type="button" class="log-trace" (click)="copy(entry.traceId!)" [attr.title]="entry.traceId" [attr.aria-label]="t().copyTrace + ': ' + entry.traceId"><span class="log-trace-id">{{ entry.traceId!.slice(0, 8) }}… </span><span>{{ t().copy }}</span></button>
         }
       </div>
     }
@@ -99,7 +106,7 @@
       </div>
       <p class="mt-2 text-sm">{{ summary(entry) }}</p>
       <pre class="log-detail">{{ entry.lines.join('\n') }}</pre>
-      @if (entry.traceId) { <p class="break-all font-mono text-xs">{{ t().trace }}: {{ entry.traceId }}</p> }
+      @if (hasTraceId(entry)) { <p class="break-all font-mono text-xs">{{ t().trace }}: {{ entry.traceId }}</p> }
       <button type="button" uiButton variant="secondary" class="log-action mt-3" (click)="copy(entry.lines.join('\n'))">{{ t().copyEvent }}</button>
     </section>
   }

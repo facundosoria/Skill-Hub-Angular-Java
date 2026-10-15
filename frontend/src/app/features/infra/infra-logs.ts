@@ -153,8 +153,15 @@ export class InfraLogs implements OnDestroy {
     });
   }
   tone(level: LogLevel): 'neutral' | 'warning' | 'danger' { return level === 'ERROR' ? 'danger' : level === 'WARN' ? 'warning' : 'neutral'; }
+  hasTraceId(entry: LogEntry): boolean { return !!entry.traceId && !/^0{32}$/i.test(entry.traceId); }
+  statusClass(status: number): string {
+    if (status >= 200 && status < 300) return 'text-success';
+    if (status >= 400 && status < 500) return 'text-warning';
+    if (status >= 500 && status < 600) return 'text-danger';
+    return 'text-text-muted';
+  }
   summary(entry: LogEntry): string {
-    return entry.method && entry.route ? `${entry.method} ${entry.route}${entry.status == null ? '' : ` → ${entry.status}`}${entry.durationMs == null ? '' : ` (${entry.durationMs} ms)`}` : entry.lines[0] ?? entry.event;
+    return entry.method && entry.route ? `${entry.method} ${entry.route}${entry.status == null ? '' : ` · ${entry.status}`}${entry.durationMs == null ? '' : ` · ${entry.durationMs} ms`}` : entry.lines[0] ?? entry.event;
   }
   time(timestamp: string | null): string {
     if (!timestamp) return this.t().noEvent;

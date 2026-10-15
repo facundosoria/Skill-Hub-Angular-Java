@@ -6,8 +6,9 @@
 .log-time { font-size: .7rem; color: var(--text-muted); }
 .log-message { min-width: 0; min-height: 44px; text-align: left; font-family: var(--font-mono); font-size: .8rem; overflow: hidden; }
 .log-message span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-request > span { display: inline; }
 .log-logger { color: var(--text-muted); font-size: .7rem; }
-.log-trace { min-height: 44px; font-size: .7rem; font-family: var(--font-mono); text-align: left; overflow: hidden; white-space: nowrap; }
+.log-trace { min-height: 36px; border-radius: var(--radius); background: var(--surface-2); padding-inline: .5rem; color: var(--text-muted); font-size: .7rem; font-family: var(--font-mono); text-align: left; overflow: hidden; white-space: nowrap; }
 .log-detail { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; padding-block: .75rem; font-size: .8rem; }
 button:focus-visible, .log-viewport:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 @media (max-width: 639px) {

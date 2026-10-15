@@ -49,6 +49,23 @@ describe('Gateway log panel', () => {
     expect(fixture.nativeElement.textContent).toContain(malicious);
     expect(fixture.nativeElement.querySelector('[role="list"]').getAttribute('aria-live')).toBe('off');
   });
+  it('shows request details as the primary row text, colors status ranges, and hides zero trace IDs', async () => {
+    const entries = [
+      logEntry(1, { traceId: '0'.repeat(32), status: 200 }),
+      logEntry(2, { status: 302 }),
+      logEntry(3, { status: 404 }),
+      logEntry(4, { status: 500 }),
+    ];
+    const { fixture } = await configure(mockStore(entries));
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.log-row')) as HTMLElement[];
+    expect(rows[0].querySelector('.log-trace')).toBeNull();
+    expect(rows[0].querySelector('.log-request')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('GET /api/example/{id} · 200 · 18 ms');
+    expect(rows[0].querySelector('.log-logger')?.textContent).toBe('LoggingFilter');
+    expect(rows[0].querySelector('.log-request span')?.classList.contains('text-success')).toBe(true);
+    expect(rows[1].querySelector('.log-request span')?.classList.contains('text-text-muted')).toBe(true);
+    expect(rows[2].querySelector('.log-request span')?.classList.contains('text-warning')).toBe(true);
+    expect(rows[3].querySelector('.log-request span')?.classList.contains('text-danger')).toBe(true);
+  });
   it('renders only a bounded window for 5000 events and offers pages of at most 150', async () => {
     const { fixture, panel } = await configure(mockStore(Array.from({ length: 5000 }, (_, index) => logEntry(index + 1))));
     expect(fixture.nativeElement.querySelectorAll('[role="listitem"]').length).toBeLessThanOrEqual(80);
