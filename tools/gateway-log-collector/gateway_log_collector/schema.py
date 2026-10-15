@@ -33,7 +33,7 @@ def render(event):
 
 def project(event, seq):
     """Never copy free text or prototype-only fields into the exchange directory."""
-    result = {key: event.get(key) for key in EVENT_KEYS}
+    result = {key: event.get(key) for key in EVENT_KEYS if key not in {"traceId", "spanId"} or key in event}
     result.update(seq=seq, logger=event["logger"].rsplit(".", 1)[-1])
     result["message"] = render(result)
     validate_event(result)
@@ -45,7 +45,7 @@ def integer(value, minimum=0, maximum=None):
 
 
 def validate_event(event):
-    if set(event) != EVENT_KEYS:
+    if set(event) - EVENT_KEYS or EVENT_KEYS - {"traceId", "spanId"} - set(event):
         raise ValueError("Invalid event fields")
     if not integer(event["seq"], 1) or not valid_timestamp(event["timestamp"]):
         raise ValueError("Invalid event position")
@@ -56,7 +56,7 @@ def validate_event(event):
     if event["event"] not in EVENTS:
         raise ValueError("Invalid event kind")
     for key, size in (("traceId", 32), ("spanId", 16)):
-        if event[key] is not None and not valid_id(event[key], size):
+        if event.get(key) is not None and not valid_id(event[key], size):
             raise ValueError("Invalid correlation identifier")
     if event["method"] is not None and event["method"] not in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}:
         raise ValueError("Invalid request method")

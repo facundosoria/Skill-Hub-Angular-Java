@@ -46,6 +46,12 @@ class StoreTests(unittest.TestCase):
         self.assertNotIn("traceparent", event)
         self.assertIsNone(event["reason"])
 
+    def test_zero_correlation_ids_are_omitted_from_stored_events(self):
+        self.send(trace="0" * 32, span="0" * 16)
+        event = self.events()[0]
+        self.assertNotIn("traceId", event)
+        self.assertNotIn("spanId", event)
+
     def test_reject_unknown_stored_fields_and_message(self):
         self.send()
         event = self.events()[0]
