@@ -109,6 +109,15 @@ describe('Gateway log panel', () => {
     expect(panel.stackLines(logEntry(9, { lines: ['at com.skillhub.Example.run(Example.java:1)', 'at java.base.Thread.run'] }))[0].applicationFrame).toBe(true);
     fixture.destroy();
   });
+  it('focuses the opened detail and closes it with Escape', async () => {
+    const entry = logEntry(12);
+    const { fixture, panel } = await configure(mockStore([entry]));
+    panel.detail(entry); fixture.detectChanges(); await fixture.whenStable();
+    const detail = fixture.nativeElement.querySelector('section[tabindex="-1"]') as HTMLElement | null;
+    expect(detail).not.toBeNull(); expect(document.activeElement).toBe(detail);
+    detail?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); fixture.detectChanges();
+    expect(panel.selectedId()).toBeNull(); fixture.destroy();
+  });
   it('applies removable path, method, status, and duration filters server-side', async () => {
     const { fixture, panel, store } = await configure(); store.open.mockClear();
     panel.route.set('/api/example'); panel.methods.set(['POST']); panel.statuses.set(['4xx']); panel.minDurationMs.set(501);
