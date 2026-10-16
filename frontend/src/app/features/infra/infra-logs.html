@@ -1,0 +1,202 @@
+<div uiCard>
+  <header class="log-header border-b border-border p-4 sm:p-6">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-2"><h2 class="text-lg font-semibold">api-gateway</h2><span uiBadge class="log-connection-badge max-w-full !whitespace-normal break-words" [tone]="store.connection() === 'live' ? 'success' : 'neutral'" [attr.title]="connectionLabel()">{{ connectionLabel() }}</span></div>
+        <p class="mt-1 text-sm text-text-muted">{{ t().window }} · {{ t().privacy }} · {{ t().lastEvent }}: {{ time(store.lastEventAt()) }}</p>
+      </div>
+      <nav class="log-header-links flex items-center gap-3" aria-label="{{ t().helpLinks }}">
+        <details class="relative min-w-0" (keydown.escape)="closeDisclosure($event)"><summary class="flex min-h-9 cursor-pointer items-center rounded border-0 bg-transparent px-2 text-xs text-text-muted hover:text-text">{{ t().followRequests }}</summary><div class="log-popover absolute right-0 top-[calc(100%+6px)] z-10 max-h-[min(70vh,32rem)] w-[min(28rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-border bg-surface p-4 shadow-xl">
+          <p class="text-text-muted">{{ t().followHint }}</p>
+          <div class="mt-3 flex flex-wrap items-end gap-2"><label>{{ t().jumpDate }}<input uiInput class="mt-1" type="datetime-local" [value]="jumpValue()" [min]="datetimeLocal(store.status()?.coverageStart ?? null)" [max]="nowLocal()" (input)="jumpValue.set($any($event.target).value)" /></label><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="jumpToDate()" [disabled]="!jumpValue()">{{ t().go }}</button><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="jumpPreset(15)">{{ t().ago15min }}</button><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="jumpPreset(60)">{{ t().ago1hour }}</button><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="jumpPreset(180)">{{ t().ago3hours }}</button></div>
+          <p class="mt-2 text-xs text-text-muted">{{ t().sixHourHint }}</p>
+        </div></details>
+        <details class="relative min-w-0" (keydown.escape)="closeDisclosure($event)"><summary class="flex min-h-9 cursor-pointer items-center rounded border-0 bg-transparent px-2 text-xs text-text-muted hover:text-text">{{ t().howRead }}</summary><div class="log-popover log-help absolute right-0 top-[calc(100%+6px)] z-10 max-h-[min(70vh,32rem)] w-[min(28rem,calc(100vw-2rem))] space-y-2 overflow-auto rounded-lg border border-border bg-surface p-4 text-text-muted shadow-xl"><p>{{ t().helpLevels }}</p><p>{{ t().helpStates }}</p><p>{{ t().helpRetention }}</p><p>{{ t().helpPrivacy }}</p><p>{{ t().helpSource }}</p><p>{{ t().helpRevocation }}</p><p>{{ t().helpGlossary }}</p></div></details>
+      </nav>
+    </div>
+    <div class="log-toolbar mt-4">
+      <label class="log-search">{{ t().text }}<input uiInput class="mt-1 w-full" type="search" maxlength="120" [value]="query()" (input)="setQuery($any($event.target).value)" /></label>
+      <fieldset class="log-level-control min-w-max"><legend>{{ t().level }}</legend><div class="log-levels flex min-h-9 flex-wrap items-center gap-1">
+        @for (level of ['INFO', 'WARN', 'ERROR']; track level) { <label class="log-level-option"><input class="peer sr-only" type="checkbox" [checked]="levels().includes($any(level))" (change)="toggleLevel($any(level))" /><span class="inline-flex min-h-8 items-center rounded-full bg-surface-2 px-3 text-xs text-text-muted peer-checked:bg-accent-soft peer-checked:text-accent peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-accent">{{ level }}</span></label> }
+      </div></fieldset>
+      @if (!store.historyAt()) {
+        @if (store.connection() === 'paused') { <button type="button" class="log-primary-button inline-flex min-h-9 items-center justify-center rounded border border-border bg-surface px-3 text-sm font-medium text-text hover:border-accent disabled:opacity-50" (click)="store.resume()">{{ t().resume }}</button> }
+        @else { <button type="button" class="log-primary-button inline-flex min-h-9 items-center justify-center rounded border border-border bg-surface px-3 text-sm font-medium text-text hover:border-accent disabled:opacity-50" (click)="store.pause()" [disabled]="store.connection() === 'loading' || store.connection() === 'revoked' || store.connection() === 'blocked'">{{ t().pause }}</button> }
+      }
+      <details class="relative min-w-0" (keydown.escape)="closeDisclosure($event)"><summary class="flex min-h-9 cursor-pointer items-center rounded border border-transparent bg-transparent px-3 text-sm text-text-muted hover:border-border hover:bg-surface-2 hover:text-text">{{ t().jumpDate }}</summary><div class="log-popover absolute right-0 top-[calc(100%+6px)] z-10 max-h-[min(70vh,32rem)] w-[min(28rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-border bg-surface p-4 shadow-xl">
+        <label>{{ t().jumpDate }}<input uiInput class="mt-1" type="datetime-local" [value]="jumpValue()" [min]="datetimeLocal(store.status()?.coverageStart ?? null)" [max]="nowLocal()" (input)="jumpValue.set($any($event.target).value)" /></label><button type="button" class="log-primary-button mt-2 inline-flex min-h-9 items-center justify-center rounded border border-border bg-surface px-3 text-sm font-medium text-text hover:border-accent disabled:opacity-50" (click)="jumpToDate()" [disabled]="!jumpValue()">{{ t().go }}</button>
+      </div></details>
+      <details class="relative min-w-0" (keydown.escape)="closeDisclosure($event)"><summary class="flex min-h-9 cursor-pointer items-center gap-2 rounded border border-transparent bg-transparent px-3 text-sm text-text-muted hover:border-border hover:bg-surface-2 hover:text-text">{{ t().filters }} <span class="log-filter-count">{{ activeFilterLabels().length }}</span></summary><div class="log-popover log-filter-panel absolute right-0 top-[calc(100%+6px)] z-10 max-h-[min(70vh,32rem)] w-[min(48rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-border bg-surface p-4 shadow-xl">
+        <div class="log-filter-fields">
+          <label>{{ t().route }}<input uiInput class="mt-1 w-full" type="search" maxlength="120" list="log-route-suggestions" [value]="route()" (input)="setRoute($any($event.target).value)" /><datalist id="log-route-suggestions">@for (suggestion of routeSuggestions(); track suggestion) { <option [value]="suggestion"></option> }</datalist></label>
+          <label>{{ t().trace }}<input uiInput class="mt-1 w-full font-mono" type="text" maxlength="32" spellcheck="false" autocomplete="off" [value]="traceId()" [attr.aria-invalid]="invalid()" aria-describedby="logs-filter-error" (input)="setTrace($any($event.target).value)" /></label>
+          <fieldset><legend>{{ t().method }}</legend><div class="log-chip-row">
+            @for (method of ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']; track method) { <button type="button" class="log-chip log-method-chip rounded-full bg-surface-2 px-3 text-xs text-text-muted hover:bg-accent-soft" [class.is-selected]="methods().includes($any(method))" [attr.aria-pressed]="methods().includes($any(method))" (click)="toggleMethod($any(method))">{{ method }}</button> }
+          </div></fieldset>
+          <fieldset><legend>{{ t().status }}</legend><div class="log-chip-row">
+            @for (item of [{ id: '2xx', label: '2xx OK' }, { id: '3xx', label: '3xx Redirección' }, { id: '4xx', label: '4xx Error del cliente' }, { id: '5xx', label: '5xx Error del servidor' }]; track item.id) { <button type="button" class="log-chip rounded-full bg-surface-2 px-3 text-xs text-text-muted hover:bg-accent-soft" [class.is-selected]="statuses().includes($any(item.id))" [attr.aria-pressed]="statuses().includes($any(item.id))" (click)="toggleStatus($any(item.id))">{{ item.label }}</button> }
+          </div></fieldset>
+          <label class="log-duration">{{ t().slowerThan }}<select uiInput class="mt-1 w-full" [value]="minDurationMs() ?? ''" (change)="setMinDuration($any($event.target).value)"><option value="">{{ t().allDurations }}</option><option value="201">200 ms</option><option value="501">500 ms</option><option value="1001">1 s</option><option value="3001">3 s</option></select></label>
+          <div class="log-presets flex flex-wrap gap-2" aria-label="{{ t().presets }}"><button type="button" class="log-chip rounded-full bg-surface-2 px-3 text-xs text-text-muted hover:bg-accent-soft" (click)="preset('errors')">{{ t().onlyErrors }}</button><button type="button" class="log-chip rounded-full bg-surface-2 px-3 text-xs text-text-muted hover:bg-accent-soft" (click)="preset('slow')">{{ t().onlySlow }}</button><button type="button" class="log-chip rounded-full bg-surface-2 px-3 text-xs text-text-muted hover:bg-accent-soft" (click)="preset('rejected')">{{ t().onlyRejected }}</button></div>
+        </div>
+        <button type="button" class="log-text-button mt-3 min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="clearFilters()">{{ t().clear }}</button>
+      </div></details>
+      <div class="log-timezone inline-flex h-9 justify-self-end items-center rounded-md border border-border p-0.5" role="group" [attr.aria-label]="t().timezoneToggle">
+        <button type="button" class="h-[30px] rounded px-2 text-xs text-text-muted" [class.bg-surface-2]="timezone() === 'local'" [class.text-text]="timezone() === 'local'" [attr.aria-pressed]="timezone() === 'local'" (click)="setTimezone('local')">{{ t().timezoneLocal }}</button>
+        <button type="button" class="h-[30px] rounded px-2 text-xs text-text-muted" [class.bg-surface-2]="timezone() === 'utc'" [class.text-text]="timezone() === 'utc'" [attr.aria-pressed]="timezone() === 'utc'" (click)="setTimezone('utc')">{{ t().timeUtc }}</button>
+      </div>
+    </div>
+    @if (activeFilterLabels().length) { <div class="log-active-filters mt-3 flex gap-2 overflow-x-auto" [attr.aria-label]="t().activeFilters">
+      @for (filter of activeFilterLabels(); track filter.name) { <button type="button" class="log-active-chip shrink-0 rounded-full bg-surface px-3 text-xs text-text-muted" (click)="removeFilter(filter.name)" [attr.aria-label]="t().removeFilter + ' ' + filter.label">{{ filter.label }} ×</button> }
+    </div> }
+    @if (invalid()) { <p id="logs-filter-error" class="mt-2 text-sm text-danger" role="alert">{{ t().invalidFilters }}</p> }
+    @if (store.historyAt(); as historyAt) { <p class="mt-3 rounded bg-warning/10 p-2 text-sm" role="status">{{ t().historyFrom }} {{ time(historyAt) }}</p> }
+  </header>
+  <div class="log-status-area px-4 pt-3 text-sm sm:px-6">
+    <p class="sr-only" role="status" aria-live="polite" aria-atomic="true">
+      {{ connectionLabel() }}
+      @if (store.connection() === 'blocked' || store.connection() === 'reconnecting') { · {{ t().retryIn }} {{ store.retrySeconds() }} s }
+    </p>
+    @if (store.connection() === 'blocked' || store.connection() === 'revoked') { <button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="store.resume()" [disabled]="store.connection() === 'blocked' || store.connection() === 'revoked'">{{ t().retry }}</button> }
+    @if (errorLabel()) {
+      <p class="text-danger" role="alert">
+        @if (store.errorCode() === 'session') { <a href="/login" class="underline">{{ errorLabel() }}</a> }
+        @else { {{ errorLabel() }} }
+      </p>
+    }
+    @if (store.status(); as status) {
+      @if (status.sourceStatus === 'disconnected') { <p class="text-warning">{{ t().sourceDisconnected }} · {{ t().lastEvent }}: {{ time(store.lastEventAt()) }}</p> }
+      @if (status.sourceStatus === 'starting') { <p class="text-text-muted">{{ t().sourceStarting }}</p> }
+      @if (status.sourceStatus !== 'starting' && (status.retentionTruncated || store.capacityLimited())) { <p class="text-warning">{{ t().retention }}</p> }
+    }
+    @if (store.browserTruncated()) { <p class="text-warning">{{ t().browserLimit }}</p> }
+    @if (store.discontinuity(); as discontinuity) {
+      <div class="flex flex-wrap items-center gap-2 text-warning">
+        <p>{{ t()[discontinuity] }} {{ t().gapDetails }}</p>
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="store.refresh()" [disabled]="store.connection() === 'blocked' || store.connection() === 'revoked'">{{ t().latest }}</button>
+      </div>
+    }
+    <div class="log-list-controls min-w-0 border-b border-border py-2">
+      <div class="log-meta-line flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-muted">
+        @if (store.status(); as status) { <span>{{ t().coverage }}: {{ time(status.coverageStart) }} · {{ t().source }}: {{ sourceLabel() }}</span> }
+        <button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="loadOlder()" [disabled]="!store.hasMoreBefore() || store.loadingHistory() || store.connection() === 'blocked' || store.connection() === 'revoked'">{{ store.loadingHistory() ? t().loading : t().older }}</button>
+        @if (store.historyAt()) { <button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="store.loadNewer()" [disabled]="!store.hasMoreAfter() || store.loadingHistory()">{{ t().newer }}</button> }
+        @if (store.historyAt() || store.connection() === 'paused' || store.connection() === 'hidden') { <button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="goLive()">{{ t().backLive }}</button> }
+        <button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" [attr.aria-pressed]="accessible()" (click)="toggleAccessible()">{{ accessible() ? t().virtualView : t().accessibleView }}</button>
+      </div>
+    </div>
+  </div>
+  <div class="log-summary border-y border-border px-3 py-2 text-xs text-text-muted sm:px-4" aria-label="Resumen de eventos">
+    <div class="log-summary-chips flex items-center gap-3 overflow-x-auto whitespace-nowrap"><span class="log-summary-title font-semibold text-text">{{ t().httpSummary }}</span>
+      @for (status of ['2xx', '3xx', '4xx', '5xx']; track status) { <button type="button" class="summary-chip shrink-0 rounded-full bg-surface-2 px-3 text-xs" [class.is-selected]="statuses().includes($any(status))" [attr.aria-pressed]="statuses().includes($any(status))" (click)="applySummaryStatus($any(status))"><strong>{{ status }}</strong> {{ summaryStats().classes[status] }}</button> }
+    </div>
+    <div class="log-summary-stats mt-2 flex flex-wrap gap-3"><span>{{ t().warningsErrors }}: {{ summaryStats().warningsErrors }}</span><span>{{ t().slowest }}: {{ summaryStats().slowest ?? '—' }} ms</span><span>{{ t().average }}: {{ summaryStats().average ?? '—' }} ms</span></div>
+  </div>
+  <details class="log-tools mx-4 mb-2 sm:mx-6">
+    <summary class="scroll-mt-2 py-2">{{ t().summaryTools }}</summary>
+    <div class="pt-1">
+      <section class="flex flex-wrap items-center justify-between gap-3 py-3 text-sm" aria-label="{{ t().downloadView }}">
+        <div class="flex flex-wrap items-center gap-2"><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="toggleGrouping()" [attr.aria-pressed]="groupRepeated()">{{ t().groupRepeated }}: {{ groupRepeated() ? t().on : t().off }}</button><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="copyIssue()">{{ t().copyIssue }}</button></div>
+        <div class="flex flex-wrap items-center gap-2"><span>{{ t().downloadView }}:</span><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="downloadView('json')">{{ t().downloadJson }}</button><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="downloadView('csv')">{{ t().downloadCsv }}</button><button type="button" class="log-text-button min-h-8 border-0 bg-transparent px-1 text-xs text-accent underline underline-offset-2" (click)="downloadView('txt')">{{ t().downloadTxt }}</button></div>
+      </section>
+      @if (routeStats().length) {
+        <section class="grid gap-3 border-t border-border py-3 text-sm md:grid-cols-2" aria-label="{{ t().routeFrequency }} / {{ t().routeErrors }}">
+      <div><h3 class="font-semibold">{{ t().routeFrequency }}</h3><table class="route-stats-table"><thead><tr><th>{{ t().route }}</th><th>{{ t().routeCount }}</th></tr></thead><tbody>@for (item of frequentRoutes(); track item.route) { <tr><td><button type="button" class="route-stat-link" (click)="filterRoute(item.route)">{{ item.route }}</button></td><td class="route-stat-number">{{ item.count }}</td></tr> }</tbody></table></div>
+      <div><h3 class="font-semibold">{{ t().routeErrors }}</h3><table class="route-stats-table"><thead><tr><th>{{ t().route }}</th><th>{{ t().routeErrorCount }}</th></tr></thead><tbody>@for (item of errorRoutes(); track item.route) { <tr><td><button type="button" class="route-stat-link" (click)="filterRoute(item.route)">{{ item.route }}</button></td><td class="route-stat-number">{{ item.errorCount }}</td></tr> }</tbody></table></div>
+        </section>
+      }
+    </div>
+  </details>
+  @if (store.connection() === 'loading') {
+    <p class="p-6 text-text-muted">{{ t().loading }}</p>
+  } @else if (!store.entries().length && !errorLabel()) {
+    <div class="space-y-2 p-6" role="status"><ui-empty-state [title]="hasActiveFilters() ? t().emptyFiltered : t().empty" />
+      @if (hasActiveFilters()) { <p>{{ t().emptyFiltersHelp }}</p><button type="button" uiButton variant="secondary" class="log-action" (click)="clearFilters()">{{ t().clear }}</button> }
+      @if (store.historyAt()) { <p>{{ t().emptyJumpHelp }}</p><button type="button" uiButton variant="secondary" class="log-action" (click)="goLive()">{{ t().backLive }}</button> }
+      @if (store.status()?.sourceStatus === 'starting' || store.status()?.sourceStatus === 'disconnected') { <p>{{ t().emptySourceHelp }}</p> }
+    </div>
+  }
+  <div class="log-content-layout mx-4 min-w-0 sm:mx-6" [class.has-detail]="!!selected()">
+  <div class="log-list-main min-w-0">
+  <div #viewport class="log-viewport" role="list" [attr.aria-label]="t().events" tabindex="0" aria-live="off" (scroll)="onScroll()">
+    <div role="presentation" [style.height.px]="topSpace()"></div>
+    @for (group of visibleGroups(); track group.key; let index = $index) {
+      @let entry = group.representative;
+      <div role="listitem" class="log-row" [attr.aria-posinset]="rangeStart() + index + 1" [attr.aria-setsize]="displayedGroups().length">
+        <time class="log-time" [attr.datetime]="entry.timestamp" [attr.title]="time(entry.timestamp)">{{ time(entry.timestamp) }}</time>
+        <span uiBadge [tone]="tone(entry.level)">{{ entry.level }}</span>
+        <button type="button" class="log-message" [attr.data-log-id]="entry.id" (click)="detail(entry)" [attr.aria-label]="t().detail + ': ' + entry.logger + ' ' + summary(entry)" [attr.title]="summary(entry)">
+          <span class="log-logger text-xs text-text-muted">{{ entry.logger }}</span>
+          @if (entry.method && entry.route) {
+            <span class="log-request">
+              {{ entry.method }} @for (part of routeParts(entry); track $index) { @if (part.match) { <mark>{{ part.text }}</mark> } @else { {{ part.text }} } }
+              @if (entry.status != null) { · <span [class]="statusClass(entry.status)">{{ entry.status }}</span> }
+              @if (entry.durationMs != null) { · {{ entry.durationMs }} ms }
+            </span>
+          } @else { <span>{{ summary(entry) }}</span> }
+          @if (showRowExplanation(entry)) { <span class="log-meaning text-xs text-text-muted">{{ language(explanation(entry).meaning) }}</span> }
+        </button>
+        <div class="log-row-tags">
+          @if (routePart(entry); as segment) { <button type="button" class="route-chip bg-surface-2 text-text-muted" (click)="filterPathSegment(segment)" [attr.aria-label]="t().route + ': ' + segment" [title]="segment">{{ segment }}</button> }
+          @if (group.entries.length > 1) { <button type="button" class="log-group-toggle bg-surface-2 text-text-muted" (click)="toggleExpanded(group)" [attr.aria-expanded]="expandedGroup() === group.key" [attr.aria-label]="t().collapseGroup">{{ group.entries.length }} {{ t().groupDetails }}</button> }
+          @if (hasTraceId(entry)) {
+          <button type="button" class="log-trace bg-surface-2 font-mono text-text-muted" (click)="copy(entry.traceId!)" [attr.title]="entry.traceId" [attr.aria-label]="t().copyTrace + ': ' + entry.traceId"><span class="log-trace-id">{{ entry.traceId!.slice(0, 8) }}… </span><span>{{ t().copy }}</span></button>
+          }
+        </div>
+      </div>
+    }
+    <div role="presentation" [style.height.px]="bottomSpace()"></div>
+  </div>
+  @if (expandedGroupData(); as group) { <section class="border-b border-border p-3 text-sm" [attr.aria-label]="t().groupTimeline"><h3 class="font-semibold">{{ t().groupTimeline }} · {{ group.entries.length }}</h3><ol class="mt-2 flex max-h-32 flex-wrap gap-2 overflow-auto">@for (item of group.entries; track item.id) { <li><button type="button" class="min-h-11 rounded border border-border px-2" (click)="detail(item)">{{ time(item.timestamp) }} · {{ item.status ?? item.level }}</button></li> }</ol></section> }
+  @if (accessible()) {
+    <div class="flex flex-wrap items-center justify-center gap-3 p-3">
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="changePage(-1)" [disabled]="pageIndex() === 0">{{ t().previous }}</button>
+      <span>{{ t().page }} {{ pageIndex() + 1 }} / {{ pageCount() }}</span>
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="changePage(1)" [disabled]="pageIndex() >= pageCount() - 1">{{ t().next }}</button>
+    </div>
+  }
+  </div>
+  @if (selected(); as entry) {
+    <section #detailPanel tabindex="-1" class="log-detail-panel border-t border-border p-4" [attr.aria-label]="t().detail" (keydown.escape)="closeDetail()">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h3 class="font-semibold">{{ entry.logger }} · {{ t().detail }}</h3>
+        <div class="flex gap-2"><button type="button" uiButton variant="secondary" class="log-action" (click)="navigateDetail(-1)" [disabled]="detailIndex(entry) <= 0">{{ t().previousEvent }}</button><button type="button" uiButton variant="secondary" class="log-action" (click)="navigateDetail(1)" [disabled]="detailIndex(entry) >= store.entries().length - 1">{{ t().nextEvent }}</button><button type="button" uiButton variant="secondary" class="log-action" (click)="closeDetail()">{{ t().close }}</button></div>
+      </div>
+      <p class="mt-1 text-xs text-text-muted">{{ relativeTime(entry.timestamp) }} · {{ t().sanitizedLine }}: {{ entry.lines[0] }}</p>
+      <div class="mt-2 rounded bg-surface-2 p-3"><h4 class="font-semibold">{{ t().meaning }}</h4><p>{{ language(explanation(entry).meaning) }}</p><h4 class="mt-2 font-semibold">{{ t().whatToDo }}</h4><p>{{ language(explanation(entry).action) }}</p></div>
+      <dl class="log-detail-fields mt-3 grid grid-cols-2 gap-x-5 gap-y-3 max-[700px]:grid-cols-1">
+        <div><dt>{{ t().timestamp }}</dt><dd>{{ fullTime(entry.timestamp) }} · {{ t().timeUtc }}: {{ utcTime(entry.timestamp) }} · {{ relativeTime(entry.timestamp) }}</dd></div>
+        <div><dt>{{ t().level }}</dt><dd><span uiBadge [tone]="tone(entry.level)">{{ entry.level }}</span></dd></div>
+        <div><dt>{{ t().logger }}</dt><dd class="break-all">{{ entry.logger }} <span class="text-text-muted">({{ shortLogger(entry.logger) }})</span></dd></div>
+        <div><dt>{{ t().event }}</dt><dd>{{ entry.event }}</dd></div>
+        <div><dt>{{ t().method }}</dt><dd>{{ entry.method ?? '—' }}</dd></div>
+        <div><dt>{{ t().route }}</dt><dd class="break-all">{{ entry.route ?? '—' }}</dd></div>
+        <div><dt>{{ t().status }}</dt><dd>@if (entry.status != null) { <span [class]="statusClass(entry.status)">{{ entry.status }}</span> {{ statusLabel(entry.status) }} } @else { — }</dd></div>
+        <div><dt>{{ t().duration }}</dt><dd>{{ entry.durationMs == null ? '—' : entry.durationMs + ' ms' }} @if (entry.durationMs != null && entry.durationMs > 1000) { <span class="text-warning">· {{ t().slow }}</span> }</dd></div>
+        <div><dt>{{ t().reason }}</dt><dd class="break-all">{{ entry.reason ?? '—' }}</dd></div>
+        @if (hasTraceId(entry)) { <div><dt>Trace ID</dt><dd class="break-all font-mono">{{ entry.traceId }}</dd></div> }
+        @if (hasSpanId(entry)) { <div><dt>Span ID</dt><dd class="break-all font-mono">{{ entry.spanId }}</dd></div> }
+      </dl>
+      @if (entry.redacted) { <p class="mt-3 text-sm text-text-muted">{{ t().redactedNote }}</p> }
+      <div class="detail-actions">
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="copy(eventJson(entry))">{{ t().copyEvent }}</button>
+        <button type="button" uiButton variant="secondary" class="log-action" (click)="copyIssue(entry)">{{ t().copyIssue }}</button>
+        @if (hasTraceId(entry)) { <button type="button" uiButton variant="secondary" class="log-action" (click)="copy(entry.traceId!)">{{ t().copyTrace }}</button><button type="button" uiButton variant="secondary" class="log-action" (click)="filterByTrace(entry)">{{ t().traceOnly }}</button> }
+        @if (hasSpanId(entry)) { <button type="button" uiButton variant="secondary" class="log-action" (click)="copy(entry.spanId!)">{{ t().copySpan }}</button> }
+      </div>
+      @if (hasTraceId(entry)) { <div class="mt-3"><h4 class="font-semibold">{{ t().relatedTrace }} <span class="related-count">({{ relatedEntries(entry).length }})</span></h4><ul class="related-events mt-2">@for (related of relatedEntries(entry); track related.id) { <li><button type="button" class="related-event" (click)="detail(related)">{{ time(related.timestamp) }} · {{ related.event }} · {{ related.status ?? '—' }}</button></li> }</ul></div> }
+      <div class="mt-2"><h4 class="text-sm font-semibold">{{ t().sanitizedLine }}</h4><pre class="log-detail log-raw-line">{{ entry.lines[0] }}</pre></div>
+      @if (continuationLines(entry).length) { <div class="mt-3"><h4 class="text-sm font-semibold">{{ t().continuation }}</h4><pre class="log-detail log-continuations">@for (line of continuationLines(entry); track $index) {<span [class.application-frame]="line.applicationFrame">{{ line.text }}</span>@if (!$last) {<span>&#10;</span>}}</pre>
+        <button type="button" uiButton variant="secondary" class="detail-copy mt-2" (click)="copy(continuationText(entry))">{{ t().copyLines }}</button></div> }
+    </section>
+  }
+  </div>
+  <div class="flex flex-wrap items-center justify-between gap-3 border-t border-border p-4 text-sm">
+    <p>{{ store.entries().length }} {{ t().loaded }} · {{ store.status()?.omittedCount ?? 0 }} {{ t().omitted }}</p>
+    <p>{{ t().autoScroll }}: {{ autoScroll() ? t().on : t().off }}</p>
+    @if ((!autoScroll() || store.connection() === 'paused') && !store.historyAt()) {
+      <button type="button" uiButton variant="secondary" class="log-action" (click)="goToEnd()">{{ store.newCount() }} {{ t().newEvents }} · {{ t().goToEnd }}</button>
+    }
+    <p role="status" aria-live="polite">{{ copyResult() ? t()[copyResult()!] : '' }}</p>
+  </div>
+</div>

@@ -1,0 +1,1 @@
+{"durationMs":17,"event":"REQUEST_COMPLETED","level":"INFO","logger":"LoggingFilter","message":"GET /api/users/profile/{userId} -> 200 (17 ms)","method":"GET","policyVersion":"r2-v1","reason":null,"route":"/api/users/profile/{userId}","seq":1,"spanId":"1234567890abcdef","status":200,"timestamp":"2026-01-01T12:34:56.123456789Z","traceId":"1234567890abcdef1234567890abcdef"}
