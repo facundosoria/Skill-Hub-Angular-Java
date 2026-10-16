@@ -44,7 +44,7 @@ import { UI } from '../../shared/ui';
         </div>
       }
       @if (activeTab() === 'logs' && logsEnabled()) {
-        <section id="infra-panel-logs" role="tabpanel" aria-labelledby="infra-tab-logs" class="relative left-1/2 w-screen max-w-[1600px] -translate-x-1/2 px-4 sm:px-6 lg:px-8">
+        <section id="infra-panel-logs" role="tabpanel" aria-labelledby="infra-tab-logs" class="min-w-0">
           <app-infra-logs (disabled)="hideLogs()" />
         </section>
       } @else {

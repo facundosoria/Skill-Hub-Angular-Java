@@ -74,6 +74,20 @@ describe('Gateway log panel', () => {
     expect(rows[3].querySelector('.log-meaning')?.textContent).toContain('falló el servidor');
     expect(rows[4].querySelector('.log-meaning')).toBeNull();
   });
+  it('keeps compact rows and exposes the timezone as a two-choice segmented control', async () => {
+    const { fixture, panel } = await configure(mockStore([logEntry(1)]));
+    expect(panel.rowHeight).toBe(52);
+    const timezone = fixture.nativeElement.querySelector('[role="group"][aria-label="Zona horaria"]');
+    expect(timezone).not.toBeNull();
+    const choices = Array.from(timezone.querySelectorAll('button')) as HTMLButtonElement[];
+    expect(choices.map(button => button.textContent?.trim())).toEqual(['Local', 'UTC']);
+    expect(choices.map(button => button.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
+    choices[1].click(); fixture.detectChanges();
+    expect(panel.timezone()).toBe('utc');
+    expect(choices.map(button => button.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    expect(fixture.nativeElement.querySelector('.log-meta-line')).not.toBeNull();
+    fixture.destroy();
+  });
   it('shows full event details, copy actions, and trace filtering in the detail panel', async () => {
     const entry = logEntry(8, { logger: 'com.example.gateway.LoggingFilter', event: 'REQUEST_COMPLETED',
       status: 201, durationMs: 1201, reason: 'synthetic reason', lines: ['safe event line', 'continuation'] });

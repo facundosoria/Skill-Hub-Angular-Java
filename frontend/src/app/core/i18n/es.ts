@@ -848,6 +848,8 @@ export const es = {
       copyError: "No pudimos copiar. Seleccioná el texto para copiarlo.",
       timeLocal: "Hora local",
       timeUtc: "UTC",
+      timezoneToggle: "Zona horaria",
+      timezoneLocal: "Local",
       copyIssue: "Copiar para un issue",
       downloadView: "Descargar vista",
       downloadJson: ".json",

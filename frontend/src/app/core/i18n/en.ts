@@ -852,6 +852,8 @@ export const en: Dict = {
       copyError: "Could not copy. Select the text to copy it.",
       timeLocal: "Local time",
       timeUtc: "UTC",
+      timezoneToggle: "Time zone",
+      timezoneLocal: "Local",
       copyIssue: "Copy for an issue",
       downloadView: "Download view",
       downloadJson: ".json",

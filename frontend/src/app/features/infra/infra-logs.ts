@@ -52,7 +52,7 @@ export class InfraLogs implements OnDestroy {
   readonly frequentRoutes = computed(() => [...this.routeStats()].sort((a, b) => b.count - a.count || a.route.localeCompare(b.route)).slice(0, 5));
   readonly errorRoutes = computed(() => [...this.routeStats()].sort((a, b) => b.errorCount - a.errorCount || b.count - a.count || a.route.localeCompare(b.route)).filter(item => item.errorCount > 0).slice(0, 5));
   readonly copyResult = signal<'copied' | 'copyError' | null>(null);
-  readonly rowHeight = 88;
+  readonly rowHeight = 52;
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.displayedGroups().length / 150)));
   readonly rangeStart = computed(() => this.accessible() ? Math.min(this.pageIndex(), this.pageCount() - 1) * 150 :
     Math.max(0, Math.floor(this.scrollTop() / this.rowHeight) - 5));
@@ -242,6 +242,7 @@ export class InfraLogs implements OnDestroy {
   }
   detailIndex(entry: LogEntry): number { return this.store.entries().findIndex(item => item.id === entry.id); }
   toggleTimezone(): void { this.timezone.update(value => value === 'local' ? 'utc' : 'local'); }
+  setTimezone(value: 'local' | 'utc'): void { this.timezone.set(value); }
   toggleGrouping(): void { this.groupRepeated.update(value => !value); this.expandedGroup.set(null); }
   toggleExpanded(group: LogGroup): void { this.expandedGroup.set(this.expandedGroup() === group.key ? null : group.key); }
   filterRoute(value: string): void { this.route.set(value); this.applyFilters(); }
