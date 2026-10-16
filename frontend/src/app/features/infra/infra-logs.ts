@@ -52,7 +52,7 @@ export class InfraLogs implements OnDestroy {
   readonly frequentRoutes = computed(() => [...this.routeStats()].sort((a, b) => b.count - a.count || a.route.localeCompare(b.route)).slice(0, 5));
   readonly errorRoutes = computed(() => [...this.routeStats()].sort((a, b) => b.errorCount - a.errorCount || b.count - a.count || a.route.localeCompare(b.route)).filter(item => item.errorCount > 0).slice(0, 5));
   readonly copyResult = signal<'copied' | 'copyError' | null>(null);
-  readonly rowHeight = 72;
+  readonly rowHeight = 88;
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.displayedGroups().length / 150)));
   readonly rangeStart = computed(() => this.accessible() ? Math.min(this.pageIndex(), this.pageCount() - 1) * 150 :
     Math.max(0, Math.floor(this.scrollTop() / this.rowHeight) - 5));
@@ -275,6 +275,13 @@ export class InfraLogs implements OnDestroy {
       const button = Array.from(buttons ?? []).find(item => item.dataset['logId'] === id);
       (button ?? this.viewport()?.nativeElement)?.focus();
     });
+  }
+  closeDisclosure(event: Event): void {
+    const details = (event.target as HTMLElement).closest('details');
+    if (!details?.open) return;
+    event.preventDefault();
+    details.open = false;
+    details.querySelector('summary')?.focus();
   }
   tone(level: LogLevel): 'neutral' | 'warning' | 'danger' { return level === 'ERROR' ? 'danger' : level === 'WARN' ? 'warning' : 'neutral'; }
   hasTraceId(entry: LogEntry): boolean { return !!entry.traceId && !/^0{32}$/i.test(entry.traceId); }

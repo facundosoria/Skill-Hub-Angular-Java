@@ -789,6 +789,7 @@ export const es = {
       events: "Eventos sanitizados del api-gateway",
       detail: "Ver detalle",
       copyTrace: "Copiar trace ID",
+      copySpan: "Copiar span ID",
       copy: "Copiar",
       previous: "Anterior",
       next: "Siguiente",
@@ -875,6 +876,10 @@ export const es = {
       lastGroupEvent: "Último",
       collapseGroup: "Mostrar u ocultar eventos del grupo",
       activeFilters: "Filtros activos",
+      helpLinks: "Ayuda de logs",
+      filters: "Filtros",
+      httpSummary: "HTTP",
+      summaryTools: "Resumen y herramientas",
     },
   },
 } as const;

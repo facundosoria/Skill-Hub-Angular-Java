@@ -793,6 +793,7 @@ export const en: Dict = {
       events: "Sanitized api-gateway events",
       detail: "View details",
       copyTrace: "Copy trace ID",
+      copySpan: "Copy span ID",
       copy: "Copy",
       previous: "Previous",
       next: "Next",
@@ -879,6 +880,10 @@ export const en: Dict = {
       lastGroupEvent: "Last",
       collapseGroup: "Show or hide group events",
       activeFilters: "Active filters",
+      helpLinks: "Log help",
+      filters: "Filters",
+      httpSummary: "HTTP",
+      summaryTools: "Summary and tools",
     },
   },
 };

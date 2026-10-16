@@ -84,7 +84,9 @@ describe('Gateway log panel', () => {
     expect(text).toContain('com.example.gateway.LoggingFilter'); expect(text).toContain('synthetic reason');
     expect(text).toContain('2222222222222222'); expect(text).toContain('safe event line');
     expect(text).toContain('Nivel'); expect(text).not.toContain('Nivel (sin selección: todos)');
-    expect(fixture.nativeElement.querySelectorAll('.detail-copy').length).toBe(3);
+    expect(fixture.nativeElement.querySelectorAll('.detail-copy').length).toBe(1);
+    const actions = fixture.nativeElement.querySelector('.detail-actions')?.textContent;
+    expect(actions).toContain('Copiar trace ID'); expect(actions).toContain('Copiar span ID');
     expect(fixture.nativeElement.querySelector('.log-continuations')?.textContent).toContain('continuation');
     const traceButton = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>)
       .find(button => button.textContent?.includes('Ver solo esta traza'));
@@ -140,7 +142,7 @@ describe('Gateway log panel', () => {
     const { fixture, panel, store } = await configure(mockStore(entries));
     expect(panel.summaryStats()).toMatchObject({ classes: { '2xx': 1, '3xx': 0, '4xx': 1, '5xx': 1 }, warningsErrors: 2, slowest: 30, average: 20 });
     panel.applySummaryStatus('4xx'); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['4xx'] });
-    fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('4xx: 1');
+    fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('4xx 1');
     const summary = Array.from(fixture.nativeElement.querySelectorAll('.summary-chip') as NodeListOf<HTMLButtonElement>)
       .find(button => button.textContent?.startsWith('4xx'))!;
     expect(summary.getAttribute('aria-pressed')).toBe('true');
@@ -175,7 +177,7 @@ describe('Gateway log panel', () => {
     viewport.scrollTop = 100; panel.onScroll(); expect(panel.autoScroll()).toBe(false);
     store.entries.update(entries => [...entries, logEntry(101)]); await fixture.whenStable();
     expect(viewport.scrollTop).toBe(100); panel.goToEnd(); expect(panel.autoScroll()).toBe(true);
-    expect(viewport.scrollTop).toBe(6792); expect(store.acknowledgeNew).toHaveBeenCalled();
+    expect(viewport.scrollTop).toBe(101 * panel.rowHeight - 480); expect(store.acknowledgeNew).toHaveBeenCalled();
   });
   it('keeps paused pending counts when scrolling to the end of the frozen view', async () => {
     const { panel, store } = await configure(mockStore([logEntry()]));
@@ -186,7 +188,7 @@ describe('Gateway log panel', () => {
     const { panel, fixture, store } = await configure(mockStore([logEntry(150), logEntry(151)]));
     const viewport = fixture.nativeElement.querySelector('.log-viewport'); viewport.scrollTop = 10;
     store.loadOlder.mockImplementation(async () => { store.entries.set([logEntry(149), ...store.entries()]); });
-    await panel.loadOlder(); expect(viewport.scrollTop).toBe(82); expect(panel.autoScroll()).toBe(false);
+    await panel.loadOlder(); expect(viewport.scrollTop).toBe(panel.rowHeight + 10); expect(panel.autoScroll()).toBe(false);
   });
   it('shows loading, empty filtered and disconnected source states with retention warnings', async () => {
     const { fixture, store, panel } = await configure();
@@ -205,15 +207,31 @@ describe('Gateway log panel', () => {
     store.capacityLimited.set(false); fixture.detectChanges();
     expect(fixture.nativeElement.textContent).not.toContain('Parte del historial ya no está disponible');
   });
-  it('keeps compact filter controls and the follow/help disclosures collapsed', async () => {
+  it('keeps secondary filters and header help collapsed until requested', async () => {
     const { fixture, panel } = await configure();
-    const follow = fixture.nativeElement.querySelector('.log-toolbar details') as HTMLDetailsElement;
+    const follow = fixture.nativeElement.querySelector('.log-header-links details') as HTMLDetailsElement;
+    const filters = fixture.nativeElement.querySelector('.log-filter-panel') as HTMLElement;
     expect(follow).not.toBeNull(); expect(follow.open).toBe(false);
-    expect(fixture.nativeElement.querySelectorAll('.log-filter-row').length).toBe(2);
+    expect(filters.closest('details')?.open).toBe(false);
+    expect(fixture.nativeElement.querySelector('.log-toolbar details')).toBeTruthy();
     panel.toggleMethod('GET'); fixture.detectChanges();
     const getChip = Array.from(fixture.nativeElement.querySelectorAll('.log-method-chip') as NodeListOf<HTMLButtonElement>)
       .find(button => button.textContent?.trim() === 'GET');
     expect(getChip?.getAttribute('aria-pressed')).toBe('true'); expect(getChip?.classList.contains('is-selected')).toBe(true);
+    expect(fixture.nativeElement.querySelector('.log-filter-count')?.textContent).toBe('1');
+    expect(fixture.nativeElement.querySelector('.log-active-chip')?.textContent).toContain('GET');
+  });
+  it('closes an open disclosure with Escape and restores focus to its summary', async () => {
+    const { fixture, panel } = await configure();
+    const disclosure = fixture.nativeElement.querySelector('.log-header-links details') as HTMLDetailsElement;
+    const summary = disclosure.querySelector('summary') as HTMLElement;
+    disclosure.open = true;
+    const popover = disclosure.querySelector('.log-popover') as HTMLElement;
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+    popover.dispatchEvent(event);
+    panel.closeDisclosure(event);
+    expect(disclosure.open).toBe(false);
+    expect(document.activeElement).toBe(summary);
   });
   it('shows related events with a count and keeps continuation lines distinct from the main line', async () => {
     const traceId = '1'.repeat(32);
