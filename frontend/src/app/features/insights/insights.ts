@@ -21,7 +21,7 @@ type Miss = { query_text: string; veces: number };
       </div>
 
       @if (loading()) {
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-pulse" aria-label="Cargando telemetría">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 skeleton-shimmer-group" aria-label="Cargando telemetría">
           <div class="lg:col-span-7 h-72 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
           <div class="lg:col-span-5 h-72 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
         </div>

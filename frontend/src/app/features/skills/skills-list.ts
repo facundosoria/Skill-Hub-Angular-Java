@@ -245,21 +245,21 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
         @case ('plugins') {
           <div class="catalog-plugin-grid" aria-label="Cargando plugins">
             @for (i of [1, 2, 3, 4, 5, 6]; track i) {
-              <div class="catalog-plugin-skeleton animate-pulse" aria-hidden="true"></div>
+              <div class="catalog-plugin-skeleton skeleton-shimmer" aria-hidden="true"></div>
             }
           </div>
         }
         @case ('contracts') {
           <div uiCard class="overflow-hidden" aria-label="Cargando contratos">
             @for (i of [1, 2, 3, 4, 5]; track i) {
-              <div class="catalog-contract-skeleton animate-pulse" aria-hidden="true"></div>
+              <div class="catalog-contract-skeleton skeleton-shimmer" aria-hidden="true"></div>
             }
           </div>
         }
         @default {
           <div class="space-y-2.5" aria-label="Cargando skills">
             @for (i of [1, 2, 3, 4, 5]; track i) {
-              <div class="catalog-skill-skeleton animate-pulse" aria-hidden="true"></div>
+              <div class="catalog-skill-skeleton skeleton-shimmer" aria-hidden="true"></div>
             }
           </div>
         }
