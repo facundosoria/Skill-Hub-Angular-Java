@@ -199,8 +199,8 @@ describe('DepMap offline controls', () => {
     expect(panels).toHaveLength(2);
     expect(panels[0].getAttribute('direction')).toBe('out');
     expect(panels[1].getAttribute('direction')).toBe('in');
-    expect(fixture.nativeElement.querySelector('.details-out')?.textContent).toContain('Necesita de');
-    expect(fixture.nativeElement.querySelector('.details-in')?.textContent).toContain('Lo necesitan');
+    expect(fixture.nativeElement.querySelector('.details-out')?.textContent).toContain('grupos de los que depende');
+    expect(fixture.nativeElement.querySelector('.details-in')?.textContent).toContain('grupos que dependen de él');
   });
 
   it('uses Ajustar to align the boxes and reset the zoom', () => {
@@ -273,7 +273,7 @@ describe('DepMap offline controls', () => {
     const component = fixture.componentInstance;
     component.activateView('matriz');
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.fullscreen-toggle')).toBeNull();
+    expectFullscreenToggleReserved();
     const detailToggle = fixture.nativeElement.querySelector('.panel-toggle') as HTMLButtonElement;
     const initialExpanded = detailToggle.getAttribute('aria-expanded');
     detailToggle.click();
@@ -291,8 +291,31 @@ describe('DepMap offline controls', () => {
     fixture.detectChanges();
     expect(component.fullscreen()).toBe(false);
     expect(component.store.view()).toBe('matriz');
-    expect(fixture.nativeElement.querySelector('.fullscreen-toggle')).toBeNull();
+    expectFullscreenToggleReserved();
   });
+
+  it('toggles the full map from the toolbar without re-selecting My group', () => {
+    const store = fixture.componentInstance.store;
+    const toggle = () => fixture.nativeElement.querySelector('.map-ctl.toggle') as HTMLButtonElement;
+    expect(toggle().textContent).toContain('Ver mapa completo');
+    toggle().click();
+    fixture.detectChanges();
+    expect(store.fullMap()).toBe(true);
+    expect(store.node()).toBeNull();
+    expect(toggle().textContent).toContain('Enfocar mi grupo');
+    toggle().click();
+    fixture.detectChanges();
+    expect(store.fullMap()).toBe(false);
+    expect(store.node()).toBe(store.mine());
+  });
+
+  // Desde 057a803 el botón queda reservado (deshabilitado y oculto) fuera del mapa para no mover la barra.
+  function expectFullscreenToggleReserved(): void {
+    const button = fixture.nativeElement.querySelector('.fullscreen-toggle') as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(button.getAttribute('aria-hidden')).toBe('true');
+    expect(button.classList.contains('controls-hidden')).toBe(true);
+  }
 
   it('keeps Details functional as an overlay while fullscreen', () => {
     const component = fixture.componentInstance;
