@@ -260,7 +260,7 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
     } @else if (error()) {
       <p class="mt-6 text-sm text-danger">{{ error() }}</p>
     } @else {
-      <div class="mt-6 h-40 animate-pulse rounded-md bg-surface-2"></div>
+      <div class="mt-6 h-40 skeleton-shimmer rounded-md bg-surface-2"></div>
     }
   `,
   styles: `

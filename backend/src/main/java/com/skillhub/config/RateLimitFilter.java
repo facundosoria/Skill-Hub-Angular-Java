@@ -6,6 +6,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -22,7 +23,9 @@ public class RateLimitFilter implements Filter {
     private static final int FAILURES_PER_LEVEL = 5;
     private static final long INITIAL_BLOCK_MS = 60_000;
     private static final long MAX_BLOCK_MS = 60 * 60_000;
-    private static final String LOGIN_PATH = "/api/auth/login";
+    // Ambos validan usuario/contrasena; comparten el bucket de la IP para que
+    // alternar entre la web y el login OAuth no esquive el bloqueo.
+    private static final Set<String> LOGIN_PATHS = Set.of("/api/auth/login", "/api/oauth/accept-login");
 
     private static final class Bucket {
         private int consecutiveFailures;
@@ -38,7 +41,7 @@ public class RateLimitFilter implements Filter {
         if (req instanceof HttpServletRequest httpReq
                 && res instanceof HttpServletResponse httpRes
                 && "POST".equalsIgnoreCase(httpReq.getMethod())
-                && LOGIN_PATH.equals(httpReq.getRequestURI())) {
+                && LOGIN_PATHS.contains(httpReq.getRequestURI())) {
 
             String ip = clientIp(httpReq);
             long now = System.currentTimeMillis();
