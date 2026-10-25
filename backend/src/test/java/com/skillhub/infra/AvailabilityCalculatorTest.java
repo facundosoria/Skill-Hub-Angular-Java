@@ -87,4 +87,62 @@ class AvailabilityCalculatorTest {
         assertThat(availability.coverage()).isLessThan(0.1);
         assertThat(availability.availability()).isEqualTo(1.0);
     }
+
+    @Test
+    void nullSamplesOrAnEmptyWindowHaveNoData() {
+        assertThat(calculator.compute(null, T0, T0.plusSeconds(60), T0.plusSeconds(60)).hasData()).isFalse();
+        assertThat(calculator.compute(List.of(sample(0, InfraState.UP)), T0, T0, T0).hasData()).isFalse();
+        assertThat(calculator.compute(List.of(sample(0, InfraState.UP)), T0.plusSeconds(10), T0, T0).observedSeconds()).isNull();
+    }
+
+    @Test
+    void ignoresSamplesWithoutATimestamp() {
+        List<AvailabilitySample> samples = new java.util.ArrayList<>();
+        samples.add(null);
+        samples.add(new AvailabilitySample("svc", null, InfraState.UP));
+
+        Availability availability = calculator.compute(samples, T0, T0.plusSeconds(60), T0.plusSeconds(60));
+
+        assertThat(availability.hasData()).isFalse();
+        assertThat(availability.observedSeconds()).isNull();
+    }
+
+    @Test
+    void samplesOutsideTheWindowOrWithoutElapsedTimeCountAsUnobserved() {
+        List<AvailabilitySample> samples = List.of(sample(-200, InfraState.UP), sample(-150, InfraState.UP), sample(-150, InfraState.UP));
+
+        Availability availability = calculator.compute(samples, T0, T0.plusSeconds(60), T0.minusSeconds(100));
+
+        assertThat(availability.hasData()).isFalse();
+        assertThat(availability.observedSeconds()).isZero();
+    }
+
+    @Test
+    void theWindowStopsAtNowWhenItEndsInTheFuture() {
+        List<AvailabilitySample> samples = List.of(sample(0, InfraState.UP));
+
+        Availability availability = calculator.compute(samples, T0, T0.plusSeconds(3600), T0.plusSeconds(30));
+
+        assertThat(availability.observedSeconds()).isEqualTo(30);
+        assertThat(availability.unobservedSeconds()).isEqualTo(3570);
+    }
+
+    @Test
+    void aMissingStateIsObservedButNotAvailable() {
+        List<AvailabilitySample> samples = List.of(new AvailabilitySample("svc", T0, null), sample(60, InfraState.UP));
+
+        Availability availability = calculator.compute(samples, T0, T0.plusSeconds(60), T0.plusSeconds(60));
+
+        assertThat(availability.observedSeconds()).isEqualTo(60);
+        assertThat(availability.availableSeconds()).isZero();
+    }
+
+    @Test
+    void aGraceBelowOneSecondStillAllowsOneSecondGaps() {
+        AvailabilityCalculator strict = new AvailabilityCalculator(Duration.ZERO);
+
+        Availability availability = strict.compute(List.of(sample(0, InfraState.UP), sample(1, InfraState.UP)), T0, T0.plusSeconds(1), T0.plusSeconds(1));
+
+        assertThat(availability.observedSeconds()).isEqualTo(1);
+    }
 }
