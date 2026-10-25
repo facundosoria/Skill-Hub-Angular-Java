@@ -125,4 +125,134 @@ describe('Infra component', () => {
     fixture.detectChanges();
     expect((fixture.nativeElement.textContent as string)).toContain('No se pudo cargar');
   });
+
+  describe('labels and formatting', () => {
+    async function component() {
+      return (await configure(stateView())).componentInstance;
+    }
+
+    it('maps every state to a tone and a label', async () => {
+      const infra = await component();
+      const i = infra.t().infra;
+      expect(infra.stateTone('UP')).toBe('success');
+      expect(infra.stateTone('DOWN')).toBe('danger');
+      expect(infra.stateTone('DEGRADED')).toBe('warning');
+      expect(infra.stateTone('UNKNOWN')).toBe('neutral');
+      expect(infra.stateLabel('UP')).toBe(i.estadoUp);
+      expect(infra.stateLabel('DOWN')).toBe(i.estadoDown);
+      expect(infra.stateLabel('DEGRADED')).toBe(i.estadoDegraded);
+      expect(infra.stateLabel('NO_ACCESS')).toBe(i.estadoNoAccess);
+      expect(infra.stateLabel('UNKNOWN')).toBe(i.estadoUnknown);
+    });
+
+    it('labels coverage values', async () => {
+      const infra = await component();
+      const i = infra.t().infra;
+      expect(infra.coverageLabel('full')).toBe(i.coberturaFull);
+      expect(infra.coverageLabel('partial')).toBe(i.coberturaPartial);
+      expect(infra.coverageLabel('unavailable')).toBe(i.coberturaUnavailable);
+      expect(infra.coverageLabel(null)).toBe(i.sinDato);
+    });
+
+    it('formats availability with and without coverage', async () => {
+      const infra = await component();
+      const base = { observedSeconds: 1, availableSeconds: 1, degradedSeconds: 0, unobservedSeconds: 0 };
+      expect(infra.availabilityLabel(null)).toBe(infra.t().infra.sinDato);
+      expect(infra.availabilityLabel({ ...base, availability: 0.5, coverage: 1, hasData: false })).toBe(infra.t().infra.sinDato);
+      expect(infra.availabilityLabel({ ...base, availability: null, coverage: 1, hasData: true })).toBe(infra.t().infra.sinDato);
+      expect(infra.availabilityLabel({ ...base, availability: 0.987, coverage: null, hasData: true })).toBe('99%');
+      expect(infra.availabilityLabel({ ...base, availability: 0.5, coverage: 0.25, hasData: true })).toBe('50% (25%)');
+    });
+
+    it('formats uptime in days, hours or minutes', async () => {
+      const infra = await component();
+      expect(infra.uptimeLabel(null)).toBe(infra.t().infra.sinDato);
+      expect(infra.uptimeLabel(2 * 86400 + 3 * 3600)).toBe('2d 3h');
+      expect(infra.uptimeLabel(5 * 3600 + 7 * 60)).toBe('5h 7m');
+      expect(infra.uptimeLabel(59)).toBe('0m');
+    });
+
+    it('formats relative and absolute times', async () => {
+      const infra = await component();
+      const i = infra.t().infra;
+      const ago = (seconds: number) => new Date(Date.now() - seconds * 1000).toISOString();
+      expect(infra.relative(null)).toBe(i.nunca);
+      expect(infra.relative('no es fecha')).toBe(i.sinDato);
+      expect(infra.relative(ago(1))).toBe(i.relAhora);
+      expect(infra.relative(ago(30))).toBe(i.relSegundos.replace('{n}', '30'));
+      expect(infra.relative(ago(120))).toBe(i.relMinutos.replace('{n}', '2'));
+      expect(infra.relative(ago(7200))).toBe(i.relHoras.replace('{n}', '2'));
+      expect(infra.relative(ago(3 * 86400))).toBe(i.relDias.replace('{n}', '3'));
+      expect(infra.relative(new Date(Date.now() + 60_000).toISOString())).toBe(i.relAhora);
+      expect(infra.absolute(null)).toBe('');
+      expect(infra.absolute('no es fecha')).toBe('');
+      expect(infra.absolute('2026-10-06T00:00:00Z')).not.toBe('');
+    });
+  });
+
+  describe('frontend nodes and reloading', () => {
+    it('lists frontend nodes and flags missing build data', async () => {
+      const fixture = await configure(stateView({
+        frontendNodes: { enabled: true, available: true, status: 'ok', nodes: [
+          { label: 'nodo-a', buildDataAvailable: true }, { label: 'nodo-b', buildDataAvailable: false },
+        ] } as unknown as InfraStateView['frontendNodes'],
+      }));
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('nodo-a');
+      expect(text).toContain(fixture.componentInstance.t().infra.sinBuild);
+    });
+
+    it('says the nodes are pending when enabled but not yet available', async () => {
+      const fixture = await configure(stateView({
+        frontendNodes: { enabled: true, available: false, status: 'unavailable', nodes: [] },
+      }));
+      expect(fixture.nativeElement.textContent).toContain(fixture.componentInstance.t().infra.nodosPendiente);
+    });
+
+    it('reloads the state from the refresh button', async () => {
+      const state = vi.fn(() => of(stateView()));
+      await TestBed.configureTestingModule({
+        imports: [Infra],
+        providers: [{ provide: InfraService, useValue: { state } }],
+      }).compileComponents();
+      const fixture = TestBed.createComponent(Infra);
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      (fixture.nativeElement.querySelector('button') as HTMLButtonElement).click();
+      await fixture.whenStable();
+
+      expect(state).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('logs tab', () => {
+    it('switches tabs with the keyboard and hides the logs when disabled', async () => {
+      const fixture = await configure(stateView());
+      const infra = fixture.componentInstance;
+      infra.logsEnabled.set(true);
+      fixture.detectChanges();
+      const tab = fixture.nativeElement.querySelector('#infra-tab-state') as HTMLButtonElement;
+      const press = (key: string) => {
+        const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+        tab.dispatchEvent(event);
+        return event;
+      };
+
+      expect(press('a').defaultPrevented).toBe(false);
+      expect(press('ArrowRight').defaultPrevented).toBe(true);
+      expect(infra.activeTab()).toBe('logs');
+      press('ArrowLeft');
+      expect(infra.activeTab()).toBe('state');
+      press('End');
+      expect(infra.activeTab()).toBe('logs');
+      press('Home');
+      expect(infra.activeTab()).toBe('state');
+
+      infra.activeTab.set('logs');
+      infra.hideLogs();
+      expect(infra.logsEnabled()).toBe(false);
+      expect(infra.activeTab()).toBe('state');
+    });
+  });
 });
