@@ -80,4 +80,33 @@ describe('Profile', () => {
     expect(component.saved()).toBe(false);
     expect(el.textContent).toContain('Nombre inválido');
   });
+
+  it('edits every field from the DOM and saves from the form', async () => {
+    const { fixture, component, el } = await render();
+    await fixture.whenStable();
+    const set = (name: string, value?: string) => {
+      const field = el.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
+      if (field instanceof HTMLSelectElement) {
+        field.value = value ?? field.options[field.options.length - 1].value;
+        field.dispatchEvent(new Event('change'));
+      } else {
+        field.value = value ?? '';
+        field.dispatchEvent(new Event('input'));
+      }
+    };
+
+    set('name', 'Ana María');
+    set('team');
+    set('theme', 'light');
+    set('locale', 'es');
+    expect(component.name()).toBe('Ana María');
+    expect(component.theme).toBe('light');
+    expect(component.locale).toBe('es');
+
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve));
+
+    expect(api.put).toHaveBeenCalledWith('/profile', expect.objectContaining({ name: 'Ana María', theme: 'light', locale: 'es' }));
+    TestBed.inject(I18n).setLocale('es');
+  });
 });

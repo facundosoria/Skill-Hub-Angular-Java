@@ -334,6 +334,102 @@ describe('AdminUsers screen', () => {
     expect(document.activeElement).toBe(select);
   });
 
+  it('fills and submits the reset dialog from its fields', async () => {
+    const { fixture, component, el } = await render();
+    component.openReset(component.active()[0], { currentTarget: document.createElement('button') } as unknown as Event);
+    await flush();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const dialog = el.querySelector('dialog[aria-labelledby="reset-password-title"]') as HTMLDialogElement;
+    const type = (name: string, value: string) => {
+      const input = dialog.querySelector(`input[name="${name}"]`) as HTMLInputElement;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+
+    type('temporaryPassword', 'Temporal-12345');
+    type('temporaryPasswordConfirmation', 'Temporal-12345');
+    expect(component.temporaryPassword).toBe('Temporal-12345');
+    expect(component.temporaryPasswordConfirmation).toBe('Temporal-12345');
+
+    (dialog.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flush();
+    expect(api.post).toHaveBeenCalledWith('/admin/users/user-1/reset-password', { password: 'Temporal-12345' });
+  });
+
+  it('cancels the reset dialog from its buttons', async () => {
+    const { fixture, component, el } = await render();
+    const dialog = el.querySelector('dialog[aria-labelledby="reset-password-title"]') as HTMLDialogElement;
+    for (const button of [...dialog.querySelectorAll('button[type="button"]')] as HTMLButtonElement[]) {
+      component.openReset(component.active()[0], { currentTarget: document.createElement('button') } as unknown as Event);
+      fixture.detectChanges();
+      button.click();
+      expect(dialog.open).toBe(false);
+    }
+  });
+
+  it('changes the team from the select and submits the team form', async () => {
+    const { fixture, component, el } = await render();
+    component.openChangeTeam(component.active()[0], { currentTarget: document.createElement('button') } as unknown as Event);
+    await flush();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const dialog = el.querySelector('dialog[aria-labelledby="team-dialog-title"]') as HTMLDialogElement;
+    const select = dialog.querySelector('select[name="selectedTeam"]') as HTMLSelectElement;
+
+    select.value = select.options[select.options.length - 1].value;
+    select.dispatchEvent(new Event('change'));
+    expect(component.selectedTeam).toBe(select.value);
+
+    (dialog.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await flush();
+    expect(api.patch).toHaveBeenCalledWith('/admin/users/user-1/team', { team: select.value });
+  });
+
+  it('cancels the team dialog from its buttons', async () => {
+    const { fixture, component, el } = await render();
+    const dialog = el.querySelector('dialog[aria-labelledby="team-dialog-title"]') as HTMLDialogElement;
+    for (const button of [...dialog.querySelectorAll('button[type="button"]')] as HTMLButtonElement[]) {
+      component.openChangeTeam(component.active()[0], { currentTarget: document.createElement('button') } as unknown as Event);
+      fixture.detectChanges();
+      button.click();
+      expect(dialog.open).toBe(false);
+    }
+  });
+
+  it('cancels or confirms the deactivation from its buttons', async () => {
+    const { fixture, component, el } = await render();
+    const t = component.t().usuarios;
+    const dialog = el.querySelector('dialog[aria-labelledby="deactivate-dialog-title"]') as HTMLDialogElement;
+    const open = () => {
+      component.openDeactivate(component.active()[0], { currentTarget: null } as unknown as Event);
+      fixture.detectChanges();
+    };
+
+    for (const button of [...dialog.querySelectorAll('button[type="button"]')].filter((b) => b.textContent?.trim() !== t.darDeBajaConfirmar) as HTMLButtonElement[]) {
+      open();
+      button.click();
+      expect(dialog.open).toBe(false);
+    }
+
+    open();
+    byText(dialog, t.darDeBajaConfirmar).click();
+    await flush();
+    expect(api.post).toHaveBeenCalledWith('/admin/users/user-1/deactivate');
+  });
+
+  it('reactivates an inactive user from its row', async () => {
+    api.get.mockReturnValue(of({ pending: [], active: [], inactive: [{ ...targetUser(), id: 'gone', status: 'inactive' }] }));
+    const { fixture, component, el } = await render();
+    component.statusFilter.set('inactive');
+    fixture.detectChanges();
+
+    byText(el, component.t().usuarios.reactivar).click();
+    await flush();
+
+    expect(api.post).toHaveBeenCalledWith('/admin/users/gone/reactivate');
+  });
+
   it('opens each dialog from the row actions', async () => {
     const { fixture, component, el } = await render();
     const rowButtons = [...el.querySelectorAll('li button, [uiCard] button')] as HTMLButtonElement[];

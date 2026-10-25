@@ -263,4 +263,159 @@ describe('Gateway log data store', () => {
     sources[0].emit('status', logStatus({ coverageStart: new Date(Date.now() + 1000).toISOString() }));
     expect(store.entries()).toEqual([]);
   });
+
+  describe('edge cases', () => {
+    it('refuses invalid filters without calling the server', () => {
+      store.open({ ...EMPTY_FILTERS, traceId: 'no-es-un-trace' });
+      expect(store.errorCode()).toBe('invalid');
+      http.expectNone(req => req.url.startsWith(BASE));
+    });
+
+    it('treats a malformed page as unavailable and retries later', async () => {
+      store.open();
+      http.expectOne(req => req.url === BASE).flush(logPage({ headCursor: 'roto' })); await settle();
+      expect(store.errorCode()).toBe('unavailable');
+      expect(store.connection()).toBe('error');
+      await vi.advanceTimersByTimeAsync(6000);
+      http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+      http.expectOne(req => req.url === BASE).flush(logPage()); await settle();
+      expect(store.connection()).not.toBe('error');
+    });
+
+    it('reports HTTP 400 as invalid filters', async () => {
+      store.open();
+      http.expectOne(req => req.url === BASE).flush({}, { status: 400, statusText: 'Bad Request' }); await settle();
+      expect(store.errorCode()).toBe('invalid');
+      expect(store.connection()).toBe('error');
+    });
+
+    it('revokes access on HTTP 403', async () => {
+      store.open();
+      http.expectOne(req => req.url === BASE).flush({}, { status: 403, statusText: 'Forbidden' }); await settle();
+      expect(store.errorCode()).toBe('access');
+      expect(store.connection()).toBe('revoked');
+      store.setVisible(true);
+      expect(store.connection()).toBe('revoked');
+    });
+
+    it('loads newer history pages and stops when there are no more', async () => {
+      store.jumpTo('2026-10-14T06:50:58.000Z');
+      http.expectOne(req => req.url === BASE).flush(logPage({ entries: [logEntry(149)], nextAfter: 'g7:149', hasMoreAfter: true })); await settle();
+
+      const newer = store.loadNewer();
+      expect(store.loadingHistory()).toBe(true);
+      await store.loadNewer();
+      const request = http.expectOne(req => req.url === BASE);
+      expect(request.request.params.get('after')).toBe('g7:149');
+      request.flush(logPage({ entries: [logEntry(150)], nextAfter: 'g7:150', hasMoreAfter: false })); await newer;
+
+      expect(store.entries().map(entry => entry.id)).toEqual(['g7:149', 'g7:150']);
+      expect(store.hasMoreAfter()).toBe(false);
+      expect(store.loadingHistory()).toBe(false);
+      await store.loadNewer();
+      http.expectNone(req => req.url === BASE);
+    });
+
+    it('keeps the cursor when a newer page has no next cursor', async () => {
+      store.jumpTo('2026-10-14T06:50:58.000Z');
+      http.expectOne(req => req.url === BASE).flush(logPage({ entries: [logEntry(149)], nextAfter: 'g7:149', hasMoreAfter: true })); await settle();
+      const newer = store.loadNewer();
+      http.expectOne(req => req.url === BASE).flush({}, { status: 503, statusText: 'Unavailable' }); await newer;
+      expect(store.errorCode()).toBe('unavailable');
+      expect(store.loadingHistory()).toBe(false);
+    });
+
+    it('detects a new generation while paused', async () => {
+      await start(); store.pause();
+      await vi.advanceTimersByTimeAsync(15_000);
+      http.expectOne(BASE + '/status').flush(logStatus({ generation: 'g8', headCursor: 'g8:3' })); await settle();
+      expect(store.discontinuity()).toBe('reset');
+    });
+
+    it('never reports negative pending counts while paused', async () => {
+      await start(); store.pause();
+      await vi.advanceTimersByTimeAsync(15_000);
+      http.expectOne(BASE + '/status').flush(logStatus({ headCursor: 'g7:100' })); await settle();
+      expect(store.newCount()).toBe(0);
+    });
+
+    it('waits for the account block while paused and keeps watching afterwards', async () => {
+      await start(); store.pause();
+      await vi.advanceTimersByTimeAsync(15_000);
+      http.expectOne(BASE + '/status').flush(logStatus({ accountBlockedUntil: new Date(Date.now() + 4000).toISOString() })); await settle();
+      expect(store.connection()).toBe('blocked');
+      await vi.advanceTimersByTimeAsync(4000);
+      await vi.advanceTimersByTimeAsync(15_000);
+      http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+      expect(store.connection()).toBe('paused');
+    });
+
+    it('waits when resuming into an account block', async () => {
+      await start(); store.pause();
+      store.resume();
+      http.expectOne(BASE + '/status').flush(logStatus({ accountBlockedUntil: new Date(Date.now() + 2000).toISOString() })); await settle();
+      expect(store.connection()).toBe('blocked');
+      expect(store.retrySeconds()).toBe(2);
+      await vi.advanceTimersByTimeAsync(2000);
+      http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+      expect(sources.length).toBeGreaterThan(1);
+    });
+
+    it('takes a fresh snapshot when resuming without a cursor', async () => {
+      store.open();
+      http.expectOne(req => req.url === BASE).flush({}, { status: 503, statusText: 'Unavailable' }); await settle();
+      store.resume();
+      http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+      http.expectOne(req => req.url === BASE).flush(logPage()); await settle();
+      expect(sources).toHaveLength(1);
+    });
+
+    it('refreshes after a block when there is no cursor yet', async () => {
+      store.open();
+      http.expectOne(req => req.url === BASE).flush({}, { status: 429, statusText: 'Too Many Requests', headers: { 'Retry-After': '1' } }); await settle();
+      await vi.advanceTimersByTimeAsync(1000);
+      http.expectOne(req => req.url === BASE).flush(logPage()); await settle();
+      expect(store.connection()).not.toBe('blocked');
+    });
+
+    it('keeps paused while hidden and watches again when visible', async () => {
+      await start(); store.pause();
+      store.setVisible(false);
+      expect(store.connection()).toBe('paused');
+      await vi.advanceTimersByTimeAsync(30_000);
+      http.expectNone(BASE + '/status');
+      store.setVisible(true);
+      await vi.advanceTimersByTimeAsync(15_000);
+      http.expectOne(BASE + '/status').flush(logStatus()); await settle();
+      expect(store.connection()).toBe('paused');
+    });
+
+    it('rejects a live batch with an entry after its cursor', async () => {
+      await start();
+      sources[0].emit('logs', { entries: [logEntry(160)] }, 'g7:155'); await settle();
+      expect(store.entries().map(entry => entry.id)).not.toContain('g7:160');
+      // El lote invalido corta el stream y el store se recupera consultando el estado.
+      http.match(BASE + '/status').forEach(request => request.flush(logStatus()));
+      await settle();
+      http.match(req => req.url === BASE).forEach(request => request.flush(logPage()));
+    });
+
+    it('resets on a live status from another generation', async () => {
+      await start();
+      sources[0].emit('status', logStatus({ generation: 'g9', headCursor: 'g9:1' }));
+      expect(store.discontinuity()).toBe('reset');
+      http.expectOne(req => req.url === BASE).flush(logPage()); await settle();
+    });
+
+    it('loads older history and keeps the pending count', async () => {
+      await start();
+      store.acknowledgeNew();
+      const older = store.loadOlder();
+      const request = http.expectOne(req => req.url === BASE);
+      expect(request.request.params.get('before')).toBe('g7:150');
+      request.flush(logPage({ entries: [logEntry(100)], nextBefore: null, hasMoreBefore: false })); await older;
+      expect(store.newCount()).toBe(0);
+      expect(store.hasMoreBefore()).toBe(false);
+    });
+  });
 });
