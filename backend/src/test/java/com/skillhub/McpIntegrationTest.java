@@ -1162,6 +1162,170 @@ class McpIntegrationTest {
 
     // --- fixtures (mismos que tests/integration/mcp.test.ts) ------------
 
+    // --- caminos adicionales de las tools --------------------------------
+
+    @Autowired com.skillhub.skill.CatalogArtifactService artifacts;
+
+    private String seedPlugin(String slug, int artifactBytes) {
+        seedPublished(slug, "Zz " + slug);
+        jdbc.update("UPDATE skills SET type = 'plugin'::skill_type WHERE slug = ?", slug);
+        String adminId = jdbc.queryForObject("SELECT id::text FROM users WHERE username = 'zz-mcp-admin'", String.class);
+        String versionId = jdbc.queryForObject("SELECT current_version_id::text FROM skills WHERE slug = ?", String.class, slug);
+        artifacts.attachBytes(versionId, slug + ".zip", "application/zip", new byte[artifactBytes], adminId);
+        return slug;
+    }
+
+    @Test
+    void getSkillInlinesSmallArtifactsAndLinksLargeOnes() {
+        String small = seedPlugin("zz-mcp-small-plugin", 16);
+        String large = seedPlugin("zz-mcp-large-plugin", 5 * 1024 * 1024 + 1);
+        try {
+            var inline = tool("get_skill", java.util.Map.of("slug", small)).path("artifact");
+            assertThat(inline.path("content_base64").asText()).isNotEmpty();
+            assertThat(inline.path("download_url").asText()).endsWith("/artifact?v=1");
+
+            var linked = tool("get_skill", java.util.Map.of("slug", large, "version", 1)).path("artifact");
+            assertThat(linked.path("content_too_large_for_inline").asBoolean()).isTrue();
+            assertThat(linked.has("content_base64")).isFalse();
+        } finally {
+            dropSeeded(small, large);
+        }
+    }
+
+    @Test
+    void syncSkillsReportsGoneDeprecatedWithoutReplacementAndUnavailable() {
+        seedPublished("zz-mcp-sync-dep", "Zz Sync Dep");
+        seedPublished("zz-mcp-sync-draft", "Zz Sync Draft");
+        jdbc.update("UPDATE skills SET status = 'deprecated' WHERE slug = 'zz-mcp-sync-dep'");
+        jdbc.update("UPDATE skills SET status = 'draft' WHERE slug = 'zz-mcp-sync-draft'");
+        try {
+            var r = tool("sync_skills", java.util.Map.of("have", List.of(
+                    java.util.Map.of("slug", "zz-mcp-no-existe", "version", 1),
+                    java.util.Map.of("slug", "zz-mcp-sync-dep", "version", 1),
+                    java.util.Map.of("slug", "zz-mcp-sync-draft", "version", 1))));
+            var results = r.path("results");
+            assertThat(results.path(0).path("state").asText()).isEqualTo("gone");
+            assertThat(results.path(1).path("state").asText()).isEqualTo("deprecated");
+            assertThat(results.path(1).path("instruction").asText()).contains("no replacement");
+            assertThat(results.path(2).path("state").asText()).isEqualTo("gone");
+            assertThat(slugList(r.path("to_delete"))).contains("zz-mcp-no-existe", "zz-mcp-sync-dep", "zz-mcp-sync-draft");
+        } finally {
+            dropSeeded("zz-mcp-sync-dep", "zz-mcp-sync-draft");
+        }
+    }
+
+    @Test
+    void listAndSearchFilterByStackAndType() {
+        var angular = tool("list_skills", java.util.Map.of("stack", "angular", "type", "convention"));
+        assertThat(angular.toString()).doesNotContain(PREFIX + "package-structure");
+        var search = tool("search_skills", java.util.Map.of("query", "button", "stack", "angular", "type", "convention"));
+        assertThat(search).isNotNull();
+    }
+
+    @Test
+    void getPortRegistryFiltersByServiceOrReturnsTheWholeTable() {
+        var all = tool("get_port_registry", java.util.Map.of());
+        assertThat(all.path("content").asText()).isNotEmpty();
+        var one = tool("get_port_registry", java.util.Map.of("service", "zz-servicio-inexistente"));
+        assertThat(one).isNotNull();
+    }
+
+    @Test
+    void proposeSkillListsEveryArgumentProblem() {
+        var r = tool("propose_skill", java.util.Map.of(
+                "title", "Zz Problemas", "description", "d".repeat(201), "when_to_use", "w".repeat(201),
+                "stack", "angular", "content", "corto", "from_query", " ", "rationale", "x"));
+
+        assertThat(r.path("status").asText()).isEqualTo("rejected");
+        assertThat(r.path("errors").size()).isEqualTo(5);
+    }
+
+    @Test
+    void proposeSkillRejectsInvalidBase64Attachments() {
+        var r = tool("propose_skill", withOverrides(PROPUESTO, "type", "plugin", "file_content_base64", "%%%no-base64%%%"));
+
+        assertThat(r.path("status").asText()).isEqualTo("rejected");
+        assertThat(r.path("reason").asText()).contains("base64");
+    }
+
+    @Test
+    void proposeSkillInfersAttachmentNamesAndTypes() {
+        String[][] cases = {
+                {"zz-mcp-att-text", "plugin", null, null, "file_text"},
+                {"zz-mcp-att-tgz", "plugin", "paquete.tgz", null, "base64"},
+                {"zz-mcp-att-yaml", "contract", "api.yaml", null, "base64"},
+                {"zz-mcp-att-json", "contract", null, null, "base64"},
+                {"zz-mcp-att-bin", "plugin", "datos.bin", " ", "base64"},
+                {"zz-mcp-att-targz", "plugin", "x.tar.gz", null, "base64"},
+                {"zz-mcp-att-yml", "contract", "api.yml", null, "base64"},
+        };
+        for (String[] c : cases) {
+            jdbc.update("DELETE FROM skills WHERE slug = ?", c[0]);
+            var args = new java.util.HashMap<String, Object>(PROPUESTO);
+            args.put("slug", c[0]);
+            args.put("title", "Zz attachment " + c[0].substring(11));
+            args.put("from_query", "zz attachment inference " + c[0]);
+            args.put("type", c[1]);
+            args.put("owning_team", " Plataforma ");
+            if (c[2] != null) args.put("file_name", c[2]);
+            if (c[3] != null) args.put("file_content_type", c[3]);
+            if ("file_text".equals(c[4])) args.put("file_text", "contenido del paquete");
+            else args.put("file_content_base64", Base64.getEncoder().encodeToString("paquete".getBytes()));
+            var r = tool("propose_skill", args);
+            try {
+                assertThat(r.path("status").asText()).as(c[0] + " " + r).isEqualTo("proposed");
+            } finally {
+                jdbc.update("DELETE FROM skills WHERE slug = ?", c[0]);
+            }
+        }
+    }
+
+    @Test
+    void proposeRevisionAppliesFieldOverridesTagsAndRename() {
+        seedPublished("zz-mcp-rev-full", "Zz Rev Full");
+        jdbc.update("DELETE FROM skills WHERE slug = 'zz-mcp-rev-full-nuevo'");
+        try {
+            var r = revise("zz-mcp-rev-full", "title", "Zz Rev Full New", "description", "A new description that is long enough for the rules.",
+                    "when_to_use", "Use when testing that every field override reaches the snapshot.", "stack", "java", "type", "convention",
+                    "owning_team", " Plataforma ", "tags", List.of("uno", "dos"), "new_slug", "zz-mcp-rev-full-nuevo");
+            assertThat(r.path("status").asText()).as(r.toString()).isEqualTo("revision_proposed");
+            String meta = jdbc.queryForObject("""
+                    SELECT v.meta_snapshot FROM skills s JOIN skill_versions v ON v.id = s.pending_version_id
+                    WHERE s.slug = 'zz-mcp-rev-full'
+                    """, String.class);
+            assertThat(meta).contains("zz-mcp-rev-full-nuevo", "Plataforma", "uno");
+        } finally {
+            dropSeeded("zz-mcp-rev-full", "zz-mcp-rev-full-nuevo");
+        }
+    }
+
+    @Test
+    void proposeRevisionKeepsCurrentFieldsWhenOmitted() {
+        seedPublished("zz-mcp-rev-keep", "Zz Rev Keep");
+        try {
+            var r = revise("zz-mcp-rev-keep", "new_slug", "zz-mcp-rev-keep", "owning_team", " ");
+            assertThat(r.path("status").asText()).as(r.toString()).isEqualTo("revision_proposed");
+        } finally {
+            dropSeeded("zz-mcp-rev-keep");
+        }
+    }
+
+    @Test
+    void addDependenciesValidatesTheList() {
+        assertThat(tool("add_dependencies", java.util.Map.of()).path("error").asText()).contains("non-empty array");
+        assertThat(tool("add_dependencies", java.util.Map.of("dependencies", List.of())).path("error").asText()).contains("non-empty array");
+        assertThat(tool("add_dependencies", java.util.Map.of("dependencies", "x")).path("error").asText()).contains("non-empty array");
+        var many = new java.util.ArrayList<Object>();
+        for (int i = 0; i < 60; i++) many.add(java.util.Map.of("from", "a", "to", "b", "kind", "api", "text", "t" + i));
+        assertThat(tool("add_dependencies", java.util.Map.of("dependencies", many)).path("error").asText()).contains("at most");
+    }
+
+    @Test
+    void readRoomRejectsUnknownRoomsWithItsReason() {
+        var r = tool("read_room", java.util.Map.of("room_id", java.util.UUID.randomUUID().toString(), "limit", 5, "since_seq", 2));
+        assertThat(r.toString()).contains("sala");
+    }
+
     record Fixture(String slug, String title, String description, String whenToUse,
                    String stack, String type, String ownerTeam, List<String> tags, String content) {}
 
