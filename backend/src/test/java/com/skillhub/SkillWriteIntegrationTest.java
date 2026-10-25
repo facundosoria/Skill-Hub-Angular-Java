@@ -450,4 +450,62 @@ class SkillWriteIntegrationTest {
         assertThat(duplicates.closestForProposal("ab", null, null, 3)).isEmpty();
         assertThat(duplicates.closestForProposal("Titulo " + slug, null, "x".repeat(2000), 3)).isNotEmpty();
     }
+
+    // --- edge cases of skill writes ---------------------------------------
+
+    @Test
+    void keepsTheGivenChangelogOnCreate() {
+        String slug = unique("changelog");
+        SkillInput withChangelog = new SkillInput(slug, "Titulo " + slug, "Descripcion suficiente", "Cuando haga falta algo",
+                "java", "skill", "Banco", List.of("java"), "Contenido con mas de veinte caracteres", "Mi primer cambio", null);
+
+        String id = skills.createSkill(withChangelog, adminId);
+
+        assertThat(jdbc.queryForObject("SELECT changelog FROM skill_versions WHERE skill_id = ?::uuid", String.class, id)).isEqualTo("Mi primer cambio");
+    }
+
+    @Test
+    void anUpdateWithTheSameContentAndClearedFieldsOnlyRecordsRealChanges() {
+        String slug = unique("mismo");
+        skills.createSkill(input(slug), adminId);
+        SkillInput cleared = new SkillInput(slug, "Titulo " + slug, "Descripcion suficiente", "Cuando haga falta algo",
+                "java", null, null, null, "Contenido con mas de veinte caracteres", null, null);
+
+        skills.updateSkill(slug, cleared, adminId, true);
+
+        String meta = jdbc.queryForObject("SELECT metadata::text FROM audit_events WHERE action = 'skill.updated' AND target_id = ?::uuid",
+                String.class, skillId(slug));
+        assertThat(meta).contains("equipo dueno", "tags").doesNotContain("contenido").doesNotContain("titulo");
+        assertThat(jdbc.queryForObject("SELECT type::text FROM skills WHERE slug = ?", String.class, slug)).isEqualTo("skill");
+
+        SkillInput refilled = new SkillInput(slug, "Titulo " + slug, "Descripcion suficiente", "Cuando haga falta algo",
+                "java", "skill", "Banco", List.of(), "Contenido con mas de veinte caracteres", null, null);
+        skills.updateSkill(slug, refilled, adminId, true);
+    }
+
+    @Test
+    void updatesASkillThatHasNoVersionYet() {
+        String slug = unique("sinversion2");
+        skills.createSkill(input(slug), adminId);
+        jdbc.update("UPDATE skills SET current_version_id = NULL WHERE slug = ?", slug);
+        jdbc.update("DELETE FROM skill_versions WHERE skill_id = ?::uuid", skillId(slug));
+
+        var result = skills.updateSkill(slug, input(slug), adminId, true);
+
+        assertThat(result.version()).isEqualTo(1);
+    }
+
+    @Test
+    void aPendingWebEditOrAnonymousAgentBlocksAgentRevisions() {
+        String slug = unique("bloqueo");
+        skills.createSkill(input(slug), adminId);
+        skills.publishSkill(slug, adminId);
+        skills.updateSkill(slug, input(slug), memberId, false);
+
+        assertThat(skills.proposeRevision(slug, 1, input(slug), memberId, "x").motivo()).isEqualTo("ya_pendiente");
+
+        skills.discardPendingEdit(skillId(slug));
+        assertThat(skills.proposeRevision(slug, 1, input(slug), memberId, "x").ok()).isTrue();
+        assertThat(skills.proposeRevision(slug, 1, input(slug), null, "x").motivo()).isEqualTo("ya_pendiente");
+    }
 }
