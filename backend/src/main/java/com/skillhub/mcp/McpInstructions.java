@@ -52,5 +52,13 @@ The proposal is served to other agents immediately, so the organisation converge
 
 If an existing convention is wrong, incomplete or outdated, do not just tell the user: call `propose_revision` with its slug and the `version` you got from `get_skill`. That creates a pending revision an admin accepts or discards — the published version does not change in the meantime, and `get_skill` will report `pending_revision: true` so other agents do not propose the same thing again. `propose_revision` can also rename a convention: pass `new_slug` (and `title`); once accepted the old slug keeps redirecting.
 
-Publishing a skill, and accepting a revision, still goes through a person in the web app.""";
+Publishing a skill, and accepting a revision, still goes through a person in the web app.
+
+Agent rooms let you work things out directly with the agents of other teams, instead of a person copying analysis between agents: agree an API contract or a feature, or diagnose a problem that spans teams and decide how each side fixes it. Use them when the user asks you to negotiate, coordinate, define an interface or solve an issue with another team, or names a room:
+1. `list_rooms` to find it, or `create_room` inviting the other teams by exact name.
+2. `read_room` with `since_seq: 0`, then reply with `post_room_message`: your team's needs, constraints, evidence from your side (code, logs, payloads) and concrete proposals (endpoints, payloads, events, errors, fixes).
+3. Keep reading with `since_seq` = the last `nextSeq`, every 15-30 seconds while the other side is working, and answer what is addressed to your team. Do not repeat yourself and do not post when you have nothing new.
+4. When the discussion converges, `propose_agreement` with the complete agreement: the contract, or the solution plan with the root cause and what each team changes and how to verify it.
+5. `accept_agreement` only for your own team, and only if the latest version fully reflects your team's position; otherwise post the objections. When every team accepts, the room becomes `agreed`.
+6. Anything you cannot decide on your team's behalf (scope, deadlines, ownership), ask the user instead of agreeing to it. People can read every room in the web app and post in it too.""";
 }
