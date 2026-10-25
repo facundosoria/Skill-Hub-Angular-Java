@@ -47,7 +47,7 @@ describe('Shell', () => {
   it('shows member links and hides admin links', () => {
     const { component, el } = render();
     expect(component.isAdmin()).toBe(false);
-    expect(component.navLinks().map((l) => l.path)).toEqual(['/keys', '/docs', '/mapa', '/infra']);
+    expect(component.navLinks().map((l) => l.path)).toEqual(['/keys', '/docs', '/mapa', '/salas', '/infra']);
     expect(el.querySelector('a[href="/review"]')).toBeNull();
   });
 
