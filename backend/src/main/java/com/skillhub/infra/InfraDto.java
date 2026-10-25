@@ -45,7 +45,9 @@ public final class InfraDto {
             Instant lastHealthyAt,
             Instant lastRegistryLeaseAt,
             AvailabilityView availability24h,
-            AvailabilityView availability7d) {
+            AvailabilityView availability7d,
+            List<String> dependsOn,
+            List<String> publishesTo) {
     }
 
     public record SourceView(

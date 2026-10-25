@@ -51,7 +51,7 @@ describe('Gateway log panel', () => {
     expect(fixture.nativeElement.textContent).toContain(malicious);
     expect(fixture.nativeElement.querySelector('[role="list"]').getAttribute('aria-live')).toBe('off');
   });
-  it('shows request details as the primary row text, colors status ranges, and hides zero trace IDs', async () => {
+  it('shows the request as the primary row text with status and duration in their own columns, colors status ranges, and hides zero trace IDs', async () => {
     const entries = [
       logEntry(1, { traceId: '0'.repeat(32), status: 200 }),
       logEntry(2, { status: 302 }),
@@ -62,12 +62,17 @@ describe('Gateway log panel', () => {
     const { fixture } = await configure(mockStore(entries));
     const rows = Array.from(fixture.nativeElement.querySelectorAll('.log-row')) as HTMLElement[];
     expect(rows[0].querySelector('.log-trace')).toBeNull();
-    expect(rows[0].querySelector('.log-request')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('GET /api/example/{id} · 200 · 18 ms');
-    expect(rows[0].querySelector('.log-logger')?.textContent).toBe('LoggingFilter');
-    expect(rows[0].querySelector('.log-request span')?.classList.contains('text-success')).toBe(true);
-    expect(rows[1].querySelector('.log-request span')?.classList.contains('text-text-muted')).toBe(true);
-    expect(rows[2].querySelector('.log-request span')?.classList.contains('text-warning')).toBe(true);
-    expect(rows[3].querySelector('.log-request span')?.classList.contains('text-danger')).toBe(true);
+    expect(rows[0].querySelector('.log-request')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('GET /api/example/{id}');
+    expect(rows[0].querySelector('.log-status')?.textContent?.trim()).toBe('200');
+    expect(rows[0].querySelector('.log-duration')?.textContent?.trim()).toBe('18 ms');
+    expect(rows[0].querySelector('.log-logger')).toBeNull();
+    expect(rows[0].querySelector('.log-message')?.getAttribute('aria-label')).toContain('LoggingFilter');
+    expect(rows[0].querySelector('.log-status')?.classList.contains('text-success')).toBe(true);
+    expect(rows[1].querySelector('.log-status')?.classList.contains('text-text-muted')).toBe(true);
+    expect(rows[2].querySelector('.log-status')?.classList.contains('text-warning')).toBe(true);
+    expect(rows[3].querySelector('.log-status')?.classList.contains('text-danger')).toBe(true);
+    expect(rows[0].querySelector('.log-level-plain')?.textContent).toBe('INFO');
+    expect(rows[4].querySelector('.log-level-plain')).toBeNull();
     expect(rows[0].querySelector('.log-meaning')).toBeNull();
     expect(rows[1].querySelector('.log-meaning')).toBeNull();
     expect(rows[2].querySelector('.log-meaning')?.textContent).toContain('ruta no existe');
@@ -76,9 +81,10 @@ describe('Gateway log panel', () => {
   });
   it('keeps compact rows and exposes the timezone as a two-choice segmented control', async () => {
     const { fixture, panel } = await configure(mockStore([logEntry(1)]));
-    expect(panel.rowHeight).toBe(52);
+    expect(panel.rowHeight).toBe(48);
     const timezone = fixture.nativeElement.querySelector('[role="group"][aria-label="Zona horaria"]');
     expect(timezone).not.toBeNull();
+    expect(timezone.closest('.log-listhead')).not.toBeNull();
     const choices = Array.from(timezone.querySelectorAll('button')) as HTMLButtonElement[];
     expect(choices.map(button => button.textContent?.trim())).toEqual(['Local', 'UTC']);
     expect(choices.map(button => button.getAttribute('aria-pressed'))).toEqual(['true', 'false']);
@@ -124,7 +130,7 @@ describe('Gateway log panel', () => {
   it('opens the accessible help section and prepares report-ready copy for filtered loaded entries', async () => {
     const entry = logEntry(8, { route: '/api/courses/{id}', status: 404, traceId: null });
     const { fixture, panel } = await configure(mockStore([entry]));
-    const details = fixture.nativeElement.querySelector('details') as HTMLDetailsElement;
+    const details = fixture.nativeElement.querySelector('.log-more .log-help-inline') as HTMLDetailsElement;
     expect(details.open).toBe(false); details.querySelector('summary')?.dispatchEvent(new Event('click'));
     expect(fixture.nativeElement.textContent).toContain('La ventana conserva hasta 6 horas');
     const markdown = (await import('./infra-logs-diagnostics')).issueMarkdown([entry]);
@@ -150,6 +156,28 @@ describe('Gateway log panel', () => {
     expect(fixture.nativeElement.textContent).toContain('Ruta: /api/example');
     expect(fixture.nativeElement.textContent).toContain('Nivel: WARN');
     panel.removeFilter('route'); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, levels: ['WARN'], methods: ['POST'], statuses: ['4xx'], minDurationMs: 501 });
+  });
+  it('routes a pasted trace ID from the search box to the trace filter and any other text to the text search', async () => {
+    const { panel, store } = await configure();
+    const trace = 'a1b2c3d4'.repeat(4);
+    panel.setQuery(trace); panel.applyFilters();
+    expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, traceId: trace });
+    expect(panel.searchText()).toBe(trace);
+    panel.setQuery('/api/llm'); panel.applyFilters();
+    expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, q: '/api/llm' });
+  });
+  it('lets the 4xx and 5xx chips combine and toggles the slow and rejected chips from the summary strip', async () => {
+    const { fixture, panel, store } = await configure();
+    panel.applySummaryStatus('4xx'); panel.applySummaryStatus('5xx');
+    expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['4xx', '5xx'] });
+    panel.applySummaryStatus('4xx'); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['5xx'] });
+    panel.toggleSlow(); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['5xx'], minDurationMs: 1001 });
+    panel.toggleSlow(); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['5xx'] });
+    panel.toggleRejected(); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['5xx'], q: 'JWT_REJECTED' });
+    fixture.detectChanges();
+    const rejected = Array.from(fixture.nativeElement.querySelectorAll('.summary-chip') as NodeListOf<HTMLButtonElement>).find((b) => b.textContent?.includes('Sesión rechazada'))!;
+    expect(rejected.getAttribute('aria-pressed')).toBe('true');
+    panel.toggleRejected(); expect(store.open).toHaveBeenLastCalledWith({ ...EMPTY_FILTERS, statuses: ['5xx'] });
   });
   it('summarizes status classes and applies a summary class when selected', async () => {
     const entries = [logEntry(1, { status: 200, durationMs: 10 }), logEntry(2, { status: 404, level: 'WARN', durationMs: 20 }), logEntry(3, { status: 503, level: 'ERROR', durationMs: 30 })];
@@ -223,7 +251,7 @@ describe('Gateway log panel', () => {
   });
   it('keeps secondary filters and header help collapsed until requested', async () => {
     const { fixture, panel } = await configure();
-    const follow = fixture.nativeElement.querySelector('.log-header-links details') as HTMLDetailsElement;
+    const follow = fixture.nativeElement.querySelector('.log-more') as HTMLDetailsElement;
     const filters = fixture.nativeElement.querySelector('.log-filter-panel') as HTMLElement;
     expect(follow).not.toBeNull(); expect(follow.open).toBe(false);
     expect(filters.closest('details')?.open).toBe(false);
@@ -231,13 +259,13 @@ describe('Gateway log panel', () => {
     panel.toggleMethod('GET'); fixture.detectChanges();
     const getChip = Array.from(fixture.nativeElement.querySelectorAll('.log-method-chip') as NodeListOf<HTMLButtonElement>)
       .find(button => button.textContent?.trim() === 'GET');
-    expect(getChip?.getAttribute('aria-pressed')).toBe('true'); expect(getChip?.classList.contains('is-selected')).toBe(true);
+    expect(getChip?.getAttribute('aria-pressed')).toBe('true');
     expect(fixture.nativeElement.querySelector('.log-filter-count')?.textContent).toBe('1');
     expect(fixture.nativeElement.querySelector('.log-active-chip')?.textContent).toContain('GET');
   });
   it('closes an open disclosure with Escape and restores focus to its summary', async () => {
     const { fixture, panel } = await configure();
-    const disclosure = fixture.nativeElement.querySelector('.log-header-links details') as HTMLDetailsElement;
+    const disclosure = fixture.nativeElement.querySelector('.log-more') as HTMLDetailsElement;
     const summary = disclosure.querySelector('summary') as HTMLElement;
     disclosure.open = true;
     const popover = disclosure.querySelector('.log-popover') as HTMLElement;
@@ -278,5 +306,87 @@ describe('Gateway log panel', () => {
     await panel.copy('11111111111111111111111111111111'); expect(writeText).toHaveBeenCalledWith('11111111111111111111111111111111');
     expect(panel.copyResult()).toBe('copied'); writeText.mockRejectedValueOnce(new Error('Denied'));
     await panel.copy('Synthetic summary'); fixture.detectChanges(); expect(fixture.nativeElement.textContent).toContain('No pudimos copiar');
+  });
+  it('groups the rarely used actions in one menu and keeps the toolbar to search, level, pause, jump and filters', async () => {
+    const { fixture, panel } = await configure(mockStore([logEntry(1)]));
+    const root = fixture.nativeElement as HTMLElement;
+    const menu = root.querySelector('.log-more') as HTMLDetailsElement;
+    expect(menu).not.toBeNull(); expect(menu.open).toBe(false);
+    const text = menu.textContent ?? '';
+    expect(text).toContain('Agrupar repetidos'); expect(text).toContain('Cómo leer esto');
+    expect(text).not.toContain('Zona horaria');
+    expect(text).toContain('Vista paginada accesible'); expect(text).toContain('Copiar para un issue');
+    expect(text).toContain('Descargar vista'); expect(text).toContain('.json'); expect(text).toContain('.csv'); expect(text).toContain('.txt');
+    expect(root.querySelectorAll('.log-toolbar > details').length).toBe(3);
+    // "Rango" existe una sola vez, muestra el rango actual y trae el selector de fecha con los atajos de 15 min, 1 h y 3 h.
+    const jumps = Array.from(root.querySelectorAll('.log-toolbar > details > summary')).filter(summary => summary.textContent?.includes('Rango'));
+    expect(jumps.length).toBe(1);
+    expect(jumps[0].textContent).toContain('En vivo');
+    expect(jumps[0].closest('details')?.textContent).toContain('Ir a fecha y hora');
+    expect(jumps[0].closest('details')?.textContent).toContain('Hace 15 min');
+    const accessible = Array.from(menu.querySelectorAll('button')).find(button => button.textContent?.includes('Vista paginada accesible')) as HTMLButtonElement;
+    accessible.click(); fixture.detectChanges();
+    expect(panel.accessible()).toBe(true);
+    fixture.destroy();
+  });
+  it('moves the static window, privacy and last event info to the footer and colors the HTTP summary by severity', async () => {
+    const { fixture } = await configure(mockStore([logEntry(1)]));
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('header')?.textContent).not.toContain('Datos sensibles ocultos');
+    const footer = Array.from(root.querySelectorAll('p')).find(p => p.textContent?.includes('Datos sensibles ocultos'));
+    expect(footer).toBeTruthy();
+    expect(footer!.closest('header')).toBeNull();
+    const classes = Array.from(root.querySelectorAll('.summary-chip strong')).map(label => [label.textContent?.trim(), label.className]);
+    expect(classes).toEqual([['2xx', 'text-success'], ['3xx', 'text-text-muted'], ['4xx', 'text-warning'], ['5xx', 'text-danger']]);
+    fixture.destroy();
+  });
+  it('puts pause next to the live badge as an icon button and swaps it for resume when paused', async () => {
+    const { fixture, store } = await configure(mockStore([logEntry(1)]));
+    const root = fixture.nativeElement as HTMLElement;
+    const pause = root.querySelector('button[aria-label="Pausar"]') as HTMLButtonElement;
+    expect(pause).not.toBeNull(); expect(pause.textContent?.trim()).toBe('');
+    const live = pause.parentElement as HTMLElement;
+    expect(live.querySelector('.log-connection-badge')).not.toBeNull();
+    expect(live.textContent).toContain('api-gateway');
+    pause.click(); expect(store.pause).toHaveBeenCalled();
+    store.connection.set('paused'); store.newCount.set(12); fixture.detectChanges();
+    const resume = live.querySelector('button[aria-label="Reanudar"]') as HTMLButtonElement;
+    expect(resume).not.toBeNull(); resume.click(); expect(store.resume).toHaveBeenCalled();
+    const banner = Array.from(root.querySelectorAll('[role="status"]')).find(node => node.textContent?.includes('eventos nuevos'))!.textContent as string;
+    expect(banner).toContain('Pausado'); expect(banner).toContain('12'); expect(banner).toContain('eventos nuevos');
+    fixture.destroy();
+  });
+  it('labels the columns, keeps the timezone in the time header and shows the filter count only when there are filters', async () => {
+    const { fixture, panel } = await configure(mockStore([logEntry(1)]));
+    const root = fixture.nativeElement as HTMLElement;
+    const head = root.querySelector('.log-listhead')!.textContent as string;
+    ['Hora', 'Nivel', 'Petición', 'Estado', 'Duración', 'Servicio'].forEach(label => expect(head).toContain(label));
+    expect(root.querySelector('.log-filter-count')).toBeNull();
+    panel.toggleMethod('GET'); fixture.detectChanges();
+    expect(root.querySelector('.log-filter-count')?.textContent).toBe('1');
+    expect(Array.from(root.querySelectorAll('.log-levels label')).map(label => label.textContent?.trim())).toEqual(['INFO', 'WARN', 'ERROR']);
+    fixture.destroy();
+  });
+  it('shows only the time for today and adds day and month for older events, in the chosen zone', async () => {
+    const { fixture, panel } = await configure(mockStore([logEntry(1)]));
+    const now = new Date();
+    const today = panel.clock(now.toISOString());
+    expect(today).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+    const older = panel.clock(new Date(now.getTime() - 3 * 86_400_000).toISOString());
+    expect(older).toMatch(/^\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/);
+    panel.setTimezone('utc');
+    expect(panel.clock('2026-10-18T23:14:13.000Z')).toBe('18/10 23:14:13');
+    fixture.destroy();
+  });
+  it.each(['reconnecting', 'blocked'] as const)('keeps the badge short and shows the full %s message in its own banner', async connection => {
+    const { fixture, store } = await configure(mockStore([logEntry(1)]));
+    store.connection.set(connection); store.retrySeconds.set(7); fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    const badge = root.querySelector('.log-connection-badge') as HTMLElement;
+    expect(badge.className).toContain('truncate');
+    const banner = Array.from(root.querySelectorAll('[role="status"]')).find(node => node.classList.contains('bg-warning-soft'))!;
+    expect(banner.textContent).toContain(badge.getAttribute('title')!);
+    expect(banner.textContent).toContain('7 s');
+    fixture.destroy();
   });
 });

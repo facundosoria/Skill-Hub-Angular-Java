@@ -6,6 +6,9 @@ import { InfraLogsStore } from './infra-logs.store';
 import { explainLog, hasSpecificExplanation, statusName } from './infra-logs-explanations';
 import { downloadFilename, groupEntries, issueMarkdown, LogGroup, routeInsights, routeSegment, toCsv, toText } from './infra-logs-diagnostics';
 
+const SLOW_MS = 1001;
+const REJECTED_QUERY = 'JWT_REJECTED';
+
 @Component({
   selector: 'app-infra-logs',
   imports: [...UI],
@@ -52,7 +55,7 @@ export class InfraLogs implements OnDestroy {
   readonly frequentRoutes = computed(() => [...this.routeStats()].sort((a, b) => b.count - a.count || a.route.localeCompare(b.route)).slice(0, 5));
   readonly errorRoutes = computed(() => [...this.routeStats()].sort((a, b) => b.errorCount - a.errorCount || b.count - a.count || a.route.localeCompare(b.route)).filter(item => item.errorCount > 0).slice(0, 5));
   readonly copyResult = signal<'copied' | 'copyError' | null>(null);
-  readonly rowHeight = 52;
+  readonly rowHeight = 48;
   readonly pageCount = computed(() => Math.max(1, Math.ceil(this.displayedGroups().length / 150)));
   readonly rangeStart = computed(() => this.accessible() ? Math.min(this.pageIndex(), this.pageCount() - 1) * 150 :
     Math.max(0, Math.floor(this.scrollTop() / this.rowHeight) - 5));
@@ -118,7 +121,15 @@ export class InfraLogs implements OnDestroy {
     this.levels.update(levels => levels.includes(level) ? levels.filter(item => item !== level) : [...levels, level]);
     this.applyFilters();
   }
-  setQuery(value: string): void { this.query.set(value); this.scheduleFilters(); }
+  /** Lo que muestra el buscador: el trace ID filtrado (si lo hay) o el texto libre. */
+  readonly searchText = computed(() => this.traceId() || this.query());
+  /** Un trace ID (32 hex) pegado en el buscador filtra por traza; cualquier otro texto busca en la línea del evento (incluye la ruta). */
+  setQuery(value: string): void {
+    const isTrace = /^[0-9a-f]{32}$/i.test(value.trim());
+    this.traceId.set(isTrace ? value.trim() : '');
+    this.query.set(isTrace ? '' : value);
+    this.scheduleFilters();
+  }
   setTrace(value: string): void { this.traceId.set(value); this.scheduleFilters(); }
   setRoute(value: string): void { this.route.set(value); this.scheduleFilters(); }
   toggleMethod(method: LogMethod): void { this.methods.update(items => items.includes(method) ? items.filter(item => item !== method) : [...items, method]); this.applyFilters(); }
@@ -127,8 +138,8 @@ export class InfraLogs implements OnDestroy {
   preset(name: 'errors' | 'slow' | 'rejected'): void {
     this.levels.set([]); this.traceId.set(''); this.route.set(''); this.methods.set([]);
     this.statuses.set(name === 'errors' ? ['4xx', '5xx'] : []);
-    this.minDurationMs.set(name === 'slow' ? 1001 : null);
-    this.query.set(name === 'rejected' ? 'JWT_REJECTED' : '');
+    this.minDurationMs.set(name === 'slow' ? SLOW_MS : null);
+    this.query.set(name === 'rejected' ? REJECTED_QUERY : '');
     this.applyFilters();
   }
   removeFilter(name: 'route' | 'method' | 'status' | 'duration' | 'trace' | 'text' | 'level'): void {
@@ -235,7 +246,9 @@ export class InfraLogs implements OnDestroy {
       { text: value.slice(index + query.length), match: false },
     ];
   }
-  applySummaryStatus(status: LogStatusFilter): void { this.statuses.set([status]); this.applyFilters(); }
+  applySummaryStatus(status: LogStatusFilter): void { this.toggleStatus(status); }
+  toggleSlow(): void { this.minDurationMs.set(this.minDurationMs() === SLOW_MS ? null : SLOW_MS); this.applyFilters(); }
+  toggleRejected(): void { this.query.set(this.query() === REJECTED_QUERY ? '' : REJECTED_QUERY); this.traceId.set(''); this.applyFilters(); }
   nowLocal(): string { return this.datetimeLocal(new Date().toISOString()); }
   relatedEntries(entry: LogEntry): LogEntry[] {
     return this.hasTraceId(entry) ? this.store.entries().filter(item => item.traceId === entry.traceId) : [];
@@ -309,6 +322,18 @@ export class InfraLogs implements OnDestroy {
     if (status >= 400 && status < 500) return 'text-warning';
     if (status >= 500 && status < 600) return 'text-danger';
     return 'text-text-muted';
+  }
+  /** Hora de la fila (sin fecha si es de hoy; con día y mes si no), en la zona elegida. */
+  clock(timestamp: string): string {
+    const date = new Date(timestamp);
+    const zone = this.timezone() === 'utc' ? { timeZone: 'UTC' } : {};
+    const locale = this.i18n.intlLocale();
+    const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, ...zone });
+    const today = new Date().toLocaleDateString(locale, zone) === date.toLocaleDateString(locale, zone);
+    return today ? time : `${date.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', ...zone })} ${time}`;
+  }
+  summaryClass(status: string): string {
+    return status === '3xx' ? 'text-text-muted' : this.statusClass(Number(status[0]) * 100);
   }
   summary(entry: LogEntry): string {
     return entry.method && entry.route ? `${entry.method} ${entry.route}${entry.status == null ? '' : ` · ${entry.status}`}${entry.durationMs == null ? '' : ` · ${entry.durationMs} ms`}` : entry.lines[0] ?? entry.event;

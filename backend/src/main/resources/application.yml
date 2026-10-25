@@ -71,6 +71,51 @@ app:
     paths:
       health: /actuator/health
       prometheus: /actuator/prometheus
+    # Relaciones entre servicios para la pestana Mapa. Se declaran, nunca se
+    # infieren, y salen de los contratos del catalogo de Skill Hub.
+    #
+    # dependencies = llamadas HTTP (llamador: [llamados]). Todo HTTP pasa por el
+    # api-gateway y los pedidos de token a users-service no se listan.
+    #   - api-gateway -> todos: gateway-contract (cada servicio se expone en
+    #     /api/{nombre}/**; que este en la allowlist no figura en el catalogo).
+    #   - practical -> llm: informe Tema 05 <-> LLM (tutor y evaluacion de intento).
+    #   - course <-> llm: informe Tema 02 <-> LLM (estado de calibracion; membresia
+    #     y descarga de material). La membresia llm -> course esta acordada pero su
+    #     adopcion en llm-service sigue pendiente.
+    #   - backoffice -> llm: informe Tema 12 <-> LLM (/api/llm/admin/**).
+    #   - notifications -> llm: contrato llm-service <-> chat (moderacion).
+    #   - resto -> backoffice: GET /api/backoffice/parameters al arrancar
+    #     (backoffice-global-parameters-contract, tabla de consumidores).
+    dependencies:
+      api-gateway: [users-service, course-service, engine-challenge-service, theoretical-challenge-service, practical-challenge-service, sandbox-service, llm-service, accounting-service, market-service, roadmap-service, notifications-service, backoffice-service]
+      users-service: [backoffice-service]
+      course-service: [llm-service, backoffice-service]
+      engine-challenge-service: [backoffice-service]
+      practical-challenge-service: [llm-service, backoffice-service]
+      llm-service: [course-service, backoffice-service]
+      accounting-service: [backoffice-service]
+      market-service: [backoffice-service]
+      roadmap-service: [backoffice-service]
+      notifications-service: [llm-service]
+      backoffice-service: [llm-service]
+    # events = flujos por el bus Kafka (publicador: [consumidores]), segun
+    # contratos-kafka y los contratos por servicio. Sandbox publica
+    # sandbox.events pero el catalogo no nombra consumidores. Los flujos a
+    # notifications-service de practical, theoretical y market son por
+    # suscripcion al topico (challenges.events / notifications.events).
+    # administration.events figura sin re-provisionar en el broker (contratos-kafka).
+    events:
+      engine-challenge-service: [accounting-service, roadmap-service, notifications-service]
+      practical-challenge-service: [llm-service, notifications-service]
+      theoretical-challenge-service: [notifications-service]
+      llm-service: [practical-challenge-service, course-service, notifications-service]
+      course-service: [llm-service, users-service, accounting-service, notifications-service]
+      users-service: [notifications-service]
+      accounting-service: [market-service, roadmap-service, engine-challenge-service]
+      market-service: [accounting-service, notifications-service]
+      roadmap-service: [accounting-service]
+      notifications-service: [llm-service]
+      backoffice-service: [users-service, course-service, engine-challenge-service, practical-challenge-service, llm-service, accounting-service, market-service, roadmap-service, notifications-service]
     # Optional frontend-edge node listing through the Tailscale API. Pending:
     # requires credentials and an agreed device/tag contract, so it stays
     # disabled and reports an unavailable state rather than simulated nodes.

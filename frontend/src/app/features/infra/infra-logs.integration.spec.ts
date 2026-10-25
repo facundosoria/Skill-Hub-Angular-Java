@@ -30,7 +30,8 @@ describe('Infra logs tab integration', () => {
     const fixture = TestBed.createComponent(Infra);
     http.expectOne(BASE + '/status').flush({}, { status: 404, statusText: 'Not Found' });
     await fixture.whenStable(); fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[role="tablist"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#infra-tab-logs')).toBeNull();
+    expect(fixture.nativeElement.querySelector('#infra-tab-map')).not.toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Monitoreo deshabilitado'); expect(sources).toHaveLength(0);
   });
   it('preserves Infra when the status probe fails with 503', async () => {
@@ -56,9 +57,12 @@ describe('Infra logs tab integration', () => {
     await fixture.whenStable(); fixture.detectChanges();
     fixture.nativeElement.querySelector('#infra-tab-state').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     fixture.detectChanges(); http.expectOne(req => req.url === BASE).flush(logPage()); await settle(); await fixture.whenStable(); fixture.detectChanges();
+    expect(fixture.componentInstance.activeTab()).toBe('logs');
     const tab = fixture.nativeElement.querySelector('#infra-tab-logs'); expect(tab.getAttribute('aria-selected')).toBe('true');
     expect(tab.getAttribute('aria-controls')).toBe('infra-panel-logs');
-    tab.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })); await fixture.whenStable(); fixture.detectChanges();
+    tab.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })); await fixture.whenStable(); fixture.detectChanges();
+    expect(fixture.componentInstance.activeTab()).toBe('map');
+    fixture.nativeElement.querySelector('#infra-tab-map').dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true })); await fixture.whenStable(); fixture.detectChanges();
     expect(fixture.componentInstance.activeTab()).toBe('state');
   });
 });

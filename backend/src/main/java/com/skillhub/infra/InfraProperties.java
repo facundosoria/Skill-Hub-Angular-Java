@@ -5,7 +5,9 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Configuration for the infra monitoring feature, under {@code app.infra}.
@@ -89,6 +91,22 @@ public class InfraProperties {
 
     /** Independent service catalogue. Defaults to the expected micro list. */
     private List<ServiceDefinition> catalogue = defaultCatalogue();
+
+    /**
+     * Declared service-to-service calls, keyed by caller: {@code users-service:
+     * [api-gateway]} means users-service calls api-gateway. Nothing is inferred;
+     * the map is empty unless configured. Names that are not in the catalogue,
+     * self references and duplicates are dropped when the view is built.
+     */
+    private Map<String, List<String>> dependencies = new LinkedHashMap<>();
+
+    /**
+     * Declared event flows over the bus, keyed by publisher: {@code llm-service:
+     * [practical-challenge-service]} means practical-challenge-service consumes
+     * events published by llm-service. Same rules as {@link #dependencies}: nothing
+     * is inferred and unknown names, self references and duplicates are dropped.
+     */
+    private Map<String, List<String>> events = new LinkedHashMap<>();
 
     private Tailscale tailscale = new Tailscale();
 
@@ -204,6 +222,10 @@ public class InfraProperties {
     public void setPaths(ProbePaths paths) { this.paths = paths; }
     public List<ServiceDefinition> getCatalogue() { return catalogue; }
     public void setCatalogue(List<ServiceDefinition> catalogue) { this.catalogue = catalogue; }
+    public Map<String, List<String>> getEvents() { return events; }
+    public void setEvents(Map<String, List<String>> events) { this.events = events; }
+    public Map<String, List<String>> getDependencies() { return dependencies; }
+    public void setDependencies(Map<String, List<String>> dependencies) { this.dependencies = dependencies; }
     public Tailscale getTailscale() { return tailscale; }
     public void setTailscale(Tailscale tailscale) { this.tailscale = tailscale; }
 }

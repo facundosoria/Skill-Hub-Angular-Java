@@ -102,6 +102,34 @@ the registry: `users-service`, `course-service`, `engine-challenge-service`,
 `llm-service`, `accounting-service`, `market-service`, `roadmap-service`,
 `notifications-service`, `backoffice-service`, `api-gateway`.
 
+## Service connections (`dependsOn`, `publishesTo`)
+
+Each service in `GET /api/infra/state` carries two lists that feed the **Mapa** tab:
+
+- `dependsOn`: the services it calls over HTTP. For `api-gateway` they are the
+  routes it exposes.
+- `publishesTo`: the services that consume the events it publishes on the bus.
+
+Both are **declared, never inferred**, under `app.infra.dependencies` and
+`app.infra.events` (source → targets). Names outside the catalogue, self
+references and duplicates are dropped, and both lists are empty unless configured:
+
+```yaml
+app:
+  infra:
+    dependencies:
+      course-service: [llm-service, backoffice-service]
+    events:
+      llm-service: [course-service, notifications-service]
+```
+
+The defaults in `application.yml` come from the Skill Hub contracts (the file lists
+the source of each group): the per-service HTTP contracts and `contratos-kafka`.
+Token requests to users-service are not listed, and all HTTP traverses the
+api-gateway. `sandbox-service` publishes `sandbox.events` but the catalogue names
+no consumer, so it is related only through the gateway.
+`InfraDependenciesConfigTest` fails if a name is not in the catalogue.
+
 ## Pending / excluded
 
 - **Frontend node listing via Tailscale** is pending: it requires credentials

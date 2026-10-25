@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,6 +60,9 @@ public class InfraQueryService {
             }
         }
 
+        Set<String> knownNames = new LinkedHashSet<>();
+        for (InfraProperties.ServiceDefinition def : catalogue) knownNames.add(def.getName());
+
         List<InfraDto.ServiceView> services = new ArrayList<>();
         int up = 0;
         int down = 0;
@@ -94,7 +98,9 @@ public class InfraQueryService {
                     state == null ? null : state.lastHealthyAt(),
                     state == null ? null : state.lastRegistryLeaseAt(),
                     a24,
-                    a7));
+                    a7,
+                    declared(properties.getDependencies(), name, knownNames),
+                    declared(properties.getEvents(), name, knownNames)));
         }
 
         boolean registryConfigured = properties.getEurekaUrl() != null && !properties.getEurekaUrl().isBlank();
@@ -111,6 +117,17 @@ public class InfraQueryService {
                 new InfraDto.SourceView(registryConfigured, registryOk, lastCheck),
                 new InfraDto.SummaryView(services.size(), up, down, degraded, unknown, noAccess),
                 services, frontendNodes);
+    }
+
+    /** Configured targets of {@code name}, limited to catalogue services, without self or duplicates. */
+    private List<String> declared(Map<String, List<String>> source, String name, Set<String> knownNames) {
+        List<String> targets = source == null ? null : source.get(name);
+        if (targets == null) return List.of();
+        Set<String> clean = new LinkedHashSet<>();
+        for (String target : targets) {
+            if (target != null && !target.equals(name) && knownNames.contains(target)) clean.add(target);
+        }
+        return List.copyOf(clean);
     }
 
     private InfraDto.FrontendNodesView frontendNodes() {

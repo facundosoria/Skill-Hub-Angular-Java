@@ -33,6 +33,10 @@ export interface InfraServiceStatus {
   lastRegistryLeaseAt: string | null;
   availability24h: InfraAvailability | null;
   availability7d: InfraAvailability | null;
+  /** Servicios a los que este llama, declarados en el backend (app.infra.dependencies). */
+  dependsOn: string[];
+  /** Servicios que consumen eventos de este por el bus (app.infra.events). */
+  publishesTo: string[];
 }
 
 export interface InfraSource {

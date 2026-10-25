@@ -170,6 +170,26 @@ class SanitizedLogStoreTest {
         }
     }
 
+    @Test void aRootReachedThroughASymlinkedParentIsRejectedEvenWhenItPointsAtValidFiles() throws Exception {
+        // like macOS /var -> private/var: the root itself is a plain directory, but one parent in its path is a symlink
+        Path parentLink = dir.resolveSibling(dir.getFileName() + "-parent-link");
+        Files.createSymbolicLink(parentLink, dir.toRealPath().getParent());
+        try {
+            var properties = LogFixtures.properties(dir);
+            properties.setDir(parentLink.resolve(dir.getFileName()).toString());
+            var viaLink = new SanitizedLogStore(properties, LogFixtures.MAPPER, clock, 1000, 10);
+            viaLink.refresh();
+            var cold = viaLink.page(LogFixtures.query());
+            assertThat(cold.entries()).isEmpty();
+            assertThat(cold.sourceStatus()).isEqualTo("starting");
+            assertThat(cold.generation()).isNull();
+            // the same files through the canonical path are served
+            assertThat(store.page(LogFixtures.query("limit", "2")).entries()).hasSize(2);
+        } finally {
+            Files.deleteIfExists(parentLink);
+        }
+    }
+
     @Test void symlinksAndInvalidManifestSchemaAreRejected() throws Exception {
         Files.delete(dir.resolve(LogFixtures.FILE));
         Files.createSymbolicLink(dir.resolve(LogFixtures.FILE), dir.resolve("manifest.json"));

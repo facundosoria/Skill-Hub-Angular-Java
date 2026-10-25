@@ -28,8 +28,20 @@ final class LogFixtures {
     static InfraLogsProperties properties(Path dir) {
         InfraLogsProperties properties = new InfraLogsProperties();
         properties.setEnabled(true);
-        properties.setDir(dir.toString());
+        properties.setDir(realPath(dir).toString());
         return properties;
+    }
+
+    /**
+     * SanitizedLogStore rejects a root that is, or passes through, a symlink. A JUnit temp dir can sit behind one
+     * (macOS: /var -> private/var), so the fixture hands the store the canonical path, as a real collector directory is.
+     */
+    static Path realPath(Path dir) {
+        try {
+            return dir.toRealPath();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
     }
 
     static void copy(Path dir) throws Exception {
