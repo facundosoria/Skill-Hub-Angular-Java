@@ -2,6 +2,9 @@ package com.skillhub;
 
 import com.skillhub.session.UserService;
 import com.skillhub.skill.CatalogArtifactService;
+import com.skillhub.skill.DuplicatesRepository;
+import com.skillhub.skill.ProposeService;
+import com.skillhub.skill.VoteService;
 import com.skillhub.skill.SkillInput;
 import com.skillhub.skill.SkillWriteService;
 import com.skillhub.web.DomainException;
@@ -49,6 +52,9 @@ class SkillWriteIntegrationTest {
     @Autowired CatalogArtifactService artifacts;
     @Autowired UserService users;
     @Autowired JdbcTemplate jdbc;
+    @Autowired ProposeService proposals;
+    @Autowired VoteService votes;
+    @Autowired DuplicatesRepository duplicates;
 
     static String adminId;
     static String memberId;
@@ -320,5 +326,121 @@ class SkillWriteIntegrationTest {
         assertThat(result.ok()).isTrue();
         assertThat(result.currentVersion()).isEqualTo(1);
         assertThat(artifacts.findSummary(skillId(slug), 2)).isNotNull();
+    }
+
+    // --- agent proposals, peer votes and duplicate search ---------------
+
+    private static final String[] WORDS = {"amber", "basalt", "cobalt", "delta", "ember", "fjord", "garnet", "harbor",
+            "indigo", "jasper", "kelvin", "lumen", "marble", "nickel", "onyx", "prism", "quartz", "raven", "saffron", "tundra"};
+
+    /** Texto distinto en cada llamada para que la deteccion de duplicados no las junte. */
+    private static String words() {
+        java.util.Random random = new java.util.Random();
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < 6; i++) out.append(WORDS[random.nextInt(WORDS.length)]).append(i).append(' ');
+        return out.toString().trim();
+    }
+
+    private static SkillInput proposal(String slug, String title, String type, List<String> tags) {
+        String unique = words();
+        return new SkillInput(slug, title + " " + unique.substring(0, 12), "A description that is long enough for the catalogue " + unique + ".",
+                "Use when the " + unique + " scenario needs a valid proposal.", "java", type, null, tags,
+                "## Rule\n\nThe " + unique + " proposal carries enough content to be valid here.", null, null);
+    }
+
+    @Test
+    void proposalsDeriveTheSlugDefaultTheTypeAndCutLongTexts() {
+        String title = "Zz proposal " + UUID.randomUUID().toString().substring(0, 6);
+
+        var result = proposals.proposeSkill(proposal(" ", title, null, null), memberId, "q".repeat(400), "r".repeat(400));
+
+        assertThat(result.ok()).isTrue();
+        assertThat(status(result.slug())).isEqualTo("proposed");
+        assertThat(jdbc.queryForObject("SELECT type::text FROM skills WHERE slug = ?", String.class, result.slug())).isEqualTo("convention");
+        assertThat(jdbc.queryForObject("SELECT length(proposed_from_query) FROM skills WHERE slug = ?", Integer.class, result.slug())).isEqualTo(300);
+    }
+
+    @Test
+    void proposalsAreValidatedCheckedForLanguageAndExistingSlugs() {
+        assertThat(proposals.proposeSkill(proposal("x", "Zz", null, null), memberId, null, null).motivo()).isEqualTo("invalido");
+
+        SkillInput mixed = new SkillInput(unique("mezcla"), "Botones de la aplicacion", "A description that is long enough for the catalogue.",
+                "Usalo cuando agregues un boton en cualquier pantalla de la aplicacion.", "java", "convention", null, null,
+                "## Regla\n\nCada boton usa el componente compartido y una etiqueta visible siempre.", null, null);
+        assertThat(proposals.proposeSkill(mixed, memberId, null, null).motivo()).isEqualTo("idioma_inconsistente");
+
+        String slug = unique("existente");
+        skills.createSkill(input(slug), adminId);
+        var duplicate = proposals.proposeSkill(proposal(slug, "Zz completely different words " + slug, "convention", List.of()), memberId, "q", "why");
+        assertThat(duplicate.motivo()).isEqualTo("duplicado");
+    }
+
+    @Test
+    void proposalsOfPluginsGetAnArtifactAndKeepTheirTags() {
+        var generated = proposals.proposeSkill(proposal(unique("zz-plugin"), "Zz plugin " + UUID.randomUUID(), "plugin", List.of("uno")), memberId, "q", "why");
+        assertThat(generated.ok()).as(generated.toString()).isTrue();
+        assertThat(artifacts.findSummary(skillId(generated.slug()), 1)).isNotNull();
+        assertThat(jdbc.queryForList("SELECT tag FROM skill_tags WHERE skill_id = ?::uuid", String.class, skillId(generated.slug()))).containsExactly("uno");
+
+        var attached = proposals.proposeSkill(proposal(unique("zz-contrato"), "Zz contract " + UUID.randomUUID(), "contract", null), memberId, "q", "why",
+                new ProposeService.FileAttachment("api.yaml", "application/yaml", "openapi: 3".getBytes(StandardCharsets.UTF_8)));
+        assertThat(artifacts.findSummary(skillId(attached.slug()), 1).fileName()).isEqualTo("api.yaml");
+
+        var empty = proposals.proposeSkill(proposal(unique("zz-vacio"), "Zz empty file " + UUID.randomUUID(), "plugin", null), memberId, "q", "why",
+                new ProposeService.FileAttachment("x.zip", "application/zip", new byte[0]));
+        assertThat(artifacts.findSummary(skillId(empty.slug()), 1).fileName()).endsWith("-plugin.json");
+        var nullBytes = proposals.proposeSkill(proposal(unique("zz-nulo"), "Zz null file " + UUID.randomUUID(), "skill", null), memberId, "q", "why",
+                new ProposeService.FileAttachment("x.zip", "application/zip", null));
+        assertThat(nullBytes.ok()).isTrue();
+    }
+
+    @Test
+    void peersVoteAPendingEditUntilItApplies() {
+        String slug = unique("votos");
+        skills.createSkill(input(slug), adminId);
+        skills.publishSkill(slug, adminId);
+        String id = skillId(slug);
+        assertThat(votes.getVoteStatus(id, memberId)).isNull();
+        assertThatThrownBy(() -> votes.castVote(id, adminId)).hasMessage("No hay ninguna edicion esperando votos");
+        assertThatThrownBy(() -> votes.castVote(UUID.randomUUID().toString(), adminId)).hasMessage("No existe el skill");
+
+        SkillInput changed = new SkillInput(slug, "Titulo votado", "Descripcion suficiente", "Cuando haga falta algo",
+                "java", "skill", "Banco", List.of("java"), "Contenido con mas de veinte caracteres", null, null);
+        skills.updateSkill(slug, changed, memberId, false);
+
+        VoteService.VoteStatus status = votes.getVoteStatus(id, memberId);
+        assertThat(status.esAutor()).isTrue();
+        assertThat(status.yaVoto()).isFalse();
+        assertThatThrownBy(() -> votes.castVote(id, memberId)).hasMessage("No podes votar tu propia propuesta");
+
+        var first = votes.castVote(id, adminId);
+        assertThat(first.applied()).isFalse();
+        assertThat(votes.getVoteStatus(id, adminId).yaVoto()).isTrue();
+        assertThat(votes.castVote(id, adminId).votes()).isEqualTo(1);
+
+        VoteService.CastResult last = null;
+        for (int i = 0; i < VoteService.VOTES_REQUIRED - 1; i++) {
+            String username = "votante-" + UUID.randomUUID().toString().substring(0, 8);
+            users.register(username, "clave-segura-1", "Identidad y Usuarios", null);
+            last = votes.castVote(id, jdbc.queryForObject("SELECT id::text FROM users WHERE username = ?", String.class, username));
+        }
+        assertThat(last.applied()).isTrue();
+        assertThat(last.votes()).isEqualTo(VoteService.VOTES_REQUIRED);
+        assertThat(jdbc.queryForObject("SELECT title FROM skills WHERE id = ?::uuid", String.class, id)).isEqualTo("Titulo votado");
+    }
+
+    @Test
+    void duplicateSearchNeedsATitleAndUsesTagsWhenGiven() {
+        String slug = unique("parecido");
+        skills.createSkill(input(slug), adminId);
+        skills.publishSkill(slug, adminId);
+
+        assertThat(duplicates.findSimilarSkills(null, null, 4)).isEmpty();
+        assertThat(duplicates.findSimilarSkills(" ab ", List.of("java"), 4)).isEmpty();
+        assertThat(duplicates.findSimilarSkills("Titulo " + slug, java.util.Arrays.asList("java", " ", null), 4))
+                .extracting(DuplicatesRepository.DuplicateCandidate::slug).contains(slug);
+        assertThat(duplicates.findSimilarSkills("Titulo " + slug, null, 4)).isNotEmpty();
+        assertThat(duplicates.closestForProposal("ab", null, null, 3)).isEmpty();
+        assertThat(duplicates.closestForProposal("Titulo " + slug, null, "x".repeat(2000), 3)).isNotEmpty();
     }
 }
