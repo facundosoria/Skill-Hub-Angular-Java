@@ -9,6 +9,7 @@ import { UI } from '../../shared/ui';
 import { SkillMarkdown } from '../../shared/skill-markdown';
 import { SkillPreview } from '../../shared/skill-preview';
 import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
+import { TitleTransitionPipe } from '../../shared/title-transition.pipe';
 import { apiError } from '../auth/login';
 
 type CatalogSection = 'skills' | 'plugins' | 'contracts';
@@ -16,13 +17,13 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
 /** Puerto de src/app/(app)/skills/[slug]/page.tsx + skill-actions + edit-vote-banner. */
 @Component({
   selector: 'app-skill-detail',
-  imports: [FormsModule, RouterLink, SkillMarkdown, SkillPreview, AnimDelayPipe, ...UI],
+  imports: [FormsModule, RouterLink, SkillMarkdown, SkillPreview, AnimDelayPipe, TitleTransitionPipe, ...UI],
   template: `
     <a [routerLink]="basePath()" class="text-[13px] text-text-muted hover:text-text">← {{ sectionLabel() }}</a>
 
     @if (data(); as d) {
       <div class="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-2">
-        <h1 class="text-2xl font-semibold tracking-tight">{{ d.skill.title }}</h1>
+        <h1 class="text-2xl font-semibold tracking-tight" [style.view-transition-name]="d.skill.slug | titleTransition">{{ d.skill.title }}</h1>
         <span uiBadge tone="accent">{{ d.skill.stack }}</span>
         <span uiBadge>{{ d.skill.type }}</span>
         <ui-status-badge [status]="d.skill.status" />
@@ -260,7 +261,7 @@ type CatalogSection = 'skills' | 'plugins' | 'contracts';
     } @else if (error()) {
       <p class="mt-6 text-sm text-danger">{{ error() }}</p>
     } @else {
-      <div class="mt-6 h-40 animate-pulse rounded-md bg-surface-2"></div>
+      <div class="mt-6 h-40 skeleton-shimmer rounded-md bg-surface-2"></div>
     }
   `,
   styles: `

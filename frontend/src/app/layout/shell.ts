@@ -1,8 +1,9 @@
-import { Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { afterRenderEffect, Component, computed, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs';
 import { AuthService } from '../core/auth';
 import { I18n } from '../core/i18n/i18n';
+import { ToastHost } from '../shared/toast';
 
 /**
  * Puerto de src/app/(app)/layout.tsx: la barra de navegacion y el <router-outlet>
@@ -10,7 +11,7 @@ import { I18n } from '../core/i18n/i18n';
  */
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, ToastHost],
   styles: `
     .logout-fade {
       position: fixed;
@@ -50,7 +51,14 @@ import { I18n } from '../core/i18n/i18n';
             <i class="ph ph-rocket text-[18px]" aria-hidden="true"></i>
           </a>
         </div>
-        <nav class="flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px]" aria-label="Navegación principal">
+        <nav #mainNav class="relative flex flex-wrap items-center gap-x-1 gap-y-1 text-[13px]" aria-label="Navegación principal">
+          <div aria-hidden="true" class="nav-pill"
+               [class.nav-pill--instant]="pillInstant()"
+               [style.opacity]="pill() ? 1 : 0"
+               [style.left.px]="pill()?.left ?? 0"
+               [style.top.px]="pill()?.top ?? 0"
+               [style.width.px]="pill()?.width ?? 0"
+               [style.height.px]="pill()?.height ?? 0"></div>
           <div class="relative" data-catalog-menu>
             <button
               type="button"
@@ -147,8 +155,9 @@ import { I18n } from '../core/i18n/i18n';
           @for (l of navLinks(); track l.path) {
             <a
               [routerLink]="l.path"
-              routerLinkActive="bg-surface-2 text-text shadow-[var(--shadow-sm)]"
-              class="rounded-full px-3 py-1.5 text-text-muted transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-text"
+              routerLinkActive="text-text nav-link-active"
+              (isActiveChange)="navActiveTick.update((n) => n + 1)"
+              class="relative z-10 rounded-full px-3 py-1.5 text-text-muted transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-text"
               >{{ l.label }}</a
             >
           }
@@ -174,6 +183,7 @@ import { I18n } from '../core/i18n/i18n';
         <router-outlet />
       </main>
     </div>
+    <ui-toast-host />
   `,
 })
 export class Shell {
@@ -189,6 +199,14 @@ export class Shell {
   loggingOut = signal(false);
 
   currentUrl = signal(this.router.url);
+
+  /** Caja del link activo del nav, relativa al <nav>; null si ninguno esta activo. */
+  pill = signal<{ left: number; top: number; width: number; height: number } | null>(null);
+  /** La primera vez que aparece la pildora no se desliza desde (0,0). */
+  pillInstant = signal(true);
+  private mainNav = viewChild.required<ElementRef<HTMLElement>>('mainNav');
+  /** routerLinkActive pone la clase despues del primer render: re-medir cuando cambia. */
+  navActiveTick = signal(0);
 
   activeSection = computed<'skills' | 'plugins' | 'contracts' | null>(() => {
     const url = this.currentUrl();
@@ -254,6 +272,34 @@ export class Shell {
     };
     document.addEventListener('click', closeOnOutsideClick);
     this.destroyRef.onDestroy(() => document.removeEventListener('click', closeOnOutsideClick));
+
+    afterRenderEffect(() => {
+      this.currentUrl();
+      this.navLinks();
+      this.navActiveTick();
+      this.placePill();
+    });
+    const onResize = () => this.placePill();
+    window.addEventListener('resize', onResize);
+    this.destroyRef.onDestroy(() => window.removeEventListener('resize', onResize));
+  }
+
+  /** Mueve la pildora del nav (A4) hasta el link marcado por routerLinkActive. */
+  private placePill(): void {
+    const nav = this.mainNav().nativeElement;
+    const active = nav.querySelector<HTMLElement>('a.nav-link-active');
+    if (!active) {
+      this.pill.set(null);
+      this.pillInstant.set(true);
+      return;
+    }
+    const navBox = nav.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    const next = { left: box.left - navBox.left, top: box.top - navBox.top, width: box.width, height: box.height };
+    const prev = this.pill();
+    if (prev && prev.left === next.left && prev.top === next.top && prev.width === next.width && prev.height === next.height) return;
+    this.pillInstant.set(!prev);
+    this.pill.set(next);
   }
 
   toggleCatalog(): void {

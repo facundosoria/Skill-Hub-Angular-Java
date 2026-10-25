@@ -8,6 +8,7 @@ import { TEAM_OPTIONS, type Team } from '../../core/teams';
 import type { SkillListItem, SkillType } from '../../core/models';
 import { UI } from '../../shared/ui';
 import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
+import { TitleTransitionPipe } from '../../shared/title-transition.pipe';
 
 type CatalogSection = 'skills' | 'plugins' | 'contracts';
 type StatusFilter = 'active' | 'deprecated' | 'all';
@@ -16,7 +17,7 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
 /** Lista reutilizable para cada seccion del catalogo. */
 @Component({
   selector: 'app-skills-list',
-  imports: [FormsModule, RouterLink, NgOptimizedImage, AnimDelayPipe, ...UI],
+  imports: [FormsModule, RouterLink, NgOptimizedImage, AnimDelayPipe, TitleTransitionPipe, ...UI],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <header class="catalog-hero anim-pop-in">
@@ -245,21 +246,21 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
         @case ('plugins') {
           <div class="catalog-plugin-grid" aria-label="Cargando plugins">
             @for (i of [1, 2, 3, 4, 5, 6]; track i) {
-              <div class="catalog-plugin-skeleton animate-pulse" aria-hidden="true"></div>
+              <div class="catalog-plugin-skeleton skeleton-shimmer" aria-hidden="true"></div>
             }
           </div>
         }
         @case ('contracts') {
           <div uiCard class="overflow-hidden" aria-label="Cargando contratos">
             @for (i of [1, 2, 3, 4, 5]; track i) {
-              <div class="catalog-contract-skeleton animate-pulse" aria-hidden="true"></div>
+              <div class="catalog-contract-skeleton skeleton-shimmer" aria-hidden="true"></div>
             }
           </div>
         }
         @default {
           <div class="space-y-2.5" aria-label="Cargando skills">
             @for (i of [1, 2, 3, 4, 5]; track i) {
-              <div class="catalog-skill-skeleton animate-pulse" aria-hidden="true"></div>
+              <div class="catalog-skill-skeleton skeleton-shimmer" aria-hidden="true"></div>
             }
           </div>
         }
@@ -309,7 +310,7 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
                       <ui-status-badge [status]="s.status" />
                     }
                   </div>
-                  <h2 class="catalog-plugin-card__title">{{ s.title }}</h2>
+                  <h2 class="catalog-plugin-card__title" [style.view-transition-name]="s.slug | titleTransition">{{ s.title }}</h2>
                   <p class="catalog-plugin-card__description">{{ s.description }}</p>
                   <div class="catalog-plugin-card__footer">
                     <span class="font-mono text-xs text-text-faint">v{{ s.version }}</span>
@@ -317,7 +318,7 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
                       s.ownerTeam ?? t().catalogo.sinEquipo
                     }}</span>
                     <span class="ml-auto text-xs font-medium text-accent"
-                      >{{ t().catalogo.verPlugin }} <span aria-hidden="true">→</span></span
+                      >{{ t().catalogo.verPlugin }} <span class="catalog-arrow" aria-hidden="true">→</span></span
                     >
                   </div>
                 </a>
@@ -389,7 +390,7 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
                   <a [routerLink]="[basePath(), s.slug]" class="catalog-skill-row__content">
                     <div class="min-w-0 flex-1">
                       <div class="flex flex-wrap items-center gap-2">
-                        <h2 class="catalog-skill-row__title">{{ s.title }}</h2>
+                        <h2 class="catalog-skill-row__title" [style.view-transition-name]="s.slug | titleTransition">{{ s.title }}</h2>
                         <span uiBadge tone="accent">{{ s.stack }}</span>
                         @if (s.status !== 'published') {
                           <ui-status-badge [status]="s.status" />
@@ -454,7 +455,7 @@ type SortOption = '' | 'az' | 'za' | 'rating-desc' | 'rating-asc';
                       <div><dt>{{ t().catalogo.uso }}</dt><dd>{{ s.usos90d }}</dd></div>
                     </dl>
                     <a [routerLink]="[basePath(), s.slug]" class="catalog-quick-preview__detail">
-                      {{ t().catalogo.verDetalle }} <span aria-hidden="true">→</span>
+                      {{ t().catalogo.verDetalle }} <span class="catalog-arrow" aria-hidden="true">→</span>
                     </a>
                   </section>
                 }
