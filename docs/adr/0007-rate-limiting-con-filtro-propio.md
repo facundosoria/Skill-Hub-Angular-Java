@@ -13,17 +13,24 @@ de nginx o Cloudflare.
 
 Un `jakarta.servlet.Filter` propio,
 `backend/src/main/java/com/skillhub/config/RateLimitFilter.java` (commit
-`befee59`), que sólo actúa sobre `POST /api/auth/login`:
+`befee59`), que actúa sobre `POST /api/auth/login` y
+`POST /api/oauth/accept-login` (ambos validan usuario y contraseña):
 
+- Ambos paths comparten el bucket de la IP, para que alternar entre el login web
+  y el OAuth no esquive el bloqueo. El path se normaliza como en Spring MVC
+  (`UrlPathHelper`: decodifica, quita `;...` y colapsa `//`), así sus variantes
+  también cuentan.
 - Cuenta **fallos consecutivos por IP** (respuestas 4xx). Cinco fallos bloquean
   60 s; cada nuevo grupo de cinco duplica la espera hasta un máximo de 1 h.
-- Un login exitoso (2xx/3xx) limpia el estado de esa IP.
+- Un login exitoso (2xx/3xx) limpia el conteo de fallos y el bloqueo de esa IP,
+  pero conserva el nivel de penalización; éste vuelve a cero tras 1 h sin
+  fallos.
 - Durante el bloqueo responde `429` con `Retry-After`, `Cache-Control: no-store`
   y `{"error": ...}` en el formato de la API.
 - La IP sale de `CF-Connecting-IP`, luego del primer valor de
   `X-Forwarded-For` y, si no hay, de `getRemoteAddr()`.
 - Estado en un `ConcurrentHashMap` en memoria, con limpieza cuando supera 1000
-  IPs.
+  IPs: se eliminan las que no están bloqueadas ni fallaron en la última hora.
 - **Los registros no se cuentan**: no son intentos de autenticación y compartir
   IP (p. ej. un aula) no debe bloquear altas legítimas (javadoc del filtro).
 
@@ -48,8 +55,11 @@ El mismo criterio de limitador en memoria se repite en
   quedara expuesto sin un proxy que los sobrescriba, un atacante podría
   falsearlos y rotar la IP aparente. *Confirmar* que todos los entornos los
   normalizan en el proxy.
-- Sólo protege el login web; `/api/mcp`, el registro y el DCR no tienen límite
-  propio.
+- Sólo protege el login web y el login OAuth; `/api/mcp`, el registro y el DCR
+  no tienen límite propio.
+- El conteo es por IP: quien tenga una cuenta válida puede intercalar un login
+  exitoso propio cada cuatro fallos y no llegar al bloqueo. Cerrarlo requiere
+  contar también por usuario.
 
 ## Referencias
 

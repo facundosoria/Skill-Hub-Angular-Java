@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -13,7 +15,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class RateLimitFilterTest {
 
-    private final RateLimitFilter filter = new RateLimitFilter();
+    private final AtomicLong now = new AtomicLong(1_000_000_000L);
+    private final RateLimitFilter filter = new RateLimitFilter(now::get);
 
     private static MockHttpServletRequest login(String ip) {
         MockHttpServletRequest req = new MockHttpServletRequest("POST", "/api/auth/login");
@@ -108,5 +111,47 @@ class RateLimitFilterTest {
         for (int i = 0; i < 5; i++) attempt(login("10.9.9.9"), 401);
         for (int i = 0; i < 1001; i++) attempt(login("172.16." + (i / 256) + "." + (i % 256)), 200);
         assertThat(attempt(login("10.9.9.9"), 200).getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void variantesDelPathTambienCuentan() throws Exception {
+        String[] variants = {"/api/auth/login;jsessionid=a", "/api/auth/lo%67in", "//api/auth/login",
+                "/api/oauth/accept-login;x=1", "/api/oauth/accept-lo%67in"};
+        for (String uri : variants) {
+            MockHttpServletRequest req = new MockHttpServletRequest("POST", uri);
+            req.setRemoteAddr("10.1.1.1");
+            attempt(req, 401);
+        }
+        assertThat(attempt(login("10.1.1.1"), 200).getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void unLoginExitosoNoBorraLaPenalizacion() throws Exception {
+        for (int i = 0; i < 5; i++) attempt(login("10.1.1.2"), 401);
+        now.addAndGet(61_000);
+        assertThat(attempt(login("10.1.1.2"), 200).getStatus()).isEqualTo(200);
+
+        for (int i = 0; i < 5; i++) attempt(login("10.1.1.2"), 401);
+        assertThat(attempt(login("10.1.1.2"), 200).getHeader("Retry-After")).isEqualTo("120");
+    }
+
+    @Test
+    void laPenalizacionDecaeTrasUnaHoraSinFallos() throws Exception {
+        for (int i = 0; i < 5; i++) attempt(login("10.1.1.3"), 401);
+        now.addAndGet(60 * 60_000 + 61_000);
+
+        for (int i = 0; i < 5; i++) attempt(login("10.1.1.3"), 401);
+        assertThat(attempt(login("10.1.1.3"), 200).getHeader("Retry-After")).isEqualTo("60");
+    }
+
+    @Test
+    void laLimpiezaEliminaIpsConFallosViejosSinBloqueo() throws Exception {
+        for (int i = 0; i < 4; i++) attempt(login("10.1.1.4"), 401);
+        now.addAndGet(60 * 60_000 + 1);
+        for (int i = 0; i < 1001; i++) attempt(login("172.17." + (i / 256) + "." + (i % 256)), 200);
+
+        // El bucket viejo se elimino: hacen falta cinco fallos nuevos para bloquear.
+        assertThat(attempt(login("10.1.1.4"), 401).getStatus()).isEqualTo(401);
+        assertThat(attempt(login("10.1.1.4"), 200).getStatus()).isEqualTo(200);
     }
 }

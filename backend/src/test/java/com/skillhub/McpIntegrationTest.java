@@ -1004,8 +1004,7 @@ class McpIntegrationTest {
     @Test
     void toolDesconocidaDevuelveError() {
         var r = rpc("tools/call", java.util.Map.of("name", "no_such_tool", "arguments", java.util.Map.of()));
-        assertThat(r.path("body").has("error") || r.path("body").path("result").path("isError").asBoolean())
-                .isTrue();
+        assertThat(r.path("body").path("error").path("code").asInt()).isEqualTo(-32602);
     }
 
     @Test

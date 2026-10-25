@@ -798,6 +798,7 @@ class RestApiIntegrationTest {
         String action = all.body.path("actions").get(0).path("action").asText();
         var byAction = get("/api/audit?action=" + action, adminCookie);
         assertThat(byAction.status).isEqualTo(200);
+        assertThat(byAction.body.path("events").size()).isGreaterThan(0);
         for (var e : byAction.body.path("events")) assertThat(e.path("action").asText()).isEqualTo(action);
 
         String actorId = all.body.path("actors").get(0).path("id").asText();
