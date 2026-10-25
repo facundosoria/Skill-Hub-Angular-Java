@@ -36,7 +36,7 @@ describe('Docs', () => {
     fetchMock.mockResolvedValue({ text: () => Promise.resolve(body) });
     const fixture = TestBed.createComponent(Docs);
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.animate-pulse')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[class*="skeleton-shimmer"]')).not.toBeNull();
     await flush();
     fixture.detectChanges();
     await flush();

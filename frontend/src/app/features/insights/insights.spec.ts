@@ -8,12 +8,16 @@ describe('Insights', () => {
   const api = { get: vi.fn() };
 
   beforeEach(() => {
+    // Con reduced motion el contador escribe el valor final sin animar.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query }));
     api.get.mockReset();
     TestBed.configureTestingModule({
       imports: [Insights],
       providers: [provideRouter([]), { provide: Api, useValue: api }],
     });
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   async function render(data: { top: unknown[]; teams: unknown[]; missed: unknown[] }) {
     api.get.mockReturnValue(of(data));
@@ -28,7 +32,7 @@ describe('Insights', () => {
     api.get.mockReturnValue(NEVER);
     const fixture = TestBed.createComponent(Insights);
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('.animate-pulse')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[class*="skeleton-shimmer"]')).not.toBeNull();
   });
 
   it('shows empty states without telemetry', async () => {

@@ -65,7 +65,7 @@ describe('SkillDetailPage', () => {
     const pending = TestBed.createComponent(SkillDetailPage);
     pending.componentRef.setInput('slug', 'alpha');
     pending.detectChanges();
-    expect(pending.nativeElement.querySelector('.animate-pulse')).not.toBeNull();
+    expect(pending.nativeElement.querySelector('[class*="skeleton-shimmer"]')).not.toBeNull();
 
     const { el } = await render(new Error('404'));
     expect(el.textContent).toContain('No existe el skill');

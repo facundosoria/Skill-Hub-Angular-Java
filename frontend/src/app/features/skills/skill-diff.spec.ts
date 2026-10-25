@@ -68,7 +68,7 @@ describe('SkillDiff', () => {
     fixture.componentRef.setInput('section', 'contracts');
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('.animate-pulse')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[class*="skeleton-shimmer"]')).not.toBeNull();
     expect(fixture.componentInstance.basePath()).toBe('/contracts');
   });
 });

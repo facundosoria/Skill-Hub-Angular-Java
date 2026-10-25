@@ -10,7 +10,7 @@ describe('SkillPreview', () => {
     const iframe = (fixture.nativeElement as HTMLElement).querySelector('iframe')!;
     expect(iframe.getAttribute('sandbox')).toBe('allow-scripts');
     expect(iframe.getAttribute('srcdoc')).toContain('<body><p>demo</p></body>');
-    expect(fixture.nativeElement.querySelector('.animate-pulse')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[class*="skeleton-shimmer"]')).not.toBeNull();
   });
 
   it('hides the placeholder once the frame loads', () => {
@@ -22,6 +22,6 @@ describe('SkillPreview', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.loaded()).toBe(true);
-    expect(fixture.nativeElement.querySelector('.animate-pulse')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[class*="skeleton-shimmer"]')).toBeNull();
   });
 });
