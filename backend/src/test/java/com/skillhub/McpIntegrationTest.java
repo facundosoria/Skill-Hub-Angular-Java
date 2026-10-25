@@ -984,6 +984,142 @@ class McpIntegrationTest {
         assertThat(prefijo).doesNotMatch("(?s).*\\b\\d+ skills\\b.*");
     }
 
+    // --- caminos de rechazo y estados no publicados -------------------------
+
+    private static final String REV_BODY =
+            "## Rule\n\nSeed body revised for a rejection test. Long enough to pass the minimum.";
+    private static final String REV_WHY = "Exercising one rejection branch of propose_revision.";
+
+    private JsonNode revise(String slug, Object... extra) {
+        var args = new java.util.HashMap<String, Object>(java.util.Map.of(
+                "slug", slug, "base_version", 1, "content", REV_BODY, "rationale", REV_WHY));
+        for (int i = 0; i < extra.length; i += 2) args.put((String) extra[i], extra[i + 1]);
+        return tool("propose_revision", args);
+    }
+
+    private void dropSeeded(String... slugs) {
+        for (String s : slugs) jdbc.update("DELETE FROM skills WHERE slug = ?", s);
+    }
+
+    @Test
+    void toolDesconocidaDevuelveError() {
+        var r = rpc("tools/call", java.util.Map.of("name", "no_such_tool", "arguments", java.util.Map.of()));
+        assertThat(r.path("body").path("error").path("code").asInt()).isEqualTo(-32602);
+    }
+
+    @Test
+    void proposeRevisionListaTodosLosArgumentosFaltantes() {
+        var r = tool("propose_revision", java.util.Map.of("slug", " ", "content", "corto", "rationale", "x"));
+        assertThat(r.path("status").asText()).isEqualTo("rejected");
+        assertThat(r.path("errors").size()).isEqualTo(4);
+    }
+
+    @Test
+    void proposeRevisionRechazaSkillsQueNoEstanPublicados() {
+        seedPublished("zz-rev-deprecated", "Zz Rev Deprecated");
+        seedPublished("zz-rev-replaced", "Zz Rev Replaced");
+        seedPublished("zz-rev-proposed", "Zz Rev Proposed");
+        seedPublished("zz-rev-draft", "Zz Rev Draft");
+        try {
+            jdbc.update("UPDATE skills SET status='deprecated' WHERE slug='zz-rev-deprecated'");
+            jdbc.update("""
+                    UPDATE skills SET status='deprecated',
+                           superseded_by=(SELECT id FROM skills WHERE slug='zz-rev-draft')
+                    WHERE slug='zz-rev-replaced'
+                    """);
+            jdbc.update("UPDATE skills SET status='proposed' WHERE slug='zz-rev-proposed'");
+            jdbc.update("UPDATE skills SET status='draft' WHERE slug='zz-rev-draft'");
+
+            var dep = revise("zz-rev-deprecated");
+            assertThat(dep.path("reason").asText()).contains("is deprecated.");
+            assertThat(dep.path("instruction").asText()).contains("Do not revise it");
+
+            var rep = revise("zz-rev-replaced");
+            assertThat(rep.path("reason").asText()).contains("replaced by \"zz-rev-draft\"");
+
+            assertThat(revise("zz-rev-proposed").path("reason").asText()).contains("provisional proposal");
+            assertThat(revise("zz-rev-draft").path("reason").asText()).contains("is not published");
+        } finally {
+            dropSeeded("zz-rev-deprecated", "zz-rev-replaced", "zz-rev-proposed", "zz-rev-draft");
+        }
+    }
+
+    @Test
+    void proposeRevisionValidaElSkillResultante() {
+        seedPublished("zz-rev-validate", "Zz Rev Validate");
+        try {
+            var badSlug = revise("zz-rev-validate", "new_slug", "Not A Slug!");
+            assertThat(badSlug.path("reason").asText()).contains("is not a valid slug");
+
+            var badTitle = revise("zz-rev-validate", "title", "ab");
+            assertThat(badTitle.path("reason").asText()).contains("does not meet the catalogue rules");
+            assertThat(badTitle.path("errors").size()).isGreaterThan(0);
+
+            var mixed = revise("zz-rev-validate", "content",
+                    "## Regla\n\nCada paquete corresponde a un contexto acotado y nunca se mezcla con el dominio "
+                    + "ni con los adaptadores web, porque eso rompe la separacion de responsabilidades del equipo.");
+            assertThat(mixed.path("reason").asText()).contains("not in the same language");
+
+            var badFile = revise("zz-rev-validate", "file_content_base64", "%%% no es base64 %%%");
+            assertThat(badFile.path("reason").asText()).contains("not valid base64");
+
+            var conTags = revise("zz-rev-validate", "tags", List.of("zz-tag"), "owning_team", " platform ",
+                    "file_text", "plain attachment for the revision");
+            assertThat(conTags.path("status").asText()).isEqualTo("revision_proposed");
+        } finally {
+            dropSeeded("zz-rev-validate");
+        }
+    }
+
+    @Test
+    void proposeSkillRechazaAdjuntoInvalidoYIdiomaMezclado() {
+        var badFile = tool("propose_skill", withOverrides(PROPUESTO,
+                "title", "Zz Test Broken Attachment", "from_query", "zz test broken attachment",
+                "file_content_base64", "%%% no es base64 %%%"));
+        assertThat(badFile.path("status").asText()).isEqualTo("rejected");
+        assertThat(badFile.path("reason").asText()).contains("not valid base64");
+
+        var mixed = tool("propose_skill", withOverrides(PROPUESTO,
+                "title", "Zz Test Mixed Language", "from_query", "zz test mixed language",
+                "content", "## Regla\n\nCada bandera de funcionalidad lleva un responsable y una fecha de "
+                        + "retiro desde el dia en que se crea, y se elimina apenas deja de usarse en produccion."));
+        assertThat(mixed.path("status").asText()).isEqualTo("rejected");
+        assertThat(mixed.path("reason").asText()).contains("not in the same language");
+    }
+
+    @Test
+    void getYSyncTratanDeprecadoSinReemplazoYBorrador() {
+        seedPublished("zz-gone-deprecated", "Zz Gone Deprecated");
+        seedPublished("zz-gone-draft", "Zz Gone Draft");
+        try {
+            jdbc.update("UPDATE skills SET status='deprecated' WHERE slug='zz-gone-deprecated'");
+            jdbc.update("UPDATE skills SET status='draft' WHERE slug='zz-gone-draft'");
+
+            var dep = tool("get_skill", java.util.Map.of("slug", "zz-gone-deprecated"));
+            assertThat(dep.path("instruction").asText()).contains("no replacement");
+            var draft = tool("get_skill", java.util.Map.of("slug", "zz-gone-draft"));
+            assertThat(draft.path("error").asText()).contains("not available yet");
+
+            var sync = tool("sync_skills", java.util.Map.of("have", List.of(
+                    java.util.Map.of("slug", "zz-gone-deprecated", "version", 1),
+                    java.util.Map.of("slug", "zz-gone-draft", "version", 1))));
+            var states = new java.util.HashMap<String, JsonNode>();
+            sync.path("results").forEach(n -> states.put(n.path("slug").asText(), n));
+            assertThat(states.get("zz-gone-deprecated").path("instruction").asText()).contains("no replacement");
+            assertThat(states.get("zz-gone-draft").path("state").asText()).isEqualTo("gone");
+        } finally {
+            dropSeeded("zz-gone-deprecated", "zz-gone-draft");
+        }
+    }
+
+    @Test
+    void getPortRegistrySinCoincidenciasLoDice() {
+        var r = tool("get_port_registry", java.util.Map.of("service", "zz-servicio-inexistente"));
+        assertThat(r.path("matches").get(0).asText()).contains("No matches");
+        var full = tool("get_port_registry", java.util.Map.of());
+        assertThat(full.path("content").asText()).isNotBlank();
+    }
+
     // --- fixtures (mismos que tests/integration/mcp.test.ts) ------------
 
     record Fixture(String slug, String title, String description, String whenToUse,

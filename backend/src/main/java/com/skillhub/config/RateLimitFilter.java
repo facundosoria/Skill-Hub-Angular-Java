@@ -3,17 +3,22 @@ package com.skillhub.config;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.web.util.UrlPathHelper;
 
 import java.io.IOException;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
 
 /**
  * Rate limiter por IP para intentos fallidos de autenticacion.
  *
  * Cinco fallos consecutivos bloquean durante 60 segundos. Cada nuevo grupo de
  * cinco fallos duplica la espera (120 s, 240 s, ...), hasta una hora. Un login
- * exitoso limpia el estado de esa IP. Los registros no se cuentan: no son un
+ * exitoso limpia el conteo de fallos de esa IP, pero no la penalizacion: esta
+ * se olvida tras una hora sin fallos. Los registros no se cuentan: no son un
  * intento de autenticacion y compartir IP no debe bloquear altas legitimas.
  */
 @Component
@@ -22,15 +27,31 @@ public class RateLimitFilter implements Filter {
     private static final int FAILURES_PER_LEVEL = 5;
     private static final long INITIAL_BLOCK_MS = 60_000;
     private static final long MAX_BLOCK_MS = 60 * 60_000;
-    private static final String LOGIN_PATH = "/api/auth/login";
+    // Ambos validan usuario/contrasena; comparten el bucket de la IP para que
+    // alternar entre la web y el login OAuth no esquive el bloqueo.
+    private static final Set<String> LOGIN_PATHS = Set.of("/api/auth/login", "/api/oauth/accept-login");
+    // Decodifica, quita ";..." y colapsa "//" igual que el ruteo de Spring MVC,
+    // para que variantes del path no esquiven el limite.
+    private static final UrlPathHelper PATHS = new UrlPathHelper();
 
     private static final class Bucket {
         private int consecutiveFailures;
         private int penaltyLevel;
         private long blockedUntil;
+        private long lastFailureAt;
     }
 
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private final LongSupplier clock;
+
+    @Autowired
+    public RateLimitFilter() {
+        this(System::currentTimeMillis);
+    }
+
+    RateLimitFilter(LongSupplier clock) {
+        this.clock = clock;
+    }
 
     @Override
     public void doFilter(ServletRequest req, ServletResponse res, FilterChain chain)
@@ -38,10 +59,10 @@ public class RateLimitFilter implements Filter {
         if (req instanceof HttpServletRequest httpReq
                 && res instanceof HttpServletResponse httpRes
                 && "POST".equalsIgnoreCase(httpReq.getMethod())
-                && LOGIN_PATH.equals(httpReq.getRequestURI())) {
+                && LOGIN_PATHS.contains(PATHS.getPathWithinApplication(httpReq))) {
 
             String ip = clientIp(httpReq);
-            long now = System.currentTimeMillis();
+            long now = clock.getAsLong();
             Bucket bucket = buckets.computeIfAbsent(ip, ignored -> new Bucket());
             synchronized (bucket) {
                 if (now < bucket.blockedUntil) {
@@ -56,9 +77,10 @@ public class RateLimitFilter implements Filter {
                 synchronized (bucket) {
                     if (httpRes.getStatus() >= 200 && httpRes.getStatus() < 400) {
                         bucket.consecutiveFailures = 0;
-                        bucket.penaltyLevel = 0;
                         bucket.blockedUntil = 0;
                     } else if (httpRes.getStatus() >= 400 && httpRes.getStatus() < 500) {
+                        if (now - bucket.lastFailureAt > MAX_BLOCK_MS) bucket.penaltyLevel = 0;
+                        bucket.lastFailureAt = now;
                         bucket.consecutiveFailures++;
                         if (bucket.consecutiveFailures >= FAILURES_PER_LEVEL) {
                             bucket.penaltyLevel++;
@@ -75,7 +97,7 @@ public class RateLimitFilter implements Filter {
                 buckets.entrySet().removeIf(e -> {
                     Bucket b = e.getValue();
                     synchronized (b) {
-                        return b.blockedUntil < cleanupBefore && b.consecutiveFailures == 0;
+                        return b.blockedUntil < cleanupBefore && b.lastFailureAt < cleanupBefore;
                     }
                 });
             }
