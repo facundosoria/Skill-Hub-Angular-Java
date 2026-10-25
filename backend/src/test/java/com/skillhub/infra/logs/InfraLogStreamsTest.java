@@ -208,4 +208,34 @@ class InfraLogStreamsTest {
         assertThat(emitter.text()).contains("event:access-revoked", "SESSION_INVALID");
         assertThat(limiter.activeStreams()).isZero();
     }
+
+    @Test void revalidationFailuresAndOtherAccountsRevokeTheStream() {
+        var failing = open("g7:3");
+        when(sessions.getCurrentUser("synthetic-token")).thenThrow(new IllegalStateException("sesiones caidas"));
+        streams.revalidate();
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> assertThat(failing.text()).contains("event:access-revoked"));
+
+        reset(sessions);
+        when(sessions.getCurrentUser("synthetic-token")).thenReturn(new CurrentUser("otra-cuenta", "x", "X", "Team", "user", false));
+        var other = open("g7:3");
+        streams.revalidate();
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> assertThat(other.text()).contains("event:access-revoked"));
+
+        // Las conexiones ya liberadas no se vuelven a validar.
+        streams.revalidate();
+    }
+
+    @Test void theSchedulerStartsOnlyWhenEnabled() {
+        var disabledProperties = LogFixtures.properties(dir);
+        disabledProperties.setEnabled(false);
+        var disabled = new InfraLogStreams(disabledProperties, store, limiter, sessions, LogFixtures.MAPPER, clock, CaptureEmitter::new);
+        disabled.start();
+        disabled.stop();
+
+        streams.start();
+        var emitter = open("g7:1");
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> assertThat(emitter.text()).contains("g7:3"));
+        streams.stop();
+        assertThat(limiter.activeStreams()).isZero();
+    }
 }

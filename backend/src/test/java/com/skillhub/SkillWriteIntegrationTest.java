@@ -330,27 +330,34 @@ class SkillWriteIntegrationTest {
 
     // --- agent proposals, peer votes and duplicate search ---------------
 
-    private static final String[] WORDS = {"amber", "basalt", "cobalt", "delta", "ember", "fjord", "garnet", "harbor",
-            "indigo", "jasper", "kelvin", "lumen", "marble", "nickel", "onyx", "prism", "quartz", "raven", "saffron", "tundra"};
+    private static final String[] WORDS = {"anchor", "badge", "cabin", "dagger", "eagle", "fabric", "galaxy", "hammer", "island", "jacket", "kettle", "ladder", "magnet", "napkin", "oyster", "pebble", "quiver", "rocket", "saddle", "tablet", "umbrella", "violin", "wagon", "yogurt", "zipper", "acorn", "blossom", "candle", "desert", "engine", "falcon", "glacier", "helmet", "iceberg", "jungle", "kitten", "lantern", "meadow", "needle", "orchard", "pepper", "quilt", "river", "shovel", "thunder", "unicorn", "valley", "walnut", "barrel", "cactus", "dolphin", "feather", "garlic", "harvest", "insect", "jigsaw", "lemon", "mirror", "nugget", "ostrich", "parrot", "riddle", "spider", "tomato", "beetle", "carrot", "donkey", "forest", "goblin", "honey", "lizard", "muffin", "noodle", "otter", "pirate", "rabbit", "salmon", "turtle", "vessel", "window", "bucket", "castle", "dragon", "furnace", "gravel", "hornet", "ladle", "mango", "nectar", "oven", "puzzle", "ribbon", "sponge", "trumpet", "velvet", "whistle", "bridge", "canyon", "drum", "flame", "grape", "harbor", "kayak", "lobster", "marble", "nest", "owl", "planet", "raft", "summit", "tunnel", "volcano", "wizard", "yacht"};
+    private static final java.util.concurrent.atomic.AtomicInteger PROPOSALS = new java.util.concurrent.atomic.AtomicInteger();
 
-    /** Texto distinto en cada llamada para que la deteccion de duplicados no las junte. */
+    /**
+     * Doce palabras propias de cada llamada: ningun texto se comparte entre
+     * propuestas, asi la deteccion de duplicados no las junta y el idioma es
+     * siempre ingles.
+     */
     private static String words() {
-        java.util.Random random = new java.util.Random();
+        int n = PROPOSALS.getAndIncrement();
         StringBuilder out = new StringBuilder();
-        for (int i = 0; i < 6; i++) out.append(WORDS[random.nextInt(WORDS.length)]).append(i).append(' ');
+        for (int i = 0; i < 12; i++) out.append(WORDS[(n * 12 + i) % WORDS.length]).append(' ');
         return out.toString().trim();
     }
 
     private static SkillInput proposal(String slug, String title, String type, List<String> tags) {
-        String unique = words();
-        return new SkillInput(slug, title + " " + unique.substring(0, 12), "A description that is long enough for the catalogue " + unique + ".",
-                "Use when the " + unique + " scenario needs a valid proposal.", "java", type, null, tags,
-                "## Rule\n\nThe " + unique + " proposal carries enough content to be valid here.", null, null);
+        String[] parts = words().split(" ");
+        String first = String.join(" ", java.util.Arrays.copyOfRange(parts, 0, 4));
+        String second = String.join(" ", java.util.Arrays.copyOfRange(parts, 4, 8));
+        String third = String.join(" ", java.util.Arrays.copyOfRange(parts, 8, 12));
+        return new SkillInput(slug, title, "Notes about the " + first + " items in this catalogue.",
+                "Use when " + second + " show up together.", "java", type, null, tags,
+                "## Rule\n\nKeep every " + third + " entry documented and reviewed.", null, null);
     }
 
     @Test
     void proposalsDeriveTheSlugDefaultTheTypeAndCutLongTexts() {
-        String title = "Zz proposal " + UUID.randomUUID().toString().substring(0, 6);
+        String title = "Zz proposal for the derived slug rule";
 
         var result = proposals.proposeSkill(proposal(" ", title, null, null), memberId, "q".repeat(400), "r".repeat(400));
 
@@ -377,19 +384,19 @@ class SkillWriteIntegrationTest {
 
     @Test
     void proposalsOfPluginsGetAnArtifactAndKeepTheirTags() {
-        var generated = proposals.proposeSkill(proposal(unique("zz-plugin"), "Zz plugin " + UUID.randomUUID(), "plugin", List.of("uno")), memberId, "q", "why");
+        var generated = proposals.proposeSkill(proposal(unique("zz-plugin"), "Zz plugin packaging rule", "plugin", List.of("uno")), memberId, "q", "why");
         assertThat(generated.ok()).as(generated.toString()).isTrue();
         assertThat(artifacts.findSummary(skillId(generated.slug()), 1)).isNotNull();
         assertThat(jdbc.queryForList("SELECT tag FROM skill_tags WHERE skill_id = ?::uuid", String.class, skillId(generated.slug()))).containsExactly("uno");
 
-        var attached = proposals.proposeSkill(proposal(unique("zz-contrato"), "Zz contract " + UUID.randomUUID(), "contract", null), memberId, "q", "why",
+        var attached = proposals.proposeSkill(proposal(unique("zz-contrato"), "Zz contract shape rule", "contract", null), memberId, "q", "why",
                 new ProposeService.FileAttachment("api.yaml", "application/yaml", "openapi: 3".getBytes(StandardCharsets.UTF_8)));
         assertThat(artifacts.findSummary(skillId(attached.slug()), 1).fileName()).isEqualTo("api.yaml");
 
-        var empty = proposals.proposeSkill(proposal(unique("zz-vacio"), "Zz empty file " + UUID.randomUUID(), "plugin", null), memberId, "q", "why",
+        var empty = proposals.proposeSkill(proposal(unique("zz-vacio"), "Zz empty attachment rule", "plugin", null), memberId, "q", "why",
                 new ProposeService.FileAttachment("x.zip", "application/zip", new byte[0]));
         assertThat(artifacts.findSummary(skillId(empty.slug()), 1).fileName()).endsWith("-plugin.json");
-        var nullBytes = proposals.proposeSkill(proposal(unique("zz-nulo"), "Zz null file " + UUID.randomUUID(), "skill", null), memberId, "q", "why",
+        var nullBytes = proposals.proposeSkill(proposal(unique("zz-nulo"), "Zz missing bytes rule", "skill", null), memberId, "q", "why",
                 new ProposeService.FileAttachment("x.zip", "application/zip", null));
         assertThat(nullBytes.ok()).isTrue();
     }
