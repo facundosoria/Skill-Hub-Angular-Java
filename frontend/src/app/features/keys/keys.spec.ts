@@ -158,6 +158,60 @@ describe('Keys', () => {
     expect(el.textContent).toContain('Nombre requerido');
     expect(component.busy()).toBe(false);
   });
+
+  it('uses the toolbar buttons, the copy row and the full list modal from the DOM', async () => {
+    api.post.mockReturnValue(of({ key: 'sk-desde-el-dom', id: 'k9' }));
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `k${i}`, name: `key-${i}`, prefix: `sk-${i}`, createdAt: '2026-10-01T00:00:00Z', lastUsedAt: null, revokedAt: null,
+    })) as unknown as ApiKey[];
+    const { fixture, component, el } = await render(many);
+    const buttons = () => [...el.querySelectorAll('button')] as HTMLButtonElement[];
+
+    component.name = 'desde-dom';
+    buttons().find((button) => button.textContent?.includes(component.t().keys.generar))?.click();
+    await flush();
+    fixture.detectChanges();
+    expect(api.post).toHaveBeenCalled();
+
+    const copyButton = el.querySelector('app-copy-row button') as HTMLButtonElement;
+    copyButton.click();
+    await flush();
+    expect(writeText).toHaveBeenCalled();
+
+    const closers = () => [...el.querySelectorAll('[role="dialog"] button')].filter((button) =>
+      button.getAttribute('aria-label') === component.t().keys.cerrar || button.textContent?.trim() === component.t().keys.cerrar) as HTMLButtonElement[];
+    component.modalOpen.set(true);
+    fixture.detectChanges();
+    expect(closers()).toHaveLength(2);
+    for (const index of [0, 1]) {
+      component.modalOpen.set(true);
+      fixture.detectChanges();
+      closers()[index].click();
+      expect(component.modalOpen()).toBe(false);
+    }
+
+    component.modalOpen.set(true);
+    fixture.detectChanges();
+    // Un clic adentro del panel no cierra; un clic en el fondo sí.
+    (el.querySelector('[role="dialog"] > div') as HTMLElement).click();
+    expect(component.modalOpen()).toBe(true);
+    (el.querySelector('[role="dialog"]') as HTMLElement).click();
+    expect(component.modalOpen()).toBe(false);
+
+    router.navigate.mockClear();
+    buttons().find((button) => button.textContent?.trim() === 'Ir a tutorial' || button.textContent?.trim() === 'Go to tutorial')!.click();
+    expect(router.navigate).toHaveBeenCalled();
+  });
+
+  it('goes back to the keys tab from the tutorial', async () => {
+    const { fixture, component } = await render([], 'tutorial');
+    fixture.componentRef.setInput('tab', 'tutorial');
+    fixture.detectChanges();
+
+    component.tutorialComponent()?.showKeys.emit();
+
+    expect(router.navigate).toHaveBeenCalled();
+  });
 });
 
 describe('CopyRow', () => {
