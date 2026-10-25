@@ -162,7 +162,7 @@ class McpIntegrationTest {
     }
 
     @Test
-    void toolsListExponeLasSieteToolsYSoloLasDosDeEscrituraEscriben() {
+    void toolsListExponeLasToolsYSoloLasDeEscrituraEscriben() {
         var tools = rpc("tools/list", null).path("body").path("result").path("tools");
         var nombres = new java.util.ArrayList<String>();
         var escriben = new java.util.ArrayList<String>();
@@ -172,8 +172,11 @@ class McpIntegrationTest {
         });
         assertThat(nombres).containsExactlyInAnyOrder(
                 "get_port_registry", "get_skill", "list_skills",
-                "propose_skill", "propose_revision", "search_skills", "sync_skills");
-        assertThat(escriben).containsExactlyInAnyOrder("propose_skill", "propose_revision");
+                "propose_skill", "propose_revision", "search_skills", "sync_skills",
+                "list_rooms", "create_room", "read_room", "post_room_message",
+                "propose_agreement", "accept_agreement");
+        assertThat(escriben).containsExactlyInAnyOrder("propose_skill", "propose_revision",
+                "create_room", "post_room_message", "propose_agreement", "accept_agreement");
     }
 
     @Test

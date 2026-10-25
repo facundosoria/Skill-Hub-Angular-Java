@@ -143,6 +143,14 @@ export const routes: Routes = [
         loadComponent: () => import('./features/depmap/dep-map').then((m) => m.DepMap),
       },
       {
+        path: 'salas',
+        loadComponent: () => import('./features/rooms/rooms').then((m) => m.Rooms),
+      },
+      {
+        path: 'salas/:id',
+        loadComponent: () => import('./features/rooms/room-detail').then((m) => m.RoomDetail),
+      },
+      {
         path: 'infra',
         loadComponent: () => import('./features/infra/infra').then((m) => m.Infra),
       },
