@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
-import { throwError } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { Api } from '../../core/api';
 import { AuthService } from '../../core/auth';
 import { DepMap, estimateMapScale, shouldFitMap } from './dep-map';
@@ -402,5 +402,533 @@ describe('DepMap offline controls', () => {
     document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
     fixture.detectChanges();
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+describe('DepMap editing and data dialogs', () => {
+  let fixture: ComponentFixture<DepMap>;
+  let api: { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn>; put: ReturnType<typeof vi.fn>; delete: ReturnType<typeof vi.fn> };
+  let role: 'admin' | 'member';
+  const onlineState = {
+    nodes: {
+      usr: { n: 'Usuarios', s: 'usr', x: 0, y: 0 },
+      ops: { n: 'Operaciones', s: 'ops', x: 1, y: 1 },
+      sec: { n: 'Seguridad', s: 'sec', x: 2, y: 2, transv: true },
+    },
+    kinds: { api: 'API', propio: 'Propio' },
+    info: {},
+    edges: [{ id: 'edge-1', from: 'usr', to: 'ops', kind: 'api', state: 'pendiente', text: 'Prueba' }],
+    done: { 'edge-1': true },
+    activity: [],
+    presence: [],
+    version: 7,
+    updatedAt: null,
+    updatedBy: 'ana',
+  };
+
+  beforeAll(() => {
+    HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) { this.open = true; };
+    HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) { this.open = false; };
+  });
+
+  async function render(): Promise<void> {
+    await TestBed.configureTestingModule({
+      imports: [DepMap],
+      providers: [
+        { provide: Api, useValue: api },
+        { provide: AuthService, useValue: { user: signal({ role }) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(DepMap);
+    await Promise.resolve();
+    await Promise.resolve();
+    fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    localStorage.clear();
+    // jsdom no trae matchMedia; el layout lo consulta al correr los timers.
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: false, media: query }));
+    role = 'admin';
+    api = {
+      get: vi.fn().mockReturnValue(of(onlineState)),
+      post: vi.fn().mockReturnValue(of({})),
+      put: vi.fn().mockReturnValue(of({})),
+      delete: vi.fn().mockReturnValue(of({})),
+    };
+    await render();
+  });
+
+  afterEach(() => {
+    TestBed.resetTestingModule();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    localStorage.clear();
+  });
+
+  const map = () => fixture.componentInstance;
+  const root = () => fixture.nativeElement as HTMLElement;
+  const flush = async () => { for (let i = 0; i < 6; i++) await Promise.resolve(); };
+
+  describe('labels', () => {
+    it('translates views, statuses and kinds', () => {
+      expect(map().viewLabel('mapa')).toBe('Mapa');
+      expect(map().viewLabel('matriz')).toBe('Matriz');
+      expect(map().viewLabel('lista')).toBe('Lista');
+      expect(map().statusLabel('todos')).toBe('Todos los estados');
+      expect(map().statusLabel('pendiente')).toBe('Pendiente');
+      expect(map().statusLabel('definir')).toBe('A definir');
+      expect(map().statusLabel('hecho')).toBe('Hecho');
+      expect(map().kindLabel('api')).toBe(map().t().mapa.tipoApi);
+      expect(map().kindLabel('evento')).toBe(map().t().mapa.tipoEvento);
+      expect(map().kindLabel('dato')).toBe(map().t().mapa.tipoDatos);
+      expect(map().kindLabel('permiso')).toBe(map().t().mapa.tipoPermiso);
+      expect(map().kindLabel('ui')).toBe(map().t().mapa.tipoComponente);
+      expect(map().kindLabel('propio', 'Propio')).toBe('Propio');
+      expect(map().kindLabel('otro')).toBe('otro');
+    });
+
+    it('builds stable ids for tabs and panels', () => {
+      expect(map().tabId('lista')).toBe('depmap-tab-lista');
+      expect(map().panelId('lista')).toBe('depmap-panel-lista');
+    });
+
+    it('lists only non-transversal groups as editable', () => {
+      expect(map().groupIds()).toEqual(['usr', 'ops']);
+      expect(map().kindEntries().map((kind) => kind.label)).toEqual([map().t().mapa.tipoApi, 'Propio']);
+    });
+  });
+
+  describe('adding a dependency', () => {
+    it('opens with the selected group and sensible defaults', () => {
+      map().openAdd();
+
+      expect(map().addDialog.nativeElement.open).toBe(true);
+      expect(map().addFrom).toBe('usr');
+      expect(map().addTo).toBe('ops');
+      expect(map().addKind).toBe('api');
+      expect(map().addState).toBe('pendiente');
+      expect(map().addText).toBe('');
+    });
+
+    it('starts from the requested group when it exists', () => {
+      map().openAdd('ops');
+      expect(map().addFrom).toBe('ops');
+      expect(map().addTo).toBe('usr');
+    });
+
+    it('falls back to my group when the requested one is unknown', () => {
+      map().store.selectNode('sec');
+
+      map().openAdd('nada');
+
+      expect(map().addFrom).toBe(map().store.mine());
+    });
+
+    it('does not open without editable groups', () => {
+      map().store.state.set({ ...map().store.state(), nodes: {} });
+
+      map().openAdd();
+
+      expect(map().addDialog.nativeElement.open).toBe(false);
+    });
+
+    it('rejects the same group on both sides', async () => {
+      map().openAdd();
+      map().addTo = map().addFrom;
+      map().addText = 'Algo';
+
+      await map().submitAdd();
+      fixture.detectChanges();
+
+      expect(map().dialogError()).toBe('Elegí dos grupos distintos.');
+      expect(root().querySelector('dialog[aria-labelledby="add-title"] [role="alert"]')!.textContent).toContain('Elegí dos grupos distintos.');
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('requires a description', async () => {
+      map().openAdd();
+      map().addText = '   ';
+
+      await map().submitAdd();
+
+      expect(map().dialogError()).toBe('Contá qué necesita.');
+      expect(api.post).not.toHaveBeenCalled();
+    });
+
+    it('saves the trimmed dependency, closes the dialog and shows a toast', async () => {
+      map().openAdd();
+      map().addState = 'definir';
+      map().addText = '  Necesitamos un endpoint  ';
+
+      await map().submitAdd();
+      fixture.detectChanges();
+
+      expect(api.post).toHaveBeenCalledWith('/depmap/edges', { from: 'usr', to: 'ops', kind: 'api', state: 'definir', text: 'Necesitamos un endpoint' });
+      expect(map().addDialog.nativeElement.open).toBe(false);
+      expect(map().busy()).toBe(false);
+      expect(root().querySelector('.toast')!.textContent).toContain('Dependencia agregada para todos');
+
+      await vi.advanceTimersByTimeAsync(2_200);
+      fixture.detectChanges();
+      expect(root().querySelector('.toast')).toBeNull();
+    });
+
+    it('keeps the dialog open with the error when saving fails', async () => {
+      api.post.mockReturnValue(throwError(() => new Error('Sin permiso')));
+      map().openAdd();
+      map().addText = 'Algo';
+
+      await map().submitAdd();
+
+      expect(map().dialogError()).toBe('Sin permiso');
+      expect(map().addDialog.nativeElement.open).toBe(true);
+      expect(map().busy()).toBe(false);
+    });
+
+    it('uses a generic message for unknown errors', async () => {
+      api.post.mockReturnValue(throwError(() => 'raro'));
+      map().openAdd();
+      map().addText = 'Algo';
+
+      await map().submitAdd();
+
+      expect(map().dialogError()).toBe('No se pudo guardar.');
+    });
+
+    it('opens from the toolbar button', () => {
+      const add = [...root().querySelectorAll('button')].find((button) => button.textContent?.includes(map().t().mapa.agregar))!;
+
+      add.click();
+
+      expect(map().addDialog.nativeElement.open).toBe(true);
+    });
+  });
+
+  describe('data dialog', () => {
+    it('shows the shared state as JSON with its metadata', () => {
+      map().openData(document.body);
+      fixture.detectChanges();
+
+      expect(JSON.parse(map().jsonDataValue)).toEqual({ edges: onlineState.edges, done: onlineState.done });
+      expect(map().dataMeta()).toBe('Estado compartido: versión 7 · último cambio de ana · 1 dependencias, 1 hechas.');
+      expect(map().dataDialog.nativeElement.open).toBe(true);
+    });
+
+    it('omits the author when nobody changed the map', () => {
+      map().store.state.set({ ...map().store.state(), updatedBy: null });
+
+      expect(map().dataMeta()).toBe('Estado compartido: versión 7 · 1 dependencias, 1 hechas.');
+    });
+
+    it('copies the JSON to the clipboard', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+      map().openData(document.body);
+
+      await map().copyData();
+
+      expect(writeText).toHaveBeenCalledWith(map().jsonDataValue);
+      expect(map().toast()).toBe('Copiado');
+      vi.unstubAllGlobals();
+    });
+
+    it('asks to copy by hand when the clipboard fails', async () => {
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockRejectedValue(new Error('no')) } });
+
+      await map().copyData();
+
+      expect(map().toast()).toBe('Seleccioná y copiá a mano');
+      vi.unstubAllGlobals();
+    });
+
+    it('applies edited JSON for everyone', async () => {
+      map().openData(document.body);
+      map().jsonDataValue = JSON.stringify({ edges: [], done: { x: true } });
+
+      await map().applyData();
+
+      expect(api.post).toHaveBeenCalledWith('/depmap/import', { edges: [], done: { x: true } });
+      expect(map().dataDialog.nativeElement.open).toBe(false);
+      expect(map().toast()).toBe('Datos aplicados para todos');
+    });
+
+    it('sends an empty done map when the JSON has none', async () => {
+      map().jsonDataValue = JSON.stringify({ edges: [] });
+
+      await map().applyData();
+
+      expect(api.post).toHaveBeenCalledWith('/depmap/import', { edges: [], done: {} });
+    });
+
+    it('reports invalid JSON without calling the server', async () => {
+      map().openData(document.body);
+      map().jsonDataValue = '{roto';
+
+      await map().applyData();
+
+      expect(map().dialogError()).toBeTruthy();
+      expect(api.post).not.toHaveBeenCalled();
+      expect(map().busy()).toBe(false);
+    });
+
+    it('reports a generic message for non Error failures', async () => {
+      api.post.mockReturnValue(throwError(() => 'raro'));
+      map().jsonDataValue = JSON.stringify({ edges: [] });
+
+      await map().applyData();
+
+      expect(map().dialogError()).toBe('JSON inválido.');
+    });
+
+    it('opens from the more menu and closes the menu', () => {
+      map().toggleMenu('more');
+      expect(map().openMenu()).toBe('more');
+
+      map().openDataFromMenu();
+
+      expect(map().openMenu()).toBeNull();
+      expect(map().dataDialog.nativeElement.open).toBe(true);
+    });
+
+    it('hides reset and apply for members', async () => {
+      TestBed.resetTestingModule();
+      role = 'member';
+      await render();
+      map().openData(document.body);
+      fixture.detectChanges();
+
+      const labels = [...root().querySelectorAll('dialog[aria-labelledby="data-title"] button')].map((button) => button.textContent?.trim());
+      expect(labels).not.toContain(map().t().mapa.restaurar);
+    });
+  });
+
+  describe('confirmations', () => {
+    it('resets the map after confirming', async () => {
+      map().openData(document.body);
+      map().askReset();
+      fixture.detectChanges();
+      expect(map().confirmKind()).toBe('reset');
+      expect(root().querySelector('dialog[aria-labelledby="confirm-title"] .meta')!.textContent).toContain('datos de la reunión');
+
+      await map().confirmAction();
+
+      expect(api.post).toHaveBeenCalledWith('/depmap/reset');
+      expect(map().confirmDialog.nativeElement.open).toBe(false);
+      expect(map().dataDialog.nativeElement.open).toBe(false);
+      expect(map().toast()).toBe('Datos originales restaurados');
+    });
+
+    it('deletes a dependency after confirming', async () => {
+      const edge = onlineState.edges[0];
+      map().askDelete(edge);
+
+      expect(map().confirmMessage()).toContain('«Prueba»');
+
+      await map().confirmAction();
+
+      expect(api.delete).toHaveBeenCalledWith('/depmap/edges/edge-1');
+      expect(map().toast()).toBe('Dependencia eliminada');
+      expect(map().confirmDialog.nativeElement.open).toBe(false);
+    });
+
+    it('keeps the confirmation open when the action fails', async () => {
+      api.delete.mockReturnValue(throwError(() => new Error('Ya no existe')));
+      map().askDelete(onlineState.edges[0]);
+
+      await map().confirmAction();
+
+      expect(map().dialogError()).toBe('Ya no existe');
+      expect(map().confirmDialog.nativeElement.open).toBe(true);
+      expect(map().busy()).toBe(false);
+    });
+
+    it('uses a generic message for unknown failures', async () => {
+      api.post.mockReturnValue(throwError(() => 'raro'));
+      map().askReset();
+
+      await map().confirmAction();
+
+      expect(map().dialogError()).toBe('No se pudo completar la acción.');
+    });
+
+    it('only closes when there is nothing to confirm', async () => {
+      map().confirmDialog.nativeElement.showModal();
+
+      await map().confirmAction();
+
+      expect(api.post).not.toHaveBeenCalled();
+      expect(api.delete).not.toHaveBeenCalled();
+      expect(map().confirmDialog.nativeElement.open).toBe(false);
+    });
+
+    it('returns focus to the element that opened the dialog', async () => {
+      const opener = document.createElement('button');
+      document.body.appendChild(opener);
+      opener.focus();
+      map().askReset();
+      (document.activeElement as HTMLElement)?.blur();
+
+      map().close(map().confirmDialog.nativeElement);
+      await flush();
+
+      expect(document.activeElement).toBe(opener);
+      opener.remove();
+    });
+  });
+
+  describe('keyboard', () => {
+    function keydown(key: string, target: Element = root(), init: KeyboardEventInit = {}): KeyboardEvent {
+      const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init });
+      Object.defineProperty(event, 'target', { value: target });
+      map().onKeydown(event);
+      return event;
+    }
+
+    it('jumps to the first and last tab with Home and End', () => {
+      const end = new KeyboardEvent('keydown', { key: 'End', cancelable: true });
+      map().onTabKeydown(end, 'mapa');
+      expect(map().store.view()).toBe('lista');
+      expect(end.defaultPrevented).toBe(true);
+
+      map().onTabKeydown(new KeyboardEvent('keydown', { key: 'Home' }), 'lista');
+      expect(map().store.view()).toBe('mapa');
+
+      map().onTabKeydown(new KeyboardEvent('keydown', { key: 'ArrowLeft' }), 'mapa');
+      expect(map().store.view()).toBe('lista');
+    });
+
+    it('ignores other keys on the tabs', () => {
+      const event = new KeyboardEvent('keydown', { key: 'a', cancelable: true });
+
+      map().onTabKeydown(event, 'mapa');
+
+      expect(event.defaultPrevented).toBe(false);
+      expect(map().store.view()).toBe('mapa');
+    });
+
+    it('closes an open menu with Escape and focuses its trigger', () => {
+      map().toggleMenu('more');
+      fixture.detectChanges();
+
+      const event = keydown('Escape');
+
+      expect(map().openMenu()).toBeNull();
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(root().querySelector('[data-menu-trigger="more"]'));
+    });
+
+    it('leaves Escape to open dialogs and form fields', () => {
+      map().store.selectPair(['usr', 'ops']);
+      map().openAdd();
+      const insideDialog = map().addDialog.nativeElement.querySelector('textarea')!;
+      expect(keydown('Escape', insideDialog).defaultPrevented).toBe(false);
+
+      map().close(map().addDialog.nativeElement);
+      const input = document.createElement('input');
+      root().appendChild(input);
+      expect(keydown('Escape', input).defaultPrevented).toBe(false);
+      expect(map().store.pair()).toEqual(['usr', 'ops']);
+
+      const editable = document.createElement('div');
+      editable.setAttribute('contenteditable', 'true');
+      const child = document.createElement('span');
+      editable.appendChild(child);
+      root().appendChild(editable);
+      expect(keydown('Escape', child).defaultPrevented).toBe(false);
+    });
+
+    it('does nothing on Escape when my group is already selected', () => {
+      expect(keydown('Escape').defaultPrevented).toBe(false);
+      expect(map().store.node()).toBe('usr');
+    });
+
+    it('ignores keys other than Escape and Tab', () => {
+      map().store.selectPair(['usr', 'ops']);
+
+      keydown('Enter');
+
+      expect(map().store.pair()).toEqual(['usr', 'ops']);
+    });
+  });
+
+  describe('menus and panels', () => {
+    it('toggles each menu and closes it on a second click', () => {
+      map().toggleMenu('filters');
+      expect(map().openMenu()).toBe('filters');
+      map().toggleMenu('more');
+      expect(map().openMenu()).toBe('more');
+      map().toggleMenu('more');
+      expect(map().openMenu()).toBeNull();
+    });
+
+    it('keeps the filter popover inside narrow viewports', () => {
+      const trigger = root().querySelector('[data-menu-trigger="filters"]') as HTMLElement;
+      trigger.getBoundingClientRect = () => ({ left: 900, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) });
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 400 });
+
+      map().toggleMenu('filters');
+
+      expect(map().filterPopoverLeft()).toBe(400 - 300 - 12);
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
+    });
+
+    it('leaves the full screen when switching away from the map', () => {
+      map().enterFullscreen();
+      expect(map().fullscreen()).toBe(true);
+
+      map().activateView('lista');
+
+      expect(map().fullscreen()).toBe(false);
+      expect(map().store.view()).toBe('lista');
+    });
+
+    it('only enters full screen from the map view', () => {
+      map().activateView('matriz');
+
+      map().enterFullscreen();
+
+      expect(map().fullscreen()).toBe(false);
+    });
+
+    it('locks page scroll in full screen and restores it afterwards', () => {
+      document.body.style.overflow = 'auto';
+
+      map().toggleFullscreen();
+      expect(document.body.style.overflow).toBe('hidden');
+      expect(document.documentElement.style.overflow).toBe('hidden');
+
+      map().toggleFullscreen();
+      expect(document.body.style.overflow).toBe('auto');
+      expect(document.documentElement.style.overflow).toBe('');
+      document.body.style.overflow = '';
+    });
+
+    it('ignores exit requests outside full screen', () => {
+      expect(() => map().exitFullscreen()).not.toThrow();
+      expect(map().fullscreen()).toBe(false);
+    });
+
+    it('requests native full screen when available', () => {
+      const request = vi.fn().mockResolvedValue(undefined);
+      (fixture.nativeElement as HTMLElement & { requestFullscreen: () => Promise<void> }).requestFullscreen = request;
+
+      map().enterFullscreen();
+
+      expect(request).toHaveBeenCalled();
+      map().exitFullscreen(false);
+    });
+
+    it('opens details as an overlay while in full screen', () => {
+      map().enterFullscreen();
+
+      map().togglePanel();
+      expect(map().fullscreenDetailsOpen()).toBe(true);
+      map().togglePanel();
+      expect(map().fullscreenDetailsOpen()).toBe(false);
+
+      map().exitFullscreen(false);
+    });
   });
 });
