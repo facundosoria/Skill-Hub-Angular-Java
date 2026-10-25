@@ -156,6 +156,7 @@ import { ToastHost } from '../shared/toast';
             <a
               [routerLink]="l.path"
               routerLinkActive="text-text nav-link-active"
+              (isActiveChange)="navActiveTick.update((n) => n + 1)"
               class="relative z-10 rounded-full px-3 py-1.5 text-text-muted transition-colors duration-[var(--dur-fast)] hover:bg-surface-2 hover:text-text"
               >{{ l.label }}</a
             >
@@ -204,6 +205,8 @@ export class Shell {
   /** La primera vez que aparece la pildora no se desliza desde (0,0). */
   pillInstant = signal(true);
   private mainNav = viewChild.required<ElementRef<HTMLElement>>('mainNav');
+  /** routerLinkActive pone la clase despues del primer render: re-medir cuando cambia. */
+  navActiveTick = signal(0);
 
   activeSection = computed<'skills' | 'plugins' | 'contracts' | null>(() => {
     const url = this.currentUrl();
@@ -273,6 +276,7 @@ export class Shell {
     afterRenderEffect(() => {
       this.currentUrl();
       this.navLinks();
+      this.navActiveTick();
       this.placePill();
     });
     const onResize = () => this.placePill();

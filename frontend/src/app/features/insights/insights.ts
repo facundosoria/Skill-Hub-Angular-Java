@@ -63,7 +63,7 @@ type Miss = { query_text: string; veces: number };
                       </div>
                     </div>
                     <span uiBadge tone="neutral" class="font-mono text-xs shrink-0">
-                      <span [countUp]="r.hits"></span> {{ r.hits === 1 ? t().insights.consulta : t().insights.consultas }} · {{ r.personas }} {{ r.personas === 1 ? t().insights.persona : t().insights.personas }}
+                      <span [countUp]="r.hits"></span>&ngsp;{{ r.hits === 1 ? t().insights.consulta : t().insights.consultas }} · {{ r.personas }} {{ r.personas === 1 ? t().insights.persona : t().insights.personas }}
                     </span>
                   </div>
                 }
