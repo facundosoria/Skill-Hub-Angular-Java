@@ -236,4 +236,50 @@ class InfraMonitorTest {
         verify(registry, never()).fetch(any());
         verify(repository, never()).insertObservations(anyList());
     }
+
+    @Test
+    void skipsUnnamedDefinitionsAndFallsBackToTheNextReason() {
+        InfraProperties.ServiceDefinition nameless = new InfraProperties.ServiceDefinition();
+        properties.getCatalogue().add(nameless);
+        registry(Map.of("USERS", List.of(instance("USERS", RegistryState.UP), instance("USERS", RegistryState.UP)),
+                "LLM", List.of(instance("LLM", RegistryState.UP))));
+        when(probe.probe(any(), any())).thenReturn(
+                new ActuatorProbe.Outcome(InfraState.DEGRADED, " ", ActuatorProbe.COVERAGE_PARTIAL, null, null),
+                new ActuatorProbe.Outcome(InfraState.DEGRADED, "latency_degraded", ActuatorProbe.COVERAGE_PARTIAL, null, null),
+                new ActuatorProbe.Outcome(InfraState.DEGRADED, null, ActuatorProbe.COVERAGE_PARTIAL, null, null));
+
+        monitor.runCycleOnce(NOW);
+
+        assertThat(stored).containsOnlyKeys("users", "llm");
+        // Cada servicio toma el primer motivo no vacio de sus instancias.
+        assertThat(java.util.stream.Stream.of(stored.get("users").reason(), stored.get("llm").reason()))
+                .contains("latency_degraded");
+        assertThat(java.util.stream.Stream.of(stored.get("users").reason(), stored.get("llm").reason()))
+                .doesNotContain(" ");
+    }
+
+    @Test
+    void restartsObservedSinceWhenAnUnknownServiceBecomesKnown() {
+        Instant earlier = NOW.minusSeconds(600);
+        stored.put("users", new InfraRepository.ServiceStateRecord("users", InfraState.UNKNOWN, null, earlier, null, null, earlier,
+                0, 5, true, earlier, ActuatorProbe.COVERAGE_UNAVAILABLE, 1, null, null));
+        registry(Map.of("USERS", List.of(instance("USERS", RegistryState.UP))));
+        when(probe.probe(any(), any())).thenReturn(outcome(InfraState.UP, ActuatorProbe.COVERAGE_FULL, 10L, 5));
+
+        monitor.runCycleOnce(NOW);
+
+        assertThat(stored.get("users").state()).isEqualTo(InfraState.UP);
+        assertThat(stored.get("users").observedSince()).isEqualTo(NOW);
+    }
+
+    @Test
+    void logsAPurgeThatOnlyRemovedTransitions() {
+        registry(Map.of());
+        when(repository.purgeObservationsBefore(any())).thenReturn(0);
+        when(repository.purgeTransitionsBefore(any())).thenReturn(4);
+
+        monitor.runCycleOnce(NOW);
+
+        verify(repository).purgeTransitionsBefore(NOW.minus(Duration.ofDays(30)));
+    }
 }
