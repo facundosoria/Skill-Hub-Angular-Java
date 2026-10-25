@@ -784,4 +784,27 @@ class RestApiIntegrationTest {
                 "username", "profesor-user", "password", "password-segura-123"), null);
         assertThat(loginRestored.status).isEqualTo(200);
     }
+
+    @Test @Order(39)
+    void auditoriaSoloAdminYFiltraPorAccionYActor() {
+        assertThat(get("/api/audit", memberCookie).status).isEqualTo(403);
+
+        var all = get("/api/audit", adminCookie);
+        assertThat(all.status).isEqualTo(200);
+        assertThat(all.body.path("events").size()).isGreaterThan(0);
+        assertThat(all.body.path("actions").size()).isGreaterThan(0);
+        assertThat(all.body.path("actors").size()).isGreaterThan(0);
+
+        String action = all.body.path("actions").get(0).path("action").asText();
+        var byAction = get("/api/audit?action=" + action, adminCookie);
+        assertThat(byAction.status).isEqualTo(200);
+        assertThat(byAction.body.path("events").size()).isGreaterThan(0);
+        for (var e : byAction.body.path("events")) assertThat(e.path("action").asText()).isEqualTo(action);
+
+        String actorId = all.body.path("actors").get(0).path("id").asText();
+        var byActor = get("/api/audit?actor=" + actorId, adminCookie);
+        assertThat(byActor.status).isEqualTo(200);
+        assertThat(byActor.body.path("events").size()).isGreaterThan(0);
+        for (var e : byActor.body.path("events")) assertThat(e.path("actorId").asText()).isEqualTo(actorId);
+    }
 }

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.skillhub.agentroom.AgentRoomService;
+import com.skillhub.agentroom.RoomActor;
 import com.skillhub.auth.ApiKeyIdentity;
 import com.skillhub.depmap.DepMapService;
 import com.skillhub.session.CurrentUser;
@@ -16,6 +18,7 @@ import com.skillhub.skill.SkillRepository;
 import com.skillhub.skill.SkillWriteService;
 import com.skillhub.web.DomainException;
 import org.springframework.stereotype.Component;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -23,12 +26,21 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
- * Definiciones y despacho de las seis tools MCP. Puerto de src/server/mcp/server.ts.
+ * Definiciones y despacho de las tools MCP. Puerto de src/server/mcp/server.ts.
  *
- * Cinco de lectura (search_skills, get_skill, sync_skills, list_skills,
- * get_port_registry) y UNA de escritura (propose_skill).
+ * Catalogo: cinco de lectura (search_skills, get_skill, sync_skills,
+ * list_skills, get_port_registry) y dos de escritura (propose_skill,
+ * propose_revision).
+ *
+ * Salas de agentes: list_rooms y read_room de lectura; create_room,
+ * post_room_message, propose_agreement y accept_agreement de escritura. La
+ * logica vive en AgentRoomService, compartida con la web.
+ *
+ * Mapa de dependencias: list_dependency_map de lectura y add_dependencies de
+ * escritura, sobre DepMapService (el mismo camino que la web).
  *
  * Las descripciones estan prompt-engineered: se copian verbatim del original.
  * Los inputSchema van como JSON literal y estable (cacheable byte a byte).
@@ -49,16 +61,18 @@ public class McpTools {
     private final SkillWriteService write;
     private final CatalogArtifactService artifacts;
     private final DepMapService depMap;
+    private final AgentRoomService rooms;
     private final ObjectMapper json;
 
     public McpTools(SkillCatalog catalog, ProposeService propose,
                     SkillWriteService write, CatalogArtifactService artifacts,
-                    DepMapService depMap, ObjectMapper json) {
+                    DepMapService depMap, AgentRoomService rooms, ObjectMapper json) {
         this.catalog = catalog;
         this.propose = propose;
         this.write = write;
         this.artifacts = artifacts;
         this.depMap = depMap;
+        this.rooms = rooms;
         this.json = json;
     }
 
@@ -115,6 +129,44 @@ public class McpTools {
             + "`title` to rename the display name and `new_slug` to change the slug — the old slug is "
             + "kept as a redirect, so local copies and links reconcile on the next sync_skills. Keep the "
             + "whole skill in a single language, English or Spanish — do not mix languages across fields.";
+
+    private static final String LIST_ROOMS_DESC =
+            "List the agent rooms your team is invited to. A room is a shared thread where agents from "
+            + "different teams work something out directly (an API contract, a feature, or how to fix a "
+            + "problem that spans teams and what each side changes), instead of a person copying analysis "
+            + "from one agent to another. Returns id, title, topic, teams, status "
+            + "(open, agreed, closed) and lastSeq.";
+
+    private static final String CREATE_ROOM_DESC =
+            "Open a new agent room with other teams to agree on a contract or feature, or to diagnose and "
+            + "fix a problem that crosses team boundaries (who changes what on each side). Your own team is "
+            + "added automatically; invite the counterpart teams by their exact team name. Put in `topic` "
+            + "what has to be agreed or fixed, plus the evidence and constraints you already have (errors, "
+            + "logs, payloads, versions), so the other agents can start without asking.";
+
+    private static final String READ_ROOM_DESC =
+            "Read an agent room incrementally. Pass `since_seq` = the `nextSeq` you got last time "
+            + "(0 the first time) to receive only new messages. The current agreement's full `content` is "
+            + "included on the first read and whenever a new proposal arrives; otherwise only its version "
+            + "and which teams accepted it. If `hasMore` is true, call again right away with the new "
+            + "since_seq.";
+
+    private static final String POST_ROOM_MESSAGE_DESC =
+            "Post a message to an agent room on behalf of your team. Be concrete: endpoints, payloads, "
+            + "field names, error shapes, events, ownership. State your team's needs and constraints, "
+            + "answer the open questions from other teams, and say clearly what you agree with. Max 20 KB.";
+
+    private static final String PROPOSE_CONTRACT_DESC =
+            "Propose the room's agreement as a new version: an API contract (markdown, or an OpenAPI "
+            + "document as text) or a solution plan that states the root cause and, per team, exactly what "
+            + "it will change and how to verify it. It replaces the previous version and resets all "
+            + "acceptances. Send the complete agreement, never a diff. Propose once the discussion has "
+            + "converged; use `note` to summarise what changed. Max 100 KB.";
+
+    private static final String ACCEPT_CONTRACT_DESC =
+            "Accept an agreement version on behalf of YOUR team only. Only the latest version can be "
+            + "accepted. Accept only if it fully reflects your team's position; otherwise post a message "
+            + "with the objections. When every invited team accepts, the room becomes `agreed`.";
 
     private static final String STACK_ENUM = "[\"angular\",\"java\",\"shared\",\"infra\"]";
     private static final String TYPE_ENUM = "[\"skill\",\"convention\",\"reference\",\"plugin\",\"contract\"]";
@@ -223,6 +275,48 @@ public class McpTools {
         "required":["from","to","kind","text"],"additionalProperties":false}}},\
         "required":["dependencies"],"additionalProperties":false}""").formatted(ADD_DEPENDENCIES_MAX);
 
+    private static final String LIST_ROOMS_SCHEMA = """
+        {"type":"object","properties":{},"additionalProperties":false}""";
+
+    private static final String CREATE_ROOM_SCHEMA = """
+        {"type":"object","properties":{\
+        "title":{"type":"string","description":"Short name of what is being agreed"},\
+        "topic":{"type":"string","description":"What has to be agreed, context and known constraints"},\
+        "invite_teams":{"type":"array","items":{"type":"string"},"description":"Exact names of the other teams to invite"}},\
+        "required":["title","invite_teams"],\
+        "additionalProperties":false}""";
+
+    private static final String READ_ROOM_SCHEMA = """
+        {"type":"object","properties":{\
+        "room_id":{"type":"string"},\
+        "since_seq":{"type":"integer","minimum":0,"description":"nextSeq from the previous read; 0 for the first"},\
+        "limit":{"type":"integer","minimum":1,"maximum":200}},\
+        "required":["room_id"],\
+        "additionalProperties":false}""";
+
+    private static final String POST_ROOM_MESSAGE_SCHEMA = """
+        {"type":"object","properties":{\
+        "room_id":{"type":"string"},\
+        "body":{"type":"string","description":"Markdown message"}},\
+        "required":["room_id","body"],\
+        "additionalProperties":false}""";
+
+    private static final String PROPOSE_CONTRACT_SCHEMA = """
+        {"type":"object","properties":{\
+        "room_id":{"type":"string"},\
+        "format":{"type":"string","enum":["markdown","openapi"]},\
+        "content":{"type":"string","description":"The complete agreement: contract or solution plan"},\
+        "note":{"type":"string","description":"What changed compared to the previous version"}},\
+        "required":["room_id","content"],\
+        "additionalProperties":false}""";
+
+    private static final String ACCEPT_CONTRACT_SCHEMA = """
+        {"type":"object","properties":{\
+        "room_id":{"type":"string"},\
+        "version":{"type":"integer","minimum":1}},\
+        "required":["room_id","version"],\
+        "additionalProperties":false}""";
+
     public ArrayNode toolList() {
         ArrayNode arr = json.createArrayNode();
         arr.add(toolDef("search_skills", "Search skills", SEARCH_SKILLS_DESC, SEARCH_SKILLS_SCHEMA, true, null));
@@ -234,6 +328,12 @@ public class McpTools {
         arr.add(toolDef("propose_revision", "Propose a change to a skill", PROPOSE_REVISION_DESC, PROPOSE_REVISION_SCHEMA, false, false));
         arr.add(toolDef("list_dependency_map", "Read the dependency map", LIST_DEPENDENCY_MAP_DESC, LIST_DEPENDENCY_MAP_SCHEMA, true, null));
         arr.add(toolDef("add_dependencies", "Add dependencies to the map", ADD_DEPENDENCIES_DESC, ADD_DEPENDENCIES_SCHEMA, false, false));
+        arr.add(toolDef("list_rooms", "List agent rooms", LIST_ROOMS_DESC, LIST_ROOMS_SCHEMA, true, null));
+        arr.add(toolDef("create_room", "Open an agent room", CREATE_ROOM_DESC, CREATE_ROOM_SCHEMA, false, false));
+        arr.add(toolDef("read_room", "Read an agent room", READ_ROOM_DESC, READ_ROOM_SCHEMA, true, null));
+        arr.add(toolDef("post_room_message", "Post to an agent room", POST_ROOM_MESSAGE_DESC, POST_ROOM_MESSAGE_SCHEMA, false, false));
+        arr.add(toolDef("propose_agreement", "Propose an agreement version", PROPOSE_CONTRACT_DESC, PROPOSE_CONTRACT_SCHEMA, false, false));
+        arr.add(toolDef("accept_agreement", "Accept an agreement version", ACCEPT_CONTRACT_DESC, ACCEPT_CONTRACT_SCHEMA, false, false));
         return arr;
     }
 
@@ -270,6 +370,20 @@ public class McpTools {
             case "propose_revision" -> textContent(proposeRevision(args, identity));
             case "list_dependency_map" -> textContent(listDependencyMap());
             case "add_dependencies" -> textContent(addDependencies(args, identity));
+            case "list_rooms" -> textContent(roomCall(() -> Map.of(
+                    "rooms", rooms.list(RoomActor.agent(identity)))));
+            case "create_room" -> textContent(roomCall(() -> rooms.create(RoomActor.agent(identity),
+                    args.path("title").asText(""), args.path("topic").asText(""), strings(args.path("invite_teams")))));
+            case "read_room" -> textContent(roomCall(() -> rooms.read(RoomActor.agent(identity),
+                    args.path("room_id").asText(""), args.path("since_seq").asLong(0),
+                    args.hasNonNull("limit") ? args.get("limit").asInt() : null)));
+            case "post_room_message" -> textContent(roomCall(() -> rooms.post(RoomActor.agent(identity),
+                    args.path("room_id").asText(""), args.path("body").asText(""))));
+            case "propose_agreement" -> textContent(roomCall(() -> rooms.proposeContract(RoomActor.agent(identity),
+                    args.path("room_id").asText(""), args.path("format").asText("markdown"),
+                    args.path("content").asText(""), args.path("note").asText(""))));
+            case "accept_agreement" -> textContent(roomCall(() -> rooms.accept(RoomActor.agent(identity),
+                    args.path("room_id").asText(""), args.path("version").asInt(0))));
             default -> null;
         };
     }
@@ -949,6 +1063,29 @@ public class McpTools {
 
     private static String dependencyKey(String from, String to, String kind, String text) {
         return from + ">" + to + ">" + kind + ">" + text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    // --- salas de agentes -------------------------------------------------
+
+    /** Los errores de negocio vuelven como {"error": ...} para que el agente los lea y corrija. */
+    private JsonNode roomCall(Supplier<Object> action) {
+        try {
+            return json.valueToTree(action.get());
+        } catch (DomainException e) {
+            ObjectNode out = json.createObjectNode();
+            out.put("error", e.getMessage());
+            return out;
+        } catch (ResponseStatusException e) {
+            ObjectNode out = json.createObjectNode();
+            out.put("error", e.getReason() != null ? e.getReason() : e.getStatusCode().toString());
+            return out;
+        }
+    }
+
+    private List<String> strings(JsonNode array) {
+        List<String> values = new ArrayList<>();
+        if (array != null && array.isArray()) array.forEach(value -> values.add(value.asText()));
+        return values;
     }
 
     private ArrayNode toArray(List<String> values) {

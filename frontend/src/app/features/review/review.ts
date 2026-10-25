@@ -4,13 +4,14 @@ import { firstValueFrom } from 'rxjs';
 import { Api } from '../../core/api';
 import { I18n } from '../../core/i18n/i18n';
 import type { Proposal, RevisionProposal } from '../../core/models';
+import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
 import { UI } from '../../shared/ui';
 import { apiError } from '../auth/login';
 
 /** Puerto de src/app/(app)/review/page.tsx + review-actions.tsx. */
 @Component({
   selector: 'app-review',
-  imports: [RouterLink, ...UI],
+  imports: [RouterLink, AnimDelayPipe, ...UI],
   template: `
     <div class="mx-auto max-w-3xl">
       <h1 class="text-2xl font-semibold tracking-tight">{{ t().review.titulo }}</h1>
@@ -26,8 +27,8 @@ import { apiError } from '../auth/login';
         <ui-empty-state [title]="t().review.vacio" [hint]="t().review.vacioHint" />
       } @else {
         <div class="space-y-3">
-          @for (p of proposals(); track p.slug) {
-            <div uiCard class="p-4">
+          @for (p of proposals(); track p.slug; let i = $index) {
+            <div uiCard class="p-4" animate.enter="anim-row-in" animate.leave="anim-panel-out" [style.animationDelay]="i | animDelay">
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <a [routerLink]="['/skills', p.slug]" class="text-[15px] font-medium hover:underline">{{ p.title }}</a>
                 <span uiBadge tone="accent">{{ p.stack }}</span>
@@ -57,8 +58,8 @@ import { apiError } from '../auth/login';
         <h2 class="mt-10 text-lg font-semibold tracking-tight">{{ t().review.revisionesTitulo }}</h2>
         <p class="mt-1 mb-4 text-sm text-text-muted">{{ t().review.revisionesSubtitulo }}</p>
         <div class="space-y-3">
-          @for (r of revisions(); track r.slug) {
-            <div uiCard class="p-4">
+          @for (r of revisions(); track r.slug; let i = $index) {
+            <div uiCard class="p-4" animate.enter="anim-row-in" animate.leave="anim-panel-out" [style.animationDelay]="i | animDelay">
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <a [routerLink]="['/skills', r.slug]" class="text-[15px] font-medium hover:underline">{{ r.title }}</a>
                 <span uiBadge tone="accent">{{ r.stack }}</span>

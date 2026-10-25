@@ -113,7 +113,7 @@ interface TocGroup {
           @if (content(); as md) {
             <skill-markdown [content]="md" />
           } @else {
-            <div class="space-y-4 animate-pulse">
+            <div class="space-y-4 skeleton-shimmer-group">
               <div class="h-8 w-1/3 rounded bg-surface-2"></div>
               <div class="h-4 w-2/3 rounded bg-surface-2"></div>
               <div class="h-48 rounded bg-surface-2"></div>

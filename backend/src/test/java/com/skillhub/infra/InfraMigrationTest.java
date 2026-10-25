@@ -40,7 +40,7 @@ class InfraMigrationTest {
     @Test
     void cleanDatabaseAppliesAllMigrationsIncludingInfra() throws Exception {
         var result = flyway(CLEAN, null).migrate();
-        assertThat(result.migrationsExecuted).isEqualTo(25);
+        assertThat(result.migrationsExecuted).isEqualTo(26);
         try (Connection connection = DriverManager.getConnection(CLEAN.getJdbcUrl(), CLEAN.getUsername(), CLEAN.getPassword())) {
             assertThat(tableExists(connection, "public", "users")).isTrue();
             assertThat(tableExists(connection, "infra", "service_catalog")).isTrue();
@@ -63,7 +63,7 @@ class InfraMigrationTest {
             }
         }
 
-        var applied = flyway(PREFEATURE, null).migrate();
+        var applied = flyway(PREFEATURE, "24").migrate();
         assertThat(applied.migrationsExecuted).isEqualTo(1);
 
         try (Connection connection = DriverManager.getConnection(PREFEATURE.getJdbcUrl(), PREFEATURE.getUsername(), PREFEATURE.getPassword())) {

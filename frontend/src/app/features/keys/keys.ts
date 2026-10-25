@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { Api } from '../../core/api';
 import { I18n } from '../../core/i18n/i18n';
 import type { ApiKey } from '../../core/models';
+import { ToastService } from '../../shared/toast';
 import { UI } from '../../shared/ui';
 import { firstValueFrom } from 'rxjs';
 import { apiError } from '../auth/login';
@@ -61,7 +62,7 @@ async function copyToClipboard(value: string): Promise<boolean> {
           @if (copied()) {
             <svg
               viewBox="0 0 24 24"
-              class="h-3.5 w-3.5 text-success"
+              class="h-3.5 w-3.5 text-success anim-check-pop"
               fill="none"
               stroke="currentColor"
               stroke-width="2.2"
@@ -104,7 +105,7 @@ async function copyToClipboard(value: string): Promise<boolean> {
           @if (copied()) {
             <svg
               viewBox="0 0 24 24"
-              class="h-3.5 w-3.5 text-success"
+              class="h-3.5 w-3.5 text-success anim-check-pop"
               fill="none"
               stroke="currentColor"
               stroke-width="2.2"
@@ -136,6 +137,7 @@ async function copyToClipboard(value: string): Promise<boolean> {
 })
 export class CopyRow {
   private i18n = inject(I18n);
+  private toast = inject(ToastService);
   t = this.i18n.t;
   value = input.required<string>();
   multiline = input<boolean | undefined>(undefined);
@@ -145,6 +147,7 @@ export class CopyRow {
   async copy(): Promise<void> {
     if (!(await copyToClipboard(this.value()))) return;
     this.copied.set(true);
+    this.toast.show(this.t().keys.copiado, 'success');
     setTimeout(() => this.copied.set(false), 1600);
   }
 }

@@ -94,27 +94,25 @@ describe('DepMapGraph zoom and full map controls', () => {
     expect(fixture.componentInstance.transform().scale).toBeGreaterThan(1);
   });
 
-  it('toggles the full map mode without re-selecting My group', () => {
-    button('Ver mapa completo').click();
+  it('renders the full map without a selected group', () => {
+    store.toggleFullMap();
     fixture.detectChanges();
 
     expect(store.fullMap()).toBe(true);
     expect(store.node()).toBeNull();
     expect(store.pair()).toBeNull();
 
-    button('Enfocar mi grupo').click();
+    store.toggleFullMap();
     fixture.detectChanges();
 
     expect(store.fullMap()).toBe(false);
     expect(store.node()).toBe('usr');
   });
 
-  it('keeps map controls in the legend instead of over the drawing', () => {
-    const legend = fixture.nativeElement.querySelector('.legend');
-    const controls = fixture.nativeElement.querySelector('.map-controls');
-
-    expect(legend?.contains(controls)).toBe(true);
-    expect(fixture.nativeElement.querySelectorAll('.map-controls')).toHaveLength(1);
+  it('leaves the map controls to the dep-map toolbar', () => {
+    // Desde 7140bcf los controles viven en la barra de dep-map, no en la leyenda del grafo.
+    expect(fixture.nativeElement.querySelector('.legend')).not.toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('.map-controls')).toHaveLength(0);
   });
 
   it('renders line-based focus halos for edges without a group outline', () => {

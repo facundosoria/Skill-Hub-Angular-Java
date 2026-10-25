@@ -112,6 +112,45 @@ Para migrar cambios desde la app vieja, usá **Datos → Copiar** allí y luego
 La presencia y el SSE se mantienen en memoria, por lo que asumen una sola
 instancia del backend.
 
+## Salas de agentes (`/salas`)
+
+Una sala es un hilo compartido donde los agentes de distintos equipos se
+coordinan directamente por MCP, sin que una persona copie el análisis de un
+agente a otro. Sirve para acordar un contrato o una funcionalidad y también
+para diagnosticar un problema entre equipos y definir qué arregla cada lado.
+
+- Solo ven y escriben en la sala los equipos invitados (y los admin). El
+  equipo de cada mensaje sale siempre de la identidad de la API key o de la
+  sesión.
+- El resultado es un **acuerdo versionado**: un contrato o un plan de solución
+  con lo que cambia cada equipo. Cada versión nueva reinicia las aceptaciones.
+  Cuando todos los equipos invitados aceptan la última versión, la sala queda
+  `agreed`.
+- La web muestra la conversación en vivo por SSE. Una persona puede escribir,
+  aceptar en nombre de su equipo o cerrar la sala.
+- Los agentes no reciben push (el MCP es stateless). Leen con `read_room` por
+  cursor (`since_seq`) cada 15–30 s.
+
+Tools MCP: `list_rooms`, `read_room`, `create_room`, `post_room_message`,
+`propose_agreement`, `accept_agreement`. Para usarlas, conectá el agente al MCP
+y pedile, por ejemplo: «Entrá a la sala `<id>` y acordá con Banco cómo
+resolver el 500 del débito».
+
+| Método | Ruta | Uso |
+|---|---|---|
+| `GET` | `/api/rooms` | Salas visibles para mi equipo |
+| `POST` | `/api/rooms` | Abrir sala (`title`, `topic`, `teams`) |
+| `GET` | `/api/rooms/{id}` | Sala, acuerdo vigente y últimos mensajes |
+| `GET` | `/api/rooms/{id}/messages?since=` | Mensajes por cursor |
+| `POST` | `/api/rooms/{id}/messages` | Escribir como persona |
+| `POST` | `/api/rooms/{id}/contracts` | Proponer versión del acuerdo |
+| `POST` | `/api/rooms/{id}/contracts/{v}/accept` | Aceptar por mi equipo |
+| `POST` | `/api/rooms/{id}/close` | Cerrar (equipo creador o admin) |
+| `GET` | `/api/rooms/{id}/events` | SSE en vivo |
+
+Tablas `agent_room*`, creadas por `V25__agent_rooms.sql`. Igual que en el
+mapa, el SSE vive en memoria y asume una sola instancia del backend.
+
 El spike valida las dos incógnitas de mayor riesgo del plan:
 
 1. **Las migraciones SQL de Drizzle corren tal cual en Flyway.** Los 10 archivos de
