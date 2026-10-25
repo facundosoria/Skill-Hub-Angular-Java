@@ -143,4 +143,101 @@ class EurekaParserTest {
                 """;
         assertThat(parse(textual).get("B").get(0).secureManagement()).isTrue();
     }
+
+    @Test
+    void returnsNothingForNullOrEmptyRoots() throws Exception {
+        assertThat(EurekaParser.parse(null)).isEmpty();
+        assertThat(parse("null")).isEmpty();
+        assertThat(parse("{}")).isEmpty();
+        assertThat(parse("{\"applications\": null}")).isEmpty();
+        assertThat(parse("{\"applications\": {\"application\": null}}")).isEmpty();
+        assertThat(parse("{\"application\": null}")).isEmpty();
+    }
+
+    @Test
+    void skipsApplicationsWithoutInstancesOrName() throws Exception {
+        var result = parse("""
+                {"applications": {"application": [
+                  {"name": "SIN-INSTANCIAS"},
+                  {"name": "INSTANCIA-NULA", "instance": null},
+                  {"instance": []},
+                  {"instance": [null]}
+                ]}}
+                """);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void usesTheInstanceAppWhenTheApplicationHasNoName() throws Exception {
+        var result = parse("""
+                {"applications": {"application": {"instance": {"app": "orders", "hostName": "orders-host", "status": "DOWN"}}}}
+                """);
+
+        assertThat(result).containsOnlyKeys("ORDERS");
+        ServiceInstance instance = result.get("ORDERS").getFirst();
+        assertThat(instance.instanceId()).isEqualTo("orders-host");
+        assertThat(instance.registryState()).isEqualTo(RegistryState.DOWN);
+    }
+
+    @Test
+    void fallsBackToTheApplicationNameAndHandlesMissingFields() throws Exception {
+        var result = parse("""
+                {"application": {"name": "billing", "instance": {"status": "  ", "port": "x", "app": " ", "metadata": "no"}}}
+                """);
+
+        ServiceInstance instance = result.get("BILLING").getFirst();
+        assertThat(instance.app()).isEqualTo("BILLING");
+        assertThat(instance.instanceId()).isNull();
+        assertThat(instance.port()).isNull();
+        assertThat(instance.securePort()).isNull();
+        assertThat(instance.securePortEnabled()).isNull();
+        assertThat(instance.registryState()).isEqualTo(RegistryState.UNKNOWN);
+        assertThat(instance.metadata()).isEmpty();
+    }
+
+    @Test
+    void readsPortsAsObjectsOrBareValues() throws Exception {
+        var result = parse("""
+                {"application": {"name": "a", "instance": [
+                  {"instanceId": "1", "port": {"$": 8080}, "securePort": {"$": 8443, "@enabled": "true"}},
+                  {"instanceId": "2", "port": 9090, "securePort": 443},
+                  {"instanceId": "3", "port": {"$": 0}, "securePort": {"$": 8443, "enabled": false}},
+                  {"instanceId": "4", "securePort": {"$": null, "@enabled": "  "}},
+                  {"instanceId": "5", "securePort": {"$": 8443}},
+                  {"instanceId": "6", "securePort": null, "port": null}
+                ]}}
+                """);
+
+        List<ServiceInstance> instances = result.get("A");
+        assertThat(instances.get(0).port()).isEqualTo(8080);
+        assertThat(instances.get(0).securePort()).isEqualTo(8443);
+        assertThat(instances.get(0).securePortEnabled()).isTrue();
+        assertThat(instances.get(1).port()).isEqualTo(9090);
+        assertThat(instances.get(1).securePortEnabled()).isTrue();
+        assertThat(instances.get(2).port()).isNull();
+        assertThat(instances.get(2).securePortEnabled()).isFalse();
+        assertThat(instances.get(3).securePort()).isNull();
+        assertThat(instances.get(3).securePortEnabled()).isNull();
+        assertThat(instances.get(4).securePortEnabled()).isNull();
+        assertThat(instances.get(5).securePort()).isNull();
+        assertThat(instances.get(5).port()).isNull();
+    }
+
+    @Test
+    void keepsNonNullMetadataAsText() throws Exception {
+        var result = parse("""
+                {"application": {"name": "a", "instance": {"instanceId": "1", "metadata": {"zone": "z1", "weight": 3, "empty": null}}}}
+                """);
+
+        assertThat(result.get("A").getFirst().metadata()).containsExactly(Map.entry("zone", "z1"), Map.entry("weight", "3"));
+    }
+
+    @Test
+    void mapsEveryRegistryStatus() {
+        assertThat(RegistryState.fromEureka("up")).isEqualTo(RegistryState.UP);
+        assertThat(RegistryState.fromEureka(" OUT_OF_SERVICE ")).isEqualTo(RegistryState.OUT_OF_SERVICE);
+        assertThat(RegistryState.fromEureka("STARTING")).isEqualTo(RegistryState.UNKNOWN);
+        assertThat(RegistryState.fromEureka(null)).isEqualTo(RegistryState.UNKNOWN);
+    }
 }
