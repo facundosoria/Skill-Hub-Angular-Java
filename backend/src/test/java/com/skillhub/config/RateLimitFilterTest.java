@@ -154,4 +154,105 @@ class RateLimitFilterTest {
         assertThat(attempt(login("10.1.1.4"), 401).getStatus()).isEqualTo(401);
         assertThat(attempt(login("10.1.1.4"), 200).getStatus()).isEqualTo(200);
     }
+
+    /** Cinco fallos seguidos desde la IP y devuelve el Retry-After del bloqueo resultante. */
+    private String bloquear(String ip) throws Exception {
+        for (int i = 0; i < 5; i++) attempt(login(ip), 401);
+        return attempt(login(ip), 200).getHeader("Retry-After");
+    }
+
+    @Test
+    void elBloqueoSeDuplicaEnCadaNivelHastaUnaHora() throws Exception {
+        String[] esperados = {"60", "120", "240", "480", "960", "1920", "3600", "3600"};
+        for (String esperado : esperados) {
+            assertThat(bloquear("10.2.0.1")).isEqualTo(esperado);
+            now.addAndGet(Long.parseLong(esperado) * 1000 + 1);
+        }
+    }
+
+    @Test
+    void unBloqueoDeUnaHoraNoBorraSuPropiaPenalizacion() throws Exception {
+        // Siete niveles: el septimo ya es el tope de una hora.
+        for (int nivel = 0; nivel < 7; nivel++) {
+            String retry = bloquear("10.2.0.2");
+            now.addAndGet(Long.parseLong(retry) * 1000 + 1);
+        }
+
+        // Apenas termina el bloqueo de una hora, el siguiente sigue siendo de una hora.
+        assertThat(bloquear("10.2.0.2")).isEqualTo("3600");
+    }
+
+    @Test
+    void laHoraSinFallosSeCuentaDesdeElFinDelBloqueo() throws Exception {
+        assertThat(bloquear("10.2.0.3")).isEqualTo("60");
+
+        // Mas de una hora desde el ultimo fallo, pero menos de una hora desde el fin del bloqueo.
+        now.addAndGet(60 * 60_000 + 30_000);
+
+        assertThat(bloquear("10.2.0.3")).isEqualTo("120");
+    }
+
+    @Test
+    void trasUnaHoraDesdeElFinDelBloqueoLaPenalizacionVuelveAlInicio() throws Exception {
+        assertThat(bloquear("10.2.0.4")).isEqualTo("60");
+
+        now.addAndGet(60_000 + 60 * 60_000 + 1);
+
+        assertThat(bloquear("10.2.0.4")).isEqualTo("60");
+    }
+
+    @Test
+    void alDecaerSeOlvidanTambienLosFallosAcumulados() throws Exception {
+        for (int i = 0; i < 4; i++) attempt(login("10.2.0.5"), 401);
+        now.addAndGet(2 * 60 * 60_000);
+
+        // Un solo fallo despues del decaimiento no completa los cinco.
+        assertThat(attempt(login("10.2.0.5"), 401).getStatus()).isEqualTo(401);
+        assertThat(attempt(login("10.2.0.5"), 200).getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void losFallosRecientesSiguenSumandoAntesDeLaHora() throws Exception {
+        for (int i = 0; i < 4; i++) attempt(login("10.2.0.6"), 401);
+        now.addAndGet(59 * 60_000);
+
+        attempt(login("10.2.0.6"), 401);
+        assertThat(attempt(login("10.2.0.6"), 200).getStatus()).isEqualTo(429);
+    }
+
+    @Test
+    void elRetryAfterRedondeaHaciaArribaYNuncaBajaDeUnSegundo() throws Exception {
+        bloquear("10.2.0.7");
+
+        now.addAndGet(59_500);
+        assertThat(attempt(login("10.2.0.7"), 200).getHeader("Retry-After")).isEqualTo("1");
+
+        now.addAndGet(499);
+        assertThat(attempt(login("10.2.0.7"), 200).getHeader("Retry-After")).isEqualTo("1");
+
+        now.addAndGet(1);
+        assertThat(attempt(login("10.2.0.7"), 200).getStatus()).isEqualTo(200);
+    }
+
+    @Test
+    void mientrasDuraElBloqueoNoSeLlamaAlLogin() throws Exception {
+        bloquear("10.2.0.8");
+        int[] llamadas = {0};
+        MockHttpServletResponse res = new MockHttpServletResponse();
+
+        filter.doFilter(login("10.2.0.8"), res, (req, r) -> llamadas[0]++);
+
+        assertThat(res.getStatus()).isEqualTo(429);
+        assertThat(res.getContentType()).isEqualTo("application/json");
+        assertThat(llamadas[0]).isZero();
+    }
+
+    @Test
+    void lasRedireccionesCuentanComoExito() throws Exception {
+        for (int i = 0; i < 4; i++) attempt(login("10.2.0.9"), 401);
+        attempt(login("10.2.0.9"), 302);
+        for (int i = 0; i < 4; i++) attempt(login("10.2.0.9"), 401);
+
+        assertThat(attempt(login("10.2.0.9"), 200).getStatus()).isEqualTo(200);
+    }
 }

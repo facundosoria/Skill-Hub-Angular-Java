@@ -1,4 +1,4 @@
-import { ElementRef, signal } from '@angular/core';
+import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
 import { Api } from '../../core/api';
@@ -150,23 +150,12 @@ describe('AdminUsers screen', () => {
     });
   });
 
-  // `#ref` sobre input[uiInput]/select[uiSelect] resuelve al componente y no a un ElementRef;
-  // se inyecta el ElementRef que el código espera para poder abrir los diálogos.
-  function focusRef(component: object, field: string, tag = 'input'): HTMLElement {
-    const element = document.createElement(tag);
-    document.body.appendChild(element);
-    (component as Record<string, unknown>)[field] = new ElementRef(element);
-    return element;
-  }
-
   async function render() {
     const fixture = TestBed.createComponent(AdminUsers);
     fixture.detectChanges();
     await flush();
     fixture.detectChanges();
     const component = fixture.componentInstance;
-    focusRef(component, 'temporaryPasswordInput');
-    focusRef(component, 'teamSelect', 'select');
     return { fixture, component, el: fixture.nativeElement as HTMLElement };
   }
 
@@ -296,6 +285,53 @@ describe('AdminUsers screen', () => {
     fixture.detectChanges();
     expect(component.actionError()).toBe(t.reactivarError);
     expect(el.textContent).toContain(t.reactivarError);
+  });
+
+  it('focuses the temporary password field when the reset dialog opens', async () => {
+    const { fixture, component, el } = await render();
+    const trigger = document.createElement('button');
+    component.openReset(component.active()[0], { currentTarget: trigger } as unknown as Event);
+    await flush();
+    fixture.detectChanges();
+
+    const input = el.querySelector('input[name="temporaryPassword"]') as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+  });
+
+  it('moves focus back to the temporary password when validation fails', async () => {
+    const { fixture, component, el } = await render();
+    const t = component.t().usuarios;
+    component.openReset(component.active()[0], { currentTarget: document.createElement('button') } as unknown as Event);
+    await flush();
+    fixture.detectChanges();
+    const input = el.querySelector('input[name="temporaryPassword"]') as HTMLInputElement;
+    const other = document.createElement('button');
+    document.body.appendChild(other);
+
+    other.focus();
+    component.temporaryPassword = 'corta';
+    await expect(component.submitReset()).resolves.toBeUndefined();
+    expect(component.resetFieldError()).toBe(t.passwordHint);
+    expect(document.activeElement).toBe(input);
+
+    other.focus();
+    component.temporaryPassword = 'Temporal-12345';
+    component.temporaryPasswordConfirmation = 'Otra-12345678';
+    await expect(component.submitReset()).resolves.toBeUndefined();
+    expect(component.resetFieldError()).toBe(t.passwordsNoCoinciden);
+    expect(document.activeElement).toBe(input);
+    expect(api.post).not.toHaveBeenCalledWith(expect.stringContaining('reset-password'), expect.anything());
+    other.remove();
+  });
+
+  it('focuses the team select when the team dialog opens', async () => {
+    const { fixture, component, el } = await render();
+    component.openChangeTeam(component.active()[0], { currentTarget: document.createElement('button') } as unknown as Event);
+    await flush();
+    fixture.detectChanges();
+
+    const select = el.querySelector('select[name="selectedTeam"]') as HTMLSelectElement;
+    expect(document.activeElement).toBe(select);
   });
 
   it('opens each dialog from the row actions', async () => {

@@ -291,9 +291,9 @@ export class AdminUsers {
   readonly teamOptions = TEAM_OPTIONS;
 
   @ViewChild('resetDialog') private resetDialog?: ElementRef<HTMLDialogElement>;
-  @ViewChild('temporaryPasswordInput') private temporaryPasswordInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('temporaryPasswordInput', { read: ElementRef }) private temporaryPasswordInput?: ElementRef<HTMLInputElement>;
   @ViewChild('teamDialog') private teamDialog?: ElementRef<HTMLDialogElement>;
-  @ViewChild('teamSelect') private teamSelect?: ElementRef<HTMLSelectElement>;
+  @ViewChild('teamSelect', { read: ElementRef }) private teamSelect?: ElementRef<HTMLSelectElement>;
   @ViewChild('deactivateDialog') private deactivateDialog?: ElementRef<HTMLDialogElement>;
 
   pending = signal<AdminUser[]>([]);
