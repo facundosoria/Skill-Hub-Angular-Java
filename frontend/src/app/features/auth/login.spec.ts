@@ -178,6 +178,114 @@ describe('Login', () => {
     expect(router.navigate).toHaveBeenCalledWith(['/']);
   });
 
+  it('drives the language, mode and fields from the DOM', async () => {
+    auth.register.mockResolvedValue({ info: 'Pendiente' });
+    const { fixture, component, el } = render();
+    const t = component.t().login;
+    const buttons = () => [...el.querySelectorAll('button')] as HTMLButtonElement[];
+    const byText = (text: string) => buttons().find((button) => button.textContent?.trim() === text)!;
+    const i18n = TestBed.inject(I18n);
+    const initial = i18n.locale();
+
+    byText('EN').click();
+    expect(i18n.locale()).toBe('en');
+    byText('ES').click();
+    expect(i18n.locale()).toBe('es');
+
+    buttons().filter((button) => button.textContent?.trim() === t.crearCuenta).forEach((pill) => pill.click());
+    expect(component.mode()).toBe('register');
+    buttons().filter((button) => button.textContent?.trim() === t.entrar).forEach((pill) => pill.click());
+    expect(component.mode()).toBe('login');
+    component.setMode('register');
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const type = (name: string, value: string) => {
+      const field = el.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLSelectElement;
+      if (field instanceof HTMLSelectElement) {
+        field.value = field.options[1].value;
+        field.dispatchEvent(new Event('change'));
+      } else {
+        field.value = value;
+        field.dispatchEvent(new Event('input'));
+      }
+    };
+    type('username', 'nuevo');
+    type('password', 'clave-segura');
+    type('legajo', '321333');
+    type('team', '');
+    expect(component.username).toBe('nuevo');
+    expect(component.password).toBe('clave-segura');
+    expect(component.legajo).toBe('321333');
+    expect(component.team).toBeTruthy();
+
+    (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(auth.register).toHaveBeenCalled());
+
+    fixture.detectChanges();
+    buttons().find((button) => button.textContent?.trim() === t.entra)!.click();
+    expect(component.mode()).toBe('login');
+    fixture.detectChanges();
+    buttons().find((button) => button.textContent?.trim() === t.registrate)!.click();
+    expect(component.mode()).toBe('register');
+    i18n.setLocale(initial);
+  });
+
+  it('scrambles the title until it reaches the target text', () => {
+    reducedMotion = false;
+    const frames: FrameRequestCallback[] = [];
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+    vi.stubGlobal('cancelAnimationFrame', () => undefined);
+    const { component } = render();
+    const t = component.t().login;
+
+    component.setMode('register');
+    now = 100;
+    frames.splice(0).forEach((callback) => callback(now));
+    expect(component.displayTitle()).not.toBe(t.crearCuenta);
+
+    now = 1000;
+    for (let i = 0; i < 5 && frames.length; i++) frames.splice(0).forEach((callback) => callback(now));
+    expect(component.displayTitle()).toBe(t.crearCuenta);
+    expect(component.displaySubmit()).toBe(t.crearCuenta);
+  });
+
+  it('finishes the card morph in both directions', async () => {
+    reducedMotion = false;
+    const gsap = (await import('gsap')).default;
+    const { component } = render();
+    const card = (component as unknown as { cardRef: { nativeElement: HTMLElement } }).cardRef.nativeElement;
+    const extra = (component as unknown as { extraFieldsRef: { nativeElement: HTMLElement } }).extraFieldsRef.nativeElement;
+    const finish = () => [card, extra].forEach((element) => gsap.getTweensOf(element).forEach((tween) => tween.progress(1)));
+
+    component.setMode('register');
+    finish();
+    expect(card.style.height).toBe('auto');
+    expect(extra.style.height).toBe('auto');
+
+    component.setMode('login');
+    finish();
+    expect(card.style.height).toBe('auto');
+    expect(extra.style.display).toBe('none');
+  });
+
+  it('runs every step of the animated success timeline', async () => {
+    reducedMotion = false;
+    auth.login.mockResolvedValue(user({ name: 'Ana' }));
+    const { component } = render();
+
+    const done = component.submit();
+    await vi.waitFor(() => expect((component as unknown as { successTimeline?: unknown }).successTimeline).toBeTruthy());
+    const timeline = (component as unknown as { successTimeline: { duration(): number; time(v: number): void; progress(v: number): void } }).successTimeline;
+    for (let time = 0; time <= timeline.duration() + 0.1; time += 0.05) timeline.time(time);
+    timeline.progress(1);
+    await done;
+
+    expect(router.navigate).toHaveBeenCalledWith(['/']);
+  });
+
   it('cleans up animations on destroy', () => {
     reducedMotion = false;
     const { fixture, component } = render();

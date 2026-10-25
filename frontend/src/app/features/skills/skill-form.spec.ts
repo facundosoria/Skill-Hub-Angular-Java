@@ -256,6 +256,59 @@ describe('SkillForm', () => {
     expect(skills.checkDuplicates).not.toHaveBeenCalled();
     expect(skills.checkLanguage).not.toHaveBeenCalled();
   });
+
+  describe('typing into the form', () => {
+    function type(el: HTMLElement, name: string, value: string): void {
+      const field = el.querySelector(`[name="${name}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+      field.value = field instanceof HTMLSelectElement ? field.options[Math.min(1, field.options.length - 1)].value : value;
+      field.dispatchEvent(new Event(field instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true }));
+    }
+
+    it('updates the model from every field and submits from the form', async () => {
+      vi.useFakeTimers();
+      skills.create.mockResolvedValue({ slug: 'desde-el-dom' });
+      const { fixture, component, el } = await render();
+
+      type(el, 'title', 'Desde el DOM');
+      type(el, 'description', 'Descripcion escrita');
+      type(el, 'whenToUse', 'Cuando haga falta');
+      type(el, 'stack', '');
+      type(el, 'type', '');
+      type(el, 'tags', 'uno, dos');
+      type(el, 'ownerTeam', '');
+      type(el, 'content', '# Contenido');
+      type(el, 'changelog', 'Primera version');
+      fixture.detectChanges();
+
+      expect(component.v.title).toBe('Desde el DOM');
+      expect(component.v.slug).toBe('desde-el-dom');
+      expect(component.v.description).toBe('Descripcion escrita');
+      expect(component.v.whenToUse).toBe('Cuando haga falta');
+      expect(component.tagsCsv).toBe('uno, dos');
+      expect(component.v.content).toBe('# Contenido');
+      expect(component.v.changelog).toBe('Primera version');
+
+      type(el, 'slug', 'slug-a-mano');
+      expect(component.slugTouched).toBe(true);
+      expect(component.v.slug).toBe('slug-a-mano');
+
+      (el.querySelector('form') as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await vi.runAllTimersAsync();
+
+      expect(skills.create).toHaveBeenCalledWith(expect.objectContaining({ slug: 'slug-a-mano', tags: ['uno', 'dos'] }), null);
+    });
+
+    it('fills the duplicate justification once it is requested', async () => {
+      const { fixture, component, el } = await render();
+      component.justify.set(true);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      type(el, 'dupJust', 'No es el mismo caso');
+
+      expect(component.v.duplicateJustification).toBe('No es el mismo caso');
+    });
+  });
 });
 
 async function flush() {

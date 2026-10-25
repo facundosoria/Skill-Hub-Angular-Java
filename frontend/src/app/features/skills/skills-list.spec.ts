@@ -201,6 +201,100 @@ describe('SkillsList', () => {
     expect(component.ratingAria(4, 2)).toBe('4.0 / 5 · 2');
     TestBed.inject(I18n).setLocale('es');
   });
+
+  describe('toolbar controls through the DOM', () => {
+    const rows = () => [
+      item({ slug: 'b', title: 'beta', stack: 'angular', ratingCount: 1, ratingAverage: 3, ownerTeam: 'Banco' }),
+      item({ slug: 'a', title: 'Alpha', stack: 'java', ratingCount: 2, ratingAverage: 5 }),
+      item({ slug: 'c', title: 'Charlie', stack: 'java', ratingCount: 0, ratingAverage: 0 }),
+      item({ slug: 'd', title: 'Delta', stack: 'java', ratingCount: 3, ratingAverage: 3 }),
+    ];
+
+    it('binds the search box, stack and status radios, team and sort selects', async () => {
+      const { fixture, component, el } = await render('skills', rows());
+      await fixture.whenStable();
+
+      const search = el.querySelector('#catalog-query') as HTMLInputElement;
+      search.value = 'alp';
+      search.dispatchEvent(new Event('input'));
+      expect(component.query()).toBe('alp');
+
+      for (const id of ['stack-angular', 'stack-java', 'stack-shared', 'stack-infra', 'stack-all']) {
+        (el.querySelector(`#${id}`) as HTMLInputElement).click();
+      }
+      expect(component.stack()).toBe('');
+
+      for (const id of ['status-deprecated', 'status-all', 'status-active']) {
+        (el.querySelector(`#${id}`) as HTMLInputElement).click();
+      }
+      expect(component.status()).toBe('active');
+
+      const team = el.querySelector('.catalog-toolbar__team') as HTMLSelectElement;
+      team.value = team.options[1].value;
+      team.dispatchEvent(new Event('change'));
+      expect(component.team()).toBe(team.options[1].value);
+
+      const sort = el.querySelector('.catalog-toolbar__sort') as HTMLSelectElement;
+      sort.value = 'az';
+      sort.dispatchEvent(new Event('change'));
+      expect(component.sort()).toBe('az');
+    });
+
+    it('sorts by title in both directions', async () => {
+      const { component } = await render('skills', rows());
+
+      component.sort.set('az');
+      expect(component.visible().map((row) => row.slug)).toEqual(['a', 'b', 'c', 'd']);
+
+      component.sort.set('za');
+      expect(component.visible().map((row) => row.slug)).toEqual(['d', 'c', 'b', 'a']);
+    });
+
+    it('sorts by rating, leaving unrated skills last', async () => {
+      const { component } = await render('skills', rows());
+
+      component.sort.set('rating-desc');
+      expect(component.visible().map((row) => row.slug)).toEqual(['a', 'd', 'b', 'c']);
+
+      component.sort.set('rating-asc');
+      expect(component.visible().map((row) => row.slug)).toEqual(['b', 'd', 'a', 'c']);
+    });
+
+    it('clears every filter from the empty state', async () => {
+      const { fixture, component, el } = await render('skills', rows());
+      component.query.set('no existe nada');
+      fixture.detectChanges();
+
+      const clear = [...el.querySelectorAll('button')].find((button) => button.textContent?.includes(component.t().catalogo.limpiarFiltros)) as HTMLButtonElement;
+      clear.click();
+
+      expect(component.query()).toBe('');
+      expect(component.visible().length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('plugin icons', () => {
+    it('picks an icon from tags, slug, title or stack', async () => {
+      const { component } = await render('plugins', []);
+      const icon = (over: Partial<SkillListItem>) => component.pluginIcon(item({ tags: [], stack: 'shared', slug: 'x', title: 'x', ...over }));
+
+      expect(icon({ tags: ['github'] })).toBe('/icons/github.svg');
+      expect(icon({ title: 'Git tools' })).toBe('/icons/git.svg');
+      expect(icon({ slug: 'docker-mcp' })).toBe('/icons/docker.svg');
+      expect(icon({ tags: ['database'] })).toBe('/icons/database.svg');
+      expect(icon({ slug: 'postgresql' })).toBe('/icons/postgresql.svg');
+      expect(icon({ tags: ['mysql'] })).toBe('/icons/mysql.svg');
+      expect(icon({ title: 'Taiga board' })).toBe('/icons/taiga.svg');
+      expect(icon({ tags: ['knowledge-graph'] })).toBe('/icons/memory.svg');
+      expect(icon({ tags: ['reasoning'] })).toBe('/icons/thinking.svg');
+      expect(icon({ slug: 'fetch' })).toBe('/icons/fetch.svg');
+      expect(icon({ tags: ['spring'] })).toBe('/icons/spring.svg');
+      expect(icon({ stack: 'angular' })).toBe('/icons/angular.svg');
+      expect(icon({ stack: 'java' })).toBe('/icons/java.svg');
+      expect(icon({})).toBeNull();
+      expect(component.pluginIcon({ ...item(), tags: undefined as unknown as string[], slug: '', title: '', stack: 'shared' })).toBeNull();
+    });
+  });
 });
 
 function item(over: Partial<SkillListItem> = {}): SkillListItem {
