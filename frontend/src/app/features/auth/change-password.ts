@@ -72,7 +72,7 @@ export class ChangePassword {
   private i18n = inject(I18n);
   t = this.i18n.t;
 
-  @ViewChild('newPasswordInput') private newPasswordInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('newPasswordInput', { read: ElementRef }) private newPasswordInput?: ElementRef<HTMLInputElement>;
 
   newPassword = '';
   confirmPassword = '';

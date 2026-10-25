@@ -113,7 +113,7 @@ export class OauthConsent implements OnInit {
 
   readonly isConsentStep = this.route.snapshot.data['oauthStep'] === 'consent';
 
-  @ViewChild('usernameInput') private usernameInput?: ElementRef<HTMLInputElement>;
+  @ViewChild('usernameInput', { read: ElementRef }) private usernameInput?: ElementRef<HTMLInputElement>;
 
   loginChallenge = signal<string | null>(
     this.route.snapshot.queryParamMap.get('login_challenge'),

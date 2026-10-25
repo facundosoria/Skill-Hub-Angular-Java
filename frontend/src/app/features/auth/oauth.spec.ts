@@ -1,4 +1,3 @@
-import { ElementRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { NEVER, of, throwError } from 'rxjs';
@@ -17,13 +16,8 @@ describe('OAuth screens', () => {
     window.location.hash = '';
   });
 
-  // `#ref` sobre input[uiInput] resuelve al componente UiInput y no a un ElementRef;
-  // se inyecta el ElementRef que el código espera para cubrir el foco.
-  function focusRef(component: object, field: string): HTMLInputElement {
-    const input = document.createElement('input');
-    document.body.appendChild(input);
-    (component as Record<string, unknown>)[field] = new ElementRef(input);
-    return input;
+  function inputNamed(fixture: { nativeElement: HTMLElement }, name: string): HTMLInputElement {
+    return fixture.nativeElement.querySelector(`input[name="${name}"]`) as HTMLInputElement;
   }
 
   function configure(params: Record<string, string>, data: Record<string, unknown> = {}) {
@@ -66,7 +60,7 @@ describe('OAuth screens', () => {
       const fixture = TestBed.createComponent(OauthConsent);
       fixture.detectChanges();
       const component = fixture.componentInstance;
-      const input = focusRef(component, 'usernameInput');
+      const input = inputNamed(fixture, 'username');
       await component.submit();
       fixture.detectChanges();
       expect(fixture.nativeElement.textContent).toContain('Credenciales inválidas');
@@ -218,7 +212,7 @@ describe('OAuth screens', () => {
       fixture.detectChanges();
       const component = fixture.componentInstance;
       const t = component.t().cambioPassword;
-      const input = focusRef(component, 'newPasswordInput');
+      const input = inputNamed(fixture, 'newPassword');
 
       component.newPassword = 'corta';
       await component.submit();
@@ -255,7 +249,6 @@ describe('OAuth screens', () => {
       const fixture = TestBed.createComponent(OauthPasswordChange);
       fixture.detectChanges();
       const component = fixture.componentInstance;
-      focusRef(component, 'newPasswordInput');
       component.newPassword = component.confirmPassword = 'una-clave-larga';
       await component.submit();
       fixture.detectChanges();
