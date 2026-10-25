@@ -853,6 +853,264 @@ describe('DepMap editing and data dialogs', () => {
     });
   });
 
+  describe('driving the screen through the DOM', () => {
+    const click = (selector: string) => {
+      const target = root().querySelector(selector) as HTMLElement;
+      target.click();
+      fixture.detectChanges();
+    };
+    const buttonIn = (scope: string, label: string) =>
+      [...root().querySelectorAll(`${scope} button`)].find((button) => button.textContent?.includes(label)) as HTMLButtonElement;
+    const setValue = (element: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string, event = 'input') => {
+      element.value = value;
+      element.dispatchEvent(new Event(event, { bubbles: true }));
+      fixture.detectChanges();
+    };
+
+    it('changes my group from the header select', () => {
+      const select = root().querySelector('select[name="mine"]') as HTMLSelectElement;
+
+      setValue(select, 'ops', 'change');
+
+      expect(map().store.mine()).toBe('ops');
+    });
+
+    it('fills and submits the add dialog from its fields', async () => {
+      map().openAdd();
+      fixture.detectChanges();
+      const dialog = 'dialog[aria-labelledby="add-title"]';
+      setValue(root().querySelector(`${dialog} select[name="from"]`) as HTMLSelectElement, 'ops', 'change');
+      setValue(root().querySelector(`${dialog} select[name="to"]`) as HTMLSelectElement, 'usr', 'change');
+      setValue(root().querySelector(`${dialog} select[name="kind"]`) as HTMLSelectElement, 'propio', 'change');
+      setValue(root().querySelector(`${dialog} select[name="state"]`) as HTMLSelectElement, 'definir', 'change');
+      setValue(root().querySelector(`${dialog} textarea[name="text"]`) as HTMLTextAreaElement, 'Desde el formulario');
+
+      (root().querySelector(`${dialog} form`) as HTMLFormElement).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await flush();
+
+      expect(api.post).toHaveBeenCalledWith('/depmap/edges', { from: 'ops', to: 'usr', kind: 'propio', state: 'definir', text: 'Desde el formulario' });
+    });
+
+    it('closes the add dialog from the cross and the cancel button', () => {
+      map().openAdd();
+      fixture.detectChanges();
+      click('dialog[aria-labelledby="add-title"] .close');
+      expect(map().addDialog.nativeElement.open).toBe(false);
+
+      map().openAdd();
+      fixture.detectChanges();
+      buttonIn('dialog[aria-labelledby="add-title"]', map().t().mapa.cancelar).click();
+      expect(map().addDialog.nativeElement.open).toBe(false);
+    });
+
+    it('uses every button of the data dialog', async () => {
+      vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+      map().openData(document.body);
+      fixture.detectChanges();
+      const dialog = 'dialog[aria-labelledby="data-title"]';
+      setValue(root().querySelector(`${dialog} textarea[name="json"]`) as HTMLTextAreaElement, JSON.stringify({ edges: [] }));
+      expect(map().jsonDataValue).toBe(JSON.stringify({ edges: [] }));
+
+      buttonIn(dialog, map().t().mapa.copiar).click();
+      await flush();
+      expect(map().toast()).toBe('Copiado');
+
+      buttonIn(dialog, map().t().mapa.restaurar).click();
+      fixture.detectChanges();
+      expect(map().confirmKind()).toBe('reset');
+      buttonIn('dialog[aria-labelledby="confirm-title"]', map().t().mapa.cancelar).click();
+      expect(map().confirmDialog.nativeElement.open).toBe(false);
+
+      buttonIn(dialog, map().t().mapa.aplicar).click();
+      await flush();
+      expect(api.post).toHaveBeenCalledWith('/depmap/import', { edges: [], done: {} });
+
+      map().openData(document.body);
+      fixture.detectChanges();
+      click(`${dialog} .close`);
+      expect(map().dataDialog.nativeElement.open).toBe(false);
+    });
+
+    it('confirms from the confirmation dialog button', async () => {
+      map().askReset();
+      fixture.detectChanges();
+
+      (root().querySelector('dialog[aria-labelledby="confirm-title"] .actions button:last-child') as HTMLButtonElement).click();
+      await flush();
+
+      expect(api.post).toHaveBeenCalledWith('/depmap/reset');
+    });
+
+    it('asks to delete from the details panel', () => {
+      const remove = root().querySelector('button[aria-label="Eliminar dependencia"]') as HTMLButtonElement;
+
+      remove.click();
+
+      expect(map().confirmKind()).toBe('delete');
+      expect(map().pendingDelete()?.id).toBe('edge-1');
+    });
+
+    it('retries from the offline banner and the error banner', () => {
+      map().store.offline.set(true);
+      map().store.error.set('Caido');
+      fixture.detectChanges();
+      api.get.mockClear();
+
+      buttonIn('.banner', map().t().mapa.reintentar).click();
+      buttonIn('.error-banner', map().t().mapa.reintentarAccion).click();
+
+      expect(api.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('shows the loading state before any edge arrives', () => {
+      map().store.loading.set(true);
+      map().store.state.set({ ...map().store.state(), edges: [] });
+      fixture.detectChanges();
+
+      expect(root().textContent).toContain(map().t().mapa.cargando);
+    });
+
+    it('drives search, status filter and view tabs from the toolbar', () => {
+      setValue(root().querySelector('.toolbar-search') as HTMLInputElement, 'prueba');
+      expect(map().store.query()).toBe('prueba');
+
+      click('[data-menu-trigger="filters"]');
+      setValue(root().querySelector('#depmap-filter-options select') as HTMLSelectElement, 'hecho', 'change');
+      expect(map().store.status()).toBe('hecho');
+
+      click('#depmap-tab-lista');
+      expect(map().store.view()).toBe('lista');
+    });
+
+    it('uses the zoom, fit and full map buttons', () => {
+      const ctl = (label: string) => root().querySelector(`.map-ctl[aria-label="${label}"]`) as HTMLButtonElement;
+      vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query }));
+
+      ctl(map().t().mapa.zoomIn).click();
+      fixture.detectChanges();
+      expect(map().graph!.transform().scale).toBeCloseTo(1.25);
+
+      ctl(map().t().mapa.zoomOut).click();
+      fixture.detectChanges();
+      expect(map().graph!.transform().scale).toBeCloseTo(1);
+
+      buttonIn('.map-controls', map().t().mapa.ajustar).click();
+      buttonIn('.map-controls', map().t().mapa.verCompleto).click();
+      expect(map().store.fullMap()).toBe(true);
+    });
+
+    it('collapses and expands the floating controls in full screen', () => {
+      map().enterFullscreen();
+      fixture.detectChanges();
+
+      click('.collapse-controls');
+      expect(map().floatingControlsCollapsed()).toBe(true);
+
+      click('.expand-controls');
+      expect(map().floatingControlsCollapsed()).toBe(false);
+
+      click('.fullscreen-exit');
+      expect(map().fullscreen()).toBe(false);
+    });
+  });
+
+  describe('full screen keyboard and layout', () => {
+    it('sends Escape outside the map to exit full screen', () => {
+      map().enterFullscreen();
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+      outside.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(map().fullscreen()).toBe(false);
+      outside.remove();
+    });
+
+    it('brings Tab from outside back to the exit button', async () => {
+      map().enterFullscreen();
+      fixture.detectChanges();
+      const outside = document.createElement('button');
+      document.body.appendChild(outside);
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+
+      outside.dispatchEvent(event);
+
+      expect(event.defaultPrevented).toBe(true);
+      expect(document.activeElement).toBe(root().querySelector('.fullscreen-exit'));
+      outside.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+      map().exitFullscreen(false);
+      outside.remove();
+    });
+
+    it('leaves full screen when the browser exits native full screen', () => {
+      map().enterFullscreen();
+
+      document.dispatchEvent(new Event('fullscreenchange'));
+
+      expect(map().fullscreen()).toBe(false);
+    });
+
+    it('closes the open menu on outside presses only', () => {
+      map().toggleMenu('more');
+      fixture.detectChanges();
+      const inside = root().querySelector('[data-map-menu="more"] button') as HTMLElement;
+
+      inside.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(map().openMenu()).toBe('more');
+
+      document.body.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      expect(map().openMenu()).toBeNull();
+    });
+
+    it('wraps Tab focus inside the full screen surface', () => {
+      map().enterFullscreen();
+      fixture.detectChanges();
+      const focusable = [...root().querySelectorAll<HTMLElement>('button:not([disabled])')].filter((element) => !element.closest('[hidden],.module-header,.banner,.error-banner,.details-side'));
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      last.focus();
+      const forward = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
+      Object.defineProperty(forward, 'target', { value: last });
+      map().onKeydown(forward);
+      expect(forward.defaultPrevented).toBe(true);
+
+      first.focus();
+      const backward = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
+      Object.defineProperty(backward, 'target', { value: first });
+      map().onKeydown(backward);
+      expect(backward.defaultPrevented).toBe(true);
+      map().exitFullscreen(false);
+    });
+
+    it('measures the layout on resize when the map sits inside a main element', async () => {
+      const main = document.createElement('main');
+      main.style.paddingBottom = '10px';
+      main.appendChild(fixture.nativeElement);
+      document.body.appendChild(main);
+      vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('min-width'), media: query }));
+
+      window.dispatchEvent(new Event('resize'));
+      await vi.advanceTimersByTimeAsync(100);
+
+      expect(map().fitHeight()).toBe(true);
+      expect((fixture.nativeElement as HTMLElement).style.getPropertyValue('--map-offset')).toMatch(/px$/);
+      main.remove();
+    });
+
+    it('repositions the filter popover on resize while it is open', () => {
+      map().toggleMenu('filters');
+      const trigger = root().querySelector('[data-menu-trigger="filters"]') as HTMLElement;
+      trigger.getBoundingClientRect = () => ({ left: 40, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) });
+
+      window.dispatchEvent(new Event('resize'));
+
+      expect(map().filterPopoverLeft()).toBe(40);
+    });
+  });
+
   describe('menus and panels', () => {
     it('toggles each menu and closes it on a second click', () => {
       map().toggleMenu('filters');
