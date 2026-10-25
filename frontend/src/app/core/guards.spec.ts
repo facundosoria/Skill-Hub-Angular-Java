@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router, UrlTree } from '@angular/router';
 import { AuthService } from './auth';
-import { authGuard, passwordChangeGuard } from './guards';
+import { adminGuard, authGuard, guestGuard, passwordChangeGuard } from './guards';
 import type { User } from './models';
 
 describe('password change guards', () => {
@@ -12,6 +12,9 @@ describe('password change guards', () => {
     user: currentUser.asReadonly(),
     loaded: loaded.asReadonly(),
     refresh: vi.fn(),
+    get isAdmin() {
+      return currentUser()?.role === 'admin';
+    },
   };
 
   beforeEach(() => {
@@ -40,6 +43,49 @@ describe('password change guards', () => {
 
     currentUser.set(null);
     expect(url(await runGuard(passwordChangeGuard))).toBe('/login');
+  });
+
+  it('refreshes the session before deciding when it is not loaded yet', async () => {
+    loaded.set(false);
+    auth.refresh.mockImplementation(async () => currentUser.set(user(false)));
+
+    expect(await runGuard(authGuard)).toBe(true);
+    expect(auth.refresh).toHaveBeenCalled();
+  });
+
+  it('sends anonymous visitors of protected routes to login', async () => {
+    expect(url(await runGuard(authGuard))).toBe('/login');
+  });
+
+  it('lets only admins through adminGuard', async () => {
+    loaded.set(false);
+    expect(url(await runGuard(adminGuard))).toBe('/login');
+
+    currentUser.set(user(true));
+    expect(url(await runGuard(adminGuard))).toBe('/change-password');
+
+    currentUser.set(user(false));
+    expect(url(await runGuard(adminGuard))).toBe('/skills');
+
+    currentUser.set({ ...user(false), role: 'admin' });
+    expect(await runGuard(adminGuard)).toBe(true);
+  });
+
+  it('keeps signed-in users out of the guest screens', async () => {
+    loaded.set(false);
+    expect(await runGuard(guestGuard)).toBe(true);
+
+    currentUser.set(user(false));
+    expect(url(await runGuard(guestGuard))).toBe('/');
+
+    currentUser.set(user(true));
+    expect(url(await runGuard(guestGuard))).toBe('/change-password');
+  });
+
+  it('refreshes before the password change guard', async () => {
+    loaded.set(false);
+    expect(url(await runGuard(passwordChangeGuard))).toBe('/login');
+    expect(auth.refresh).toHaveBeenCalled();
   });
 
   function runGuard(guard: typeof authGuard): Promise<boolean | UrlTree> {
