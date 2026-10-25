@@ -69,13 +69,15 @@ public class AgentRoomRepository {
         String filter = team == null ? "" : """
                 WHERE EXISTS (SELECT 1 FROM agent_room_teams t WHERE t.room_id = r.id AND t.team = :team)
                 """;
-        List<Room> rooms = jdbc.query("""
+        // Los equipos viajan en la misma consulta para no hacer una por sala.
+        return jdbc.query("""
                 SELECT r.id::text AS id, r.title, r.topic, r.created_by_team, r.status, r.last_seq,
-                       r.created_at, r.updated_at
+                       r.created_at, r.updated_at,
+                       ARRAY(SELECT rt.team FROM agent_room_teams rt WHERE rt.room_id = r.id ORDER BY rt.team) AS teams
                 FROM agent_rooms r
                 """ + filter + " ORDER BY r.updated_at DESC LIMIT 200",
-                new MapSqlParameterSource("team", team), (rs, i) -> mapRoom(rs));
-        return rooms.stream().map(room -> room.withTeams(teams(room.id()))).toList();
+                new MapSqlParameterSource("team", team),
+                (rs, i) -> mapRoom(rs).withTeams(List.of((String[]) rs.getArray("teams").getArray())));
     }
 
     public long nextSeq(String roomId) {

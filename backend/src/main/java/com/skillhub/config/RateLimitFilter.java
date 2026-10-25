@@ -79,7 +79,12 @@ public class RateLimitFilter implements Filter {
                         bucket.consecutiveFailures = 0;
                         bucket.blockedUntil = 0;
                     } else if (httpRes.getStatus() >= 400 && httpRes.getStatus() < 500) {
-                        if (now - bucket.lastFailureAt > MAX_BLOCK_MS) bucket.penaltyLevel = 0;
+                        // La hora sin fallos se cuenta desde el fin del ultimo bloqueo: si no,
+                        // un bloqueo de una hora (el maximo) borraria su propia penalizacion.
+                        if (now - Math.max(bucket.lastFailureAt, bucket.blockedUntil) > MAX_BLOCK_MS) {
+                            bucket.penaltyLevel = 0;
+                            bucket.consecutiveFailures = 0;
+                        }
                         bucket.lastFailureAt = now;
                         bucket.consecutiveFailures++;
                         if (bucket.consecutiveFailures >= FAILURES_PER_LEVEL) {
