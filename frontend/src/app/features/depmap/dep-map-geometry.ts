@@ -1,13 +1,16 @@
-export const NODE_WIDTH = 200;
-export const NODE_HEIGHT = 64;
-export const MAP_VIEWBOX_WIDTH = 1200;
-export const MAP_VIEWBOX_HEIGHT = 745;
-export const MAP_LAYOUT_OFFSET_X = 100;
+export const NODE_WIDTH = 300;
+export const NODE_HEIGHT = 100;
+export const MAP_VIEWBOX_WIDTH = 1500;
+export const MAP_VIEWBOX_HEIGHT = 930;
+/** Server coordinates were drawn for a ~1000×745 canvas; they are spread out to the wider map. */
+export const MAP_COORD_SCALE = 1.25;
+export const MAP_LAYOUT_OFFSET_X = 125;
 export const MAP_VIEWBOX_MARGIN = 8;
-export const NODE_TEXT_X = 14;
-export const NODE_TEXT_RIGHT_PADDING = 14;
-export const NODE_NAME_FONT_SIZE = 16;
-export const NODE_COUNT_FONT_SIZE = 13;
+export const NODE_GAP = 28;
+export const NODE_TEXT_X = 20;
+export const NODE_TEXT_RIGHT_PADDING = 20;
+export const NODE_NAME_FONT_SIZE = 24;
+export const NODE_COUNT_FONT_SIZE = 18;
 
 /** Conservative SVG text-width estimate used by the geometry tests. */
 export function estimateTextWidth(text: string, fontSize: number): number {
@@ -30,13 +33,18 @@ export interface GeometryBox {
   height: number;
 }
 
-const MINE_TAG_X = 136;
-const MINE_TAG_Y = -9;
-const MINE_TAG_HEIGHT = 17;
-const MINE_TAG_PADDING = 16;
+export const MINE_TAG_X = NODE_WIDTH - 84;
+export const MINE_TAG_Y = -12;
+export const MINE_TAG_HEIGHT = 24;
+const MINE_TAG_PADDING = 18;
 
 export function mineTagWidth(label = 'tu grupo'): number {
-  return Math.max(56, estimateTextWidth(label, 10.5) + MINE_TAG_PADDING);
+  return Math.max(70, estimateTextWidth(label, 14) + MINE_TAG_PADDING);
+}
+
+/** Maps a saved server position onto the wider rendered map. */
+export function scaleServerNode<T extends GeometryNode>(node: T): T {
+  return { ...node, x: node.x * MAP_COORD_SCALE + MAP_LAYOUT_OFFSET_X, y: node.y * MAP_COORD_SCALE };
 }
 
 export function nodeBox(node: GeometryNode): GeometryBox {
@@ -57,12 +65,12 @@ export function clampNode<T extends GeometryNode>(node: T, margin = MAP_VIEWBOX_
 }
 
 /** Clamp all rendered centers and deterministically separate boxes without mutating saved data. */
-export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, margin = MAP_VIEWBOX_MARGIN, gap = 6, mineLabel = 'tu grupo'): Record<string, T> {
+export function clampNodes<T extends GeometryNode>(nodes: Record<string, T>, margin = MAP_VIEWBOX_MARGIN, gap = NODE_GAP, mineLabel = 'tu grupo'): Record<string, T> {
   const result = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, clampNode(node, margin, mineLabel)])) as Record<string, T>;
   const ids = Object.keys(result);
   const minX = margin + NODE_WIDTH / 2, maxX = Math.min(MAP_VIEWBOX_WIDTH - margin - NODE_WIDTH / 2, MAP_VIEWBOX_WIDTH - margin - MINE_TAG_X - mineTagWidth(mineLabel) + NODE_WIDTH / 2);
   const minY = margin + NODE_HEIGHT / 2 + MINE_TAG_HEIGHT, maxY = MAP_VIEWBOX_HEIGHT - margin - NODE_HEIGHT / 2;
-  for (let iteration = 0; iteration < 20; iteration++) {
+  for (let iteration = 0; iteration < 40; iteration++) {
     let changed = false;
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
       const a = result[ids[i]], b = result[ids[j]];
@@ -107,7 +115,7 @@ export function arrangeNodesSymmetrically<T extends GeometryNode>(nodes: Record<
     const [id, node] = entries[next++];
     return [id, {
       ...node,
-      x: MAP_VIEWBOX_WIDTH / 2 + (column - (size - 1) / 2) * 300,
+      x: MAP_VIEWBOX_WIDTH / 2 + (column - (size - 1) / 2) * (NODE_WIDTH + 150),
       y: rows === 1 ? MAP_VIEWBOX_HEIGHT / 2 : minY + row * (maxY - minY) / (rows - 1),
     }];
   }))) as Record<string, T>;
@@ -154,7 +162,7 @@ export function clip(node: GeometryNode, targetX: number, targetY: number, gap: 
   return [node.x + dx * k, node.y + dy * k];
 }
 
-/** Literal port of the original map's quadratic curve geometry. */
+/** Port of the original map's quadratic curve geometry, with wider offsets so both directions read apart. */
 export function geom(
   nodes: Record<string, GeometryNode>,
   from: string,
@@ -168,11 +176,11 @@ export function geom(
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
-  const offset = reverse ? 24 : 10;
+  const offset = reverse ? 40 : 16;
   const cx = mx + (-dy / len) * offset;
   const cy = my + (dx / len) * offset;
-  const start = clip(a, cx, cy, 3);
-  const end = clip(b, cx, cy, 7);
+  const start = clip(a, cx, cy, 4);
+  const end = clip(b, cx, cy, 10);
   return {
     d: `M${start[0].toFixed(1)},${start[1].toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${end[0].toFixed(1)},${end[1].toFixed(1)}`,
     lx: 0.25 * start[0] + 0.5 * cx + 0.25 * end[0],
@@ -243,7 +251,7 @@ export function nodeClass(
 }
 
 export function edgeStrokeWidth(count: number): string {
-  return (1.2 + Math.min(count, 6) * 0.45).toFixed(2);
+  return (1.8 + Math.min(count, 6) * 0.5).toFixed(2);
 }
 
 export const MAP_MIN_SCALE = 1;

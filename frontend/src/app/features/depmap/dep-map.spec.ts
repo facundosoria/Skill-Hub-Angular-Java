@@ -204,6 +204,9 @@ describe('DepMap offline controls', () => {
   });
 
   it('uses Ajustar to align the boxes and reset the zoom', () => {
+    // With reduced motion the zoom reset and the node glide apply immediately.
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({ matches: query.includes('reduce'), media: query })) as unknown as typeof window.matchMedia;
     const graph = fixture.componentInstance.graph!;
     graph.zoomIn();
     const adjust = [...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('.map-ctl')]
@@ -212,13 +215,15 @@ describe('DepMap offline controls', () => {
     expect(adjust).toBeTruthy();
     adjust!.click();
     fixture.detectChanges();
+    window.matchMedia = originalMatchMedia;
 
     expect(graph.transform().scale).toBe(1);
-    expect(graph.renderedNodes()['usr'].x).toBe(450);
-    expect(graph.renderedNodes()['ops'].x).toBe(750);
+    expect(graph.renderedNodes()['usr'].x).toBe(525);
+    expect(graph.renderedNodes()['ops'].x).toBe(975);
     expect(graph.renderedNodes()['usr'].y).toBe(graph.renderedNodes()['ops'].y);
-    expect(JSON.parse(localStorage.getItem('depmap-node-positions-v2') ?? '{}')).toEqual({
-      usr: { x: 450, y: 372.5 }, ops: { x: 750, y: 372.5 },
+    expect(graph.displayNodes()['usr'].x).toBe(525);
+    expect(JSON.parse(localStorage.getItem('depmap-node-positions-v3') ?? '{}')).toEqual({
+      usr: { x: 525, y: 465 }, ops: { x: 975, y: 465 },
     });
   });
 

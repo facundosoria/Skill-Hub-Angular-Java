@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, ElementRef, computed, inject, signal, viewChild } from '@angular/core';
 import { NgTemplateOutlet } from '@angular/common';
 import { I18n } from '../../core/i18n/i18n';
 import {
@@ -10,23 +10,40 @@ import {
   geom,
   MapTransform,
   MAP_IDENTITY,
+  MAP_COORD_SCALE,
   MAP_LAYOUT_OFFSET_X,
   MAP_MAX_SCALE,
   MAP_MIN_SCALE,
   MAP_PAN_THRESHOLD,
   MAP_VIEWBOX_HEIGHT,
   MAP_VIEWBOX_WIDTH,
+  MINE_TAG_HEIGHT,
+  MINE_TAG_X,
+  MINE_TAG_Y,
   mineTagWidth,
+  NODE_GAP,
   NODE_HEIGHT,
   NODE_WIDTH,
   nodeClass,
   NODE_TEXT_X,
   panBy,
+  scaleServerNode,
   touchedNodes,
   zoomAt,
   zoomedScale,
 } from './dep-map-geometry';
 import { DepMapEdge, DepMapStore } from './dep-map-store';
+
+const NODE_POSITIONS_KEY = 'depmap-node-positions-v3';
+
+function canAnimate(): boolean {
+  return typeof requestAnimationFrame === 'function' && typeof performance !== 'undefined'
+    && !(typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+function easeOutCubic(progress: number): number {
+  return 1 - Math.pow(1 - progress, 3);
+}
 
 @Component({
   selector: 'app-dep-map-graph',
@@ -72,21 +89,23 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
         }
       </g>
       <g>
-        @for (entry of nodeEntries(); track entry.id) {
-          <g class="node" [class]="entry.classes" [attr.data-node]="entry.id" [attr.transform]="'translate(' + (entry.node.x - NODE_WIDTH / 2) + ',' + (entry.node.y - NODE_HEIGHT / 2) + ')'"
+        @for (entry of nodeEntries(); track entry.id; let i = $index) {
+          <g class="node" [class]="entry.classes" [style.--i]="i" [attr.data-node]="entry.id" [attr.transform]="'translate(' + (entry.node.x - NODE_WIDTH / 2) + ',' + (entry.node.y - NODE_HEIGHT / 2) + ')'"
              tabindex="0" role="button" [attr.aria-label]="nodeAriaLabel(entry.node.n, entry.out, entry.in, !!entry.node.transv)" (click)="selectNode(entry.id)"
              (keydown)="onNodeKeydown($event, entry.id)">
             <title>{{ nodeAriaLabel(entry.node.n, entry.out, entry.in, !!entry.node.transv) }}</title>
-            <rect [attr.width]="NODE_WIDTH" [attr.height]="NODE_HEIGHT" rx="12"></rect>
-            <text class="nm" [attr.x]="NODE_TEXT_X" y="25">{{ entry.node.n }}</text>
+            <g class="node-body">
+            <rect [attr.width]="NODE_WIDTH" [attr.height]="NODE_HEIGHT" rx="16"></rect>
+            <text class="nm" [attr.x]="NODE_TEXT_X" y="42">{{ entry.node.n }}</text>
             @if (entry.node.transv) {
-              <text class="ct" [attr.x]="NODE_TEXT_X" y="49">{{ t().mapa.transversal }}</text>
+              <text class="ct" [attr.x]="NODE_TEXT_X" y="76">{{ t().mapa.transversal }}</text>
             } @else {
-              <text class="ct" [attr.x]="NODE_TEXT_X" y="49"><tspan class="cto">↑{{ entry.out }}</tspan>{{ '  ' }}<tspan class="cti">↓{{ entry.in }}</tspan></text>
+              <text class="ct" [attr.x]="NODE_TEXT_X" y="76"><tspan class="cto">↑{{ entry.out }}</tspan>{{ '  ' }}<tspan class="cti">↓{{ entry.in }}</tspan></text>
             }
             @if (entry.id === store.mine()) {
-              <g class="mineTag" transform="translate(136,-9)"><rect [attr.width]="mineTagWidth(t().mapa.grupoPropio)" height="17" rx="8.5"></rect><text [attr.x]="mineTagWidth(t().mapa.grupoPropio) / 2" y="12" text-anchor="middle">{{ t().mapa.grupoPropio }}</text></g>
+              <g class="mineTag" [attr.transform]="'translate(' + MINE_TAG_X + ',' + MINE_TAG_Y + ')'"><rect [attr.width]="mineTagWidth(t().mapa.grupoPropio)" [attr.height]="MINE_TAG_HEIGHT" [attr.rx]="MINE_TAG_HEIGHT / 2"></rect><text [attr.x]="mineTagWidth(t().mapa.grupoPropio) / 2" y="17" text-anchor="middle">{{ t().mapa.grupoPropio }}</text></g>
             }
+            </g>
           </g>
         }
       </g>
@@ -96,8 +115,9 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
         <path class="focus-halo" [attr.d]="edge.geometry.d" />
         <path class="focus-halo-contrast" [attr.d]="edge.geometry.d" />
         <path class="line" [attr.d]="edge.geometry.d" [attr.stroke-width]="edge.width" [attr.marker-end]="'url(#' + edge.marker + ')'" />
+        @if (edge.classes === 'out' || edge.classes === 'in' || edge.classes === 'sel') { <path class="flow" [attr.d]="edge.geometry.d" /> }
         <path class="hit" [attr.d]="edge.geometry.d"><title>{{ edgeTitle(edge.pair, edge.items.length) }}</title></path>
-        <g class="badge"><circle [attr.cx]="edge.geometry.lx" [attr.cy]="edge.geometry.ly" r="9" /><text [attr.x]="edge.geometry.lx" [attr.y]="edge.geometry.ly + 3.4" text-anchor="middle">{{ edge.items.length }}</text></g>
+        <g class="badge"><circle [attr.cx]="edge.geometry.lx" [attr.cy]="edge.geometry.ly" r="15" /><text [attr.x]="edge.geometry.lx" [attr.y]="edge.geometry.ly + 5.6" text-anchor="middle">{{ edge.items.length }}</text></g>
       </g>
       </ng-template>
     </svg>
@@ -119,32 +139,40 @@ import { DepMapEdge, DepMapStore } from './dep-map-store';
     @media (max-width:560px) { :host-context(.fullscreen) .legend { justify-content:center; } }
     svg.map { width:100%; height:auto; display:block; } .map.pannable { cursor:grab; } .graph.panning svg.map { cursor:grabbing; }
     @media (min-width:1021px) { :host-context(.fit-height) svg.map { flex:1 1 0; min-height:0; height:auto; } }
-    .node { cursor:grab; } .graph.dragging-node .node { cursor:grabbing; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.2; }
-    .node:hover rect { stroke:var(--text-muted); } .node:focus-visible rect { stroke:var(--text); stroke-width:2.4; }
-    .node.sel rect { stroke:var(--text); stroke-width:2.2; } .node.out rect { stroke:var(--dep-out); stroke-width:2; }
-    .node.in rect { stroke:var(--dep-in); stroke-width:2; } .node.dim > rect { opacity:.35; }
-    .node.transv rect { stroke-dasharray:5 4; } .node text.nm { font-weight:700; font-size:16px; fill:var(--text); }
-    .node text.ct { font-size:13px; fill:var(--text-muted); } .node .cto { fill:var(--dep-out); font-weight:600; } .node .cti { fill:var(--dep-in); font-weight:600; }
-    .mineTag rect { fill:var(--text); stroke:none; } .mineTag text { fill:var(--bg); font-size:10.5px; font-weight:600; }
-    .edge { outline:none; } .edge path.line,.edge path.focus-halo,.edge path.focus-halo-contrast { fill:none; stroke-linecap:round; }
+    .node { cursor:grab; outline:none; } .graph.dragging-node .node { cursor:grabbing; } .node rect { fill:var(--surface); stroke:var(--border); stroke-width:1.4; transition:stroke .2s ease, stroke-width .2s ease, opacity .3s ease, filter .2s ease; }
+    .node-body { transform-box:fill-box; transform-origin:center; transition:transform .2s ease; animation:node-in .5s cubic-bezier(.2,.8,.2,1) backwards; animation-delay:calc(var(--i, 0) * 35ms); }
+    .node:hover .node-body { transform:translateY(-2px); } .graph.dragging-node .node .node-body { transform:none; }
+    .node:hover .node-body > rect { stroke:var(--text-muted); filter:drop-shadow(0 6px 12px rgb(0 0 0 / .16)); } .node:focus-visible .node-body > rect { stroke:var(--text); stroke-width:2.8; }
+    .node.sel .node-body > rect { stroke:var(--text); stroke-width:2.6; filter:drop-shadow(0 6px 14px rgb(0 0 0 / .18)); } .node.out .node-body > rect { stroke:var(--dep-out); stroke-width:2.4; }
+    .node.in .node-body > rect { stroke:var(--dep-in); stroke-width:2.4; } .node.dim .node-body > rect { opacity:.35; }
+    .node.transv .node-body > rect { stroke-dasharray:6 5; } .node text.nm { font-weight:700; font-size:24px; fill:var(--text); }
+    .node text.ct { font-size:18px; fill:var(--text-muted); } .node .cto { fill:var(--dep-out); font-weight:600; } .node .cti { fill:var(--dep-in); font-weight:600; }
+    .mineTag rect { fill:var(--text); stroke:none; } .mineTag text { fill:var(--bg); font-size:14px; font-weight:600; }
+    @keyframes node-in { from { opacity:0; transform:scale(.9); } }
+    .edge { outline:none; transition:opacity .3s ease; animation:edge-in .45s ease backwards; } .edge path.line,.edge path.focus-halo,.edge path.focus-halo-contrast { fill:none; stroke-linecap:round; }
     .edge path.focus-halo,.edge path.focus-halo-contrast { opacity:0; pointer-events:none; }
-    .edge path.hit { fill:none; stroke:transparent; stroke-width:14; cursor:pointer; }
+    .edge path.hit { fill:none; stroke:transparent; stroke-width:18; cursor:pointer; }
+    .edge path.line { transition:stroke .25s ease; }
+    .edge path.flow { fill:none; stroke:var(--surface); stroke-width:2.4; stroke-linecap:round; stroke-dasharray:2 18; opacity:.85; pointer-events:none; animation:edge-flow 1.1s linear infinite; }
+    @keyframes edge-flow { to { stroke-dashoffset:-20; } }
+    @keyframes edge-in { from { opacity:0; } }
     .edge:focus-visible { opacity:1; }
     .edge:focus-visible path.focus-halo { opacity:1; stroke:var(--bg); stroke-width:10; }
     .edge:focus-visible path.focus-halo-contrast { opacity:1; stroke:var(--text); stroke-width:8; }
     .edge:focus-visible path.line { stroke-width:5; }
     .edge.base path.line { stroke:var(--text-muted); } .edge.out path.line { stroke:var(--dep-out); } .edge.in path.line { stroke:var(--dep-in); stroke-dasharray:10 6; } .edge.sel path.line { stroke:var(--text); stroke-dasharray:none; }
     .edge.dim { opacity:.1; } .edge.base { opacity:.7; } .edge .badge circle { fill:var(--surface); stroke:var(--border-strong); }
-    .edge.out .badge circle { stroke:var(--dep-out); } .edge.in .badge circle { stroke:var(--dep-in); } .edge .badge text { font-size:13px; font-weight:600; fill:var(--text); }
+    .edge.out .badge circle { stroke:var(--dep-out); } .edge.in .badge circle { stroke:var(--dep-in); } .edge .badge text { font-size:16px; font-weight:700; fill:var(--text); }
     .edge.dim .badge { display:none; } .edge[data-eid].flash path.line { animation:flash 1.6s ease-out; }
     @keyframes flash { from { opacity:.25; } to { opacity:1; } }
-    @media (max-width:760px) { svg.map { min-width:720px; } }
-    @media (prefers-reduced-motion:reduce) { * { animation:none !important; } }
+    @media (max-width:760px) { svg.map { min-width:960px; } }
+    @media (prefers-reduced-motion:reduce) { * { animation:none !important; transition:none !important; } }
   `,
 })
 export class DepMapGraph {
   readonly store = inject(DepMapStore);
   private readonly i18n = inject(I18n);
+  private readonly destroyRef = inject(DestroyRef);
   readonly t = this.i18n.t;
   readonly markers = [
     { id: 'm-n', color: 'var(--border-strong)' }, { id: 'm-out', color: 'var(--dep-out)' },
@@ -153,6 +181,9 @@ export class DepMapGraph {
   readonly NODE_WIDTH = NODE_WIDTH;
   readonly NODE_HEIGHT = NODE_HEIGHT;
   readonly NODE_TEXT_X = NODE_TEXT_X;
+  readonly MINE_TAG_X = MINE_TAG_X;
+  readonly MINE_TAG_Y = MINE_TAG_Y;
+  readonly MINE_TAG_HEIGHT = MINE_TAG_HEIGHT;
   readonly viewBox = `0 0 ${MAP_VIEWBOX_WIDTH} ${MAP_VIEWBOX_HEIGHT}`;
   readonly mineTagWidth = mineTagWidth;
 
@@ -177,8 +208,8 @@ export class DepMapGraph {
 
   readonly renderedNodes = computed(() => {
     const nodes = this.store.state().nodes;
-    const expanded = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, { ...node, x: node.x + MAP_LAYOUT_OFFSET_X }]));
-    const positioned = clampNodes(expanded, 8, 6, this.t().mapa.grupoPropio);
+    const expanded = Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, scaleServerNode(node)]));
+    const positioned = clampNodes(expanded, 8, NODE_GAP, this.t().mapa.grupoPropio);
     const saved = this.savedNodePositions();
     return Object.fromEntries(Object.entries(positioned).map(([id, node]) => [
       id,
@@ -186,9 +217,25 @@ export class DepMapGraph {
     ]));
   });
 
+  /** Positions mid-transition while nodes glide to a new layout; null when at rest. */
+  private readonly animatedPositions = signal<Record<string, { x: number; y: number }> | null>(null);
+  readonly displayNodes = computed(() => {
+    const nodes = this.renderedNodes();
+    const animated = this.animatedPositions();
+    if (!animated) return nodes;
+    return Object.fromEntries(Object.entries(nodes).map(([id, node]) => [id, animated[id] ? { ...node, ...animated[id] } : node]));
+  });
+  private positionFrame: number | null = null;
+  private transformFrame: number | null = null;
+  private transformTarget: MapTransform | null = null;
+
+  constructor() {
+    this.destroyRef.onDestroy(() => { this.stopPositionAnimation(); this.stopTransformAnimation(); });
+  }
+
   readonly edgeEntries = computed(() => {
     const grouped = this.store.grouped();
-    const nodes = this.renderedNodes();
+    const nodes = this.displayNodes();
     const selectedPair = this.store.pair();
     const selectedNode = this.store.node();
     return [...grouped.entries()].map(([key, items]) => {
@@ -202,7 +249,7 @@ export class DepMapGraph {
   readonly passiveEdges = computed(() => this.edgeEntries().filter((edge) => edge.classes === 'dim'));
 
   readonly nodeEntries = computed(() => {
-    const nodes = this.renderedNodes();
+    const nodes = this.displayNodes();
     const visible = this.store.visible();
     const out: Record<string, number> = {}, incoming: Record<string, number> = {};
     visible.forEach((edge) => { out[edge.from] = (out[edge.from] || 0) + 1; incoming[edge.to] = (incoming[edge.to] || 0) + 1; });
@@ -213,23 +260,75 @@ export class DepMapGraph {
   zoomIn(): void { this.applyZoom(1); }
   zoomOut(): void { this.applyZoom(-1); }
   fit(): void {
+    const from = this.displayNodes();
     const arranged = arrangeNodesSymmetrically(this.store.state().nodes);
     this.savedNodePositions.set(Object.fromEntries(Object.entries(arranged).map(([id, node]) => [id, { x: node.x, y: node.y }])));
     this.persistNodePositions();
-    this.transform.set({ ...MAP_IDENTITY });
+    this.animatePositions(from, this.renderedNodes());
+    this.animateTransform({ ...MAP_IDENTITY });
   }
 
   private applyZoom(direction: 1 | -1): void {
-    const current = this.transform();
+    const current = this.transformTarget ?? this.transform();
     const scale = zoomedScale(current.scale, direction);
     if (scale === current.scale) return;
-    this.transform.set(zoomAt(current, scale, MAP_VIEWBOX_WIDTH / 2, MAP_VIEWBOX_HEIGHT / 2));
+    this.animateTransform(zoomAt(current, scale, MAP_VIEWBOX_WIDTH / 2, MAP_VIEWBOX_HEIGHT / 2));
+  }
+
+  /** Glides every node from `from` to `to`; edges follow because they read the same positions. */
+  private animatePositions(from: Record<string, { x: number; y: number }>, to: Record<string, { x: number; y: number }>): void {
+    this.stopPositionAnimation();
+    if (!canAnimate()) return;
+    const start = performance.now();
+    const step = (now: number) => {
+      const progress = easeOutCubic(Math.min(1, (now - start) / 450));
+      this.animatedPositions.set(Object.fromEntries(Object.entries(to).map(([id, target]) => {
+        const origin = from[id] ?? target;
+        return [id, { x: origin.x + (target.x - origin.x) * progress, y: origin.y + (target.y - origin.y) * progress }];
+      })));
+      if (progress < 1) this.positionFrame = requestAnimationFrame(step);
+      else this.stopPositionAnimation();
+    };
+    this.positionFrame = requestAnimationFrame(step);
+  }
+
+  private stopPositionAnimation(): void {
+    if (this.positionFrame !== null) cancelAnimationFrame(this.positionFrame);
+    this.positionFrame = null;
+    this.animatedPositions.set(null);
+  }
+
+  /** Smooth zoom for the buttons and «Ajustar»; wheel zoom and panning stay immediate. */
+  private animateTransform(target: MapTransform): void {
+    this.stopTransformAnimation();
+    if (!canAnimate()) { this.transform.set(target); return; }
+    const from = this.transform();
+    const start = performance.now();
+    this.transformTarget = target;
+    const step = (now: number) => {
+      const progress = easeOutCubic(Math.min(1, (now - start) / 250));
+      this.transform.set({
+        scale: from.scale + (target.scale - from.scale) * progress,
+        x: from.x + (target.x - from.x) * progress,
+        y: from.y + (target.y - from.y) * progress,
+      });
+      if (progress < 1) this.transformFrame = requestAnimationFrame(step);
+      else { this.transformFrame = null; this.transformTarget = null; }
+    };
+    this.transformFrame = requestAnimationFrame(step);
+  }
+
+  private stopTransformAnimation(): void {
+    if (this.transformFrame !== null) cancelAnimationFrame(this.transformFrame);
+    this.transformFrame = null;
+    this.transformTarget = null;
   }
 
   /** Ctrl/⌘ + wheel zooms around the cursor; a plain wheel keeps scrolling the page. */
   onWheel(event: WheelEvent): void {
     if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
+    this.stopTransformAnimation();
     const focus = this.pointInMap(event.clientX, event.clientY);
     const current = this.transform();
     const scale = zoomedScale(current.scale, event.deltaY < 0 ? 1 : -1);
@@ -238,6 +337,8 @@ export class DepMapGraph {
 
   onPointerDown(event: PointerEvent): void {
     if (event.button !== 0 || event.pointerType === 'touch') return;
+    this.stopPositionAnimation();
+    this.stopTransformAnimation();
     const target = typeof Element !== 'undefined' && event.target instanceof Element
       ? event.target.closest<SVGGElement>('.node[data-node]')
       : null;
@@ -331,6 +432,7 @@ export class DepMapGraph {
         : event.key === 'ArrowUp' ? [0, -delta]
           : event.key === 'ArrowDown' ? [0, delta] : null;
     if (!movement) return;
+    this.stopPositionAnimation();
     const node = this.renderedNodes()[id];
     if (!node) return;
     event.preventDefault();
@@ -340,12 +442,19 @@ export class DepMapGraph {
   private readNodePositions(): Record<string, { x: number; y: number }> {
     try {
       if (typeof localStorage === 'undefined') return {};
-      const current = localStorage.getItem('depmap-node-positions-v2');
-      const stored = JSON.parse(current ?? localStorage.getItem('depmap-node-positions') ?? '{}') as Record<string, { x?: number; y?: number }>;
+      const current = localStorage.getItem(NODE_POSITIONS_KEY);
+      const v2 = current ? null : localStorage.getItem('depmap-node-positions-v2');
+      const v1 = current || v2 ? null : localStorage.getItem('depmap-node-positions');
+      const stored = JSON.parse(current ?? v2 ?? v1 ?? '{}') as Record<string, { x?: number; y?: number }>;
       const valid = Object.fromEntries(Object.entries(stored).filter(([, point]) => Number.isFinite(point?.x) && Number.isFinite(point?.y)).map(([id, point]) => [id, { x: point.x!, y: point.y! }]));
       if (!current && Object.keys(valid).length) {
-        for (const point of Object.values(valid)) point.x += MAP_LAYOUT_OFFSET_X;
-        localStorage.setItem('depmap-node-positions-v2', JSON.stringify(valid));
+        // v1 stored raw server coordinates; v2 added the old 100-unit offset.
+        for (const point of Object.values(valid)) {
+          const serverX = v2 ? point.x - 100 : point.x;
+          point.x = serverX * MAP_COORD_SCALE + MAP_LAYOUT_OFFSET_X;
+          point.y *= MAP_COORD_SCALE;
+        }
+        localStorage.setItem(NODE_POSITIONS_KEY, JSON.stringify(valid));
       }
       return valid;
     } catch { return {}; }
@@ -361,7 +470,7 @@ export class DepMapGraph {
   }
 
   private persistNodePositions(): void {
-    try { localStorage.setItem('depmap-node-positions-v2', JSON.stringify(this.savedNodePositions())); } catch { /* storage is optional */ }
+    try { localStorage.setItem(NODE_POSITIONS_KEY, JSON.stringify(this.savedNodePositions())); } catch { /* storage is optional */ }
   }
 
   selectPair(pair: [string, string]): void {

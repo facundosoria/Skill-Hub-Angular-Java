@@ -7,6 +7,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.skillhub.agentroom.AgentRoomService;
 import com.skillhub.agentroom.RoomActor;
 import com.skillhub.auth.ApiKeyIdentity;
+import com.skillhub.depmap.DepMapService;
+import com.skillhub.session.CurrentUser;
 import com.skillhub.skill.CatalogArtifactService;
 import com.skillhub.skill.LanguageDetector;
 import com.skillhub.skill.ProposeService;
@@ -19,8 +21,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -33,6 +38,9 @@ import java.util.function.Supplier;
  * Salas de agentes: list_rooms y read_room de lectura; create_room,
  * post_room_message, propose_agreement y accept_agreement de escritura. La
  * logica vive en AgentRoomService, compartida con la web.
+ *
+ * Mapa de dependencias: list_dependency_map de lectura y add_dependencies de
+ * escritura, sobre DepMapService (el mismo camino que la web).
  *
  * Las descripciones estan prompt-engineered: se copian verbatim del original.
  * Los inputSchema van como JSON literal y estable (cacheable byte a byte).
@@ -52,16 +60,18 @@ public class McpTools {
     private final ProposeService propose;
     private final SkillWriteService write;
     private final CatalogArtifactService artifacts;
+    private final DepMapService depMap;
     private final AgentRoomService rooms;
     private final ObjectMapper json;
 
     public McpTools(SkillCatalog catalog, ProposeService propose,
                     SkillWriteService write, CatalogArtifactService artifacts,
-                    AgentRoomService rooms, ObjectMapper json) {
+                    DepMapService depMap, AgentRoomService rooms, ObjectMapper json) {
         this.catalog = catalog;
         this.propose = propose;
         this.write = write;
         this.artifacts = artifacts;
+        this.depMap = depMap;
         this.rooms = rooms;
         this.json = json;
     }
@@ -235,6 +245,36 @@ public class McpTools {
         "required":["slug","base_version","content","rationale"],\
         "additionalProperties":false}""").formatted(STACK_ENUM, TYPE_ENUM);
 
+    private static final int ADD_DEPENDENCIES_MAX = 20;
+
+    private static final String LIST_DEPENDENCY_MAP_DESC =
+            "Return the shared team dependency map: every group (team) with its id, the dependency "
+            + "kinds, and the dependencies already recorded (who needs what from whom). Call it before "
+            + "add_dependencies to get the exact group and kind ids and to avoid repeating an existing "
+            + "dependency.";
+
+    private static final String ADD_DEPENDENCIES_DESC =
+            "Record one or more dependencies on the shared team dependency map: `from` is the group "
+            + "that needs something, `to` is the group it is needed from. Use the group and kind ids "
+            + "returned by list_dependency_map. Each dependency is saved for everyone and shows up "
+            + "live on the map. An exact repeat of an existing dependency is skipped, and an invalid "
+            + "item is reported without blocking the rest.";
+
+    private static final String LIST_DEPENDENCY_MAP_SCHEMA = """
+        {"type":"object","properties":{},"additionalProperties":false}""";
+
+    private static final String ADD_DEPENDENCIES_SCHEMA = ("""
+        {"type":"object","properties":{\
+        "dependencies":{"type":"array","minItems":1,"maxItems":%d,"description":"The dependencies to record",\
+        "items":{"type":"object","properties":{\
+        "from":{"type":"string","description":"Id of the group that needs something"},\
+        "to":{"type":"string","description":"Id of the group it is needed from"},\
+        "kind":{"type":"string","description":"Dependency kind id, as list_dependency_map returns it"},\
+        "text":{"type":"string","minLength":1,"maxLength":500,"description":"What is needed, in one sentence"},\
+        "state":{"type":"string","enum":["pendiente","definir"],"description":"'pendiente' (default), or 'definir' while it is still to be defined"}},\
+        "required":["from","to","kind","text"],"additionalProperties":false}}},\
+        "required":["dependencies"],"additionalProperties":false}""").formatted(ADD_DEPENDENCIES_MAX);
+
     private static final String LIST_ROOMS_SCHEMA = """
         {"type":"object","properties":{},"additionalProperties":false}""";
 
@@ -286,6 +326,8 @@ public class McpTools {
         arr.add(toolDef("get_port_registry", "Port registry", PORT_REGISTRY_DESC, PORT_REGISTRY_SCHEMA, true, null));
         arr.add(toolDef("propose_skill", "Propose a missing skill", PROPOSE_SKILL_DESC, PROPOSE_SKILL_SCHEMA, false, false));
         arr.add(toolDef("propose_revision", "Propose a change to a skill", PROPOSE_REVISION_DESC, PROPOSE_REVISION_SCHEMA, false, false));
+        arr.add(toolDef("list_dependency_map", "Read the dependency map", LIST_DEPENDENCY_MAP_DESC, LIST_DEPENDENCY_MAP_SCHEMA, true, null));
+        arr.add(toolDef("add_dependencies", "Add dependencies to the map", ADD_DEPENDENCIES_DESC, ADD_DEPENDENCIES_SCHEMA, false, false));
         arr.add(toolDef("list_rooms", "List agent rooms", LIST_ROOMS_DESC, LIST_ROOMS_SCHEMA, true, null));
         arr.add(toolDef("create_room", "Open an agent room", CREATE_ROOM_DESC, CREATE_ROOM_SCHEMA, false, false));
         arr.add(toolDef("read_room", "Read an agent room", READ_ROOM_DESC, READ_ROOM_SCHEMA, true, null));
@@ -326,6 +368,8 @@ public class McpTools {
             case "get_port_registry" -> textContent(getPortRegistry(args, identity));
             case "propose_skill" -> textContent(proposeSkill(args, identity));
             case "propose_revision" -> textContent(proposeRevision(args, identity));
+            case "list_dependency_map" -> textContent(listDependencyMap());
+            case "add_dependencies" -> textContent(addDependencies(args, identity));
             case "list_rooms" -> textContent(roomCall(() -> Map.of(
                     "rooms", rooms.list(RoomActor.agent(identity)))));
             case "create_room" -> textContent(roomCall(() -> rooms.create(RoomActor.agent(identity),
@@ -923,6 +967,102 @@ public class McpTools {
             return new ParsedAttachment(fileName, contentType, bytes);
         }
         return null;
+    }
+
+    // --- list_dependency_map / add_dependencies -------------------------
+
+    @SuppressWarnings("unchecked")
+    private ObjectNode listDependencyMap() {
+        Map<String, Object> state = depMap.state(List.of());
+        Map<String, Object> done = (Map<String, Object>) state.get("done");
+        ObjectNode out = json.createObjectNode();
+        ArrayNode groups = json.createArrayNode();
+        ((Map<String, Object>) state.get("nodes")).forEach((id, value) -> {
+            Map<String, Object> node = (Map<String, Object>) value;
+            ObjectNode g = json.createObjectNode();
+            g.put("id", id);
+            g.put("name", String.valueOf(node.get("n")));
+            if (Boolean.TRUE.equals(node.get("transv"))) g.put("transversal", true);
+            groups.add(g);
+        });
+        out.set("groups", groups);
+        ArrayNode kinds = json.createArrayNode();
+        ((Map<String, Object>) state.get("kinds")).forEach((id, label) -> {
+            ObjectNode k = json.createObjectNode();
+            k.put("id", id);
+            k.put("label", String.valueOf(label));
+            kinds.add(k);
+        });
+        out.set("kinds", kinds);
+        ArrayNode dependencies = json.createArrayNode();
+        for (Map<String, Object> edge : (List<Map<String, Object>>) state.get("edges")) {
+            String id = String.valueOf(edge.get("id"));
+            ObjectNode d = json.createObjectNode();
+            d.put("id", id);
+            d.put("from", String.valueOf(edge.get("from")));
+            d.put("to", String.valueOf(edge.get("to")));
+            d.put("kind", String.valueOf(edge.get("kind")));
+            d.put("state", String.valueOf(edge.get("state")));
+            d.put("done", done.containsKey(id));
+            d.put("text", String.valueOf(edge.get("text")));
+            dependencies.add(d);
+        }
+        out.set("dependencies", dependencies);
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    private ObjectNode addDependencies(JsonNode args, ApiKeyIdentity identity) {
+        ObjectNode out = json.createObjectNode();
+        JsonNode items = args.get("dependencies");
+        if (items == null || !items.isArray() || items.isEmpty()) {
+            out.put("error", "dependencies: a non-empty array is required");
+            return out;
+        }
+        if (items.size() > ADD_DEPENDENCIES_MAX) {
+            out.put("error", "dependencies: at most " + ADD_DEPENDENCIES_MAX + " per call");
+            return out;
+        }
+        // Mismo camino que la web (POST /api/depmap/edges): validacion, version,
+        // actividad, auditoria y broadcast SSE quedan en DepMapService.addEdge.
+        CurrentUser user = new CurrentUser(identity.userId(), identity.username(), identity.username(),
+                identity.team(), identity.role(), false);
+        Set<String> existing = new HashSet<>();
+        for (Map<String, Object> edge : (List<Map<String, Object>>) depMap.state(List.of()).get("edges")) {
+            existing.add(dependencyKey(String.valueOf(edge.get("from")), String.valueOf(edge.get("to")),
+                    String.valueOf(edge.get("kind")), String.valueOf(edge.get("text"))));
+        }
+        ArrayNode results = json.createArrayNode();
+        int created = 0;
+        for (JsonNode item : items) {
+            ObjectNode r = json.createObjectNode();
+            r.put("from", item.path("from").asText(""));
+            r.put("to", item.path("to").asText(""));
+            String key = dependencyKey(item.path("from").asText(""), item.path("to").asText(""),
+                    item.path("kind").asText(""), item.path("text").asText(""));
+            if (existing.contains(key)) {
+                r.put("status", "duplicate");
+            } else {
+                try {
+                    Map<String, Object> edge = (Map<String, Object>) depMap.addEdge(user, item).get("edge");
+                    r.put("status", "created");
+                    r.put("id", String.valueOf(edge.get("id")));
+                    existing.add(key);
+                    created++;
+                } catch (DomainException e) {
+                    r.put("status", "error");
+                    r.put("error", e.getMessage());
+                }
+            }
+            results.add(r);
+        }
+        out.put("created", created);
+        out.set("results", results);
+        return out;
+    }
+
+    private static String dependencyKey(String from, String to, String kind, String text) {
+        return from + ">" + to + ">" + kind + ">" + text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     // --- salas de agentes -------------------------------------------------

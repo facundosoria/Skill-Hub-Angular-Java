@@ -173,10 +173,47 @@ class McpIntegrationTest {
         assertThat(nombres).containsExactlyInAnyOrder(
                 "get_port_registry", "get_skill", "list_skills",
                 "propose_skill", "propose_revision", "search_skills", "sync_skills",
+                "list_dependency_map", "add_dependencies",
                 "list_rooms", "create_room", "read_room", "post_room_message",
                 "propose_agreement", "accept_agreement");
-        assertThat(escriben).containsExactlyInAnyOrder("propose_skill", "propose_revision",
+        assertThat(escriben).containsExactlyInAnyOrder("propose_skill", "propose_revision", "add_dependencies",
                 "create_room", "post_room_message", "propose_agreement", "accept_agreement");
+    }
+
+    // --- mapa de dependencias -------------------------------------------
+
+    @Test
+    void listDependencyMapDevuelveGruposTiposYDependencias() {
+        var map = tool("list_dependency_map", java.util.Map.of());
+        var groups = new java.util.ArrayList<String>();
+        map.path("groups").forEach(g -> groups.add(g.path("id").asText()));
+        assertThat(groups).contains("cur", "acc", "usr");
+        var kinds = new java.util.ArrayList<String>();
+        map.path("kinds").forEach(k -> kinds.add(k.path("id").asText()));
+        assertThat(kinds).contains("evento", "ui");
+        assertThat(map.path("dependencies").isArray()).isTrue();
+    }
+
+    @Test
+    void addDependenciesCreaOmiteDuplicadosYReportaErroresSinFrenarElLote() {
+        String text = "zz-mcp dependencia " + System.nanoTime();
+        var first = tool("add_dependencies", java.util.Map.of("dependencies", List.of(
+                java.util.Map.of("from", "usr", "to", "not", "kind", "api", "text", text),
+                java.util.Map.of("from", "usr", "to", "noexiste", "kind", "api", "text", "grupo invalido"))));
+        assertThat(first.path("created").asInt()).isEqualTo(1);
+        assertThat(first.path("results").path(0).path("status").asText()).isEqualTo("created");
+        assertThat(first.path("results").path(1).path("status").asText()).isEqualTo("error");
+        String id = first.path("results").path(0).path("id").asText();
+
+        var map = tool("list_dependency_map", java.util.Map.of());
+        var ids = new java.util.ArrayList<String>();
+        map.path("dependencies").forEach(d -> ids.add(d.path("id").asText()));
+        assertThat(ids).contains(id);
+
+        var again = tool("add_dependencies", java.util.Map.of("dependencies", List.of(
+                java.util.Map.of("from", "usr", "to", "not", "kind", "api", "text", "  " + text.toUpperCase() + " "))));
+        assertThat(again.path("created").asInt()).isZero();
+        assertThat(again.path("results").path(0).path("status").asText()).isEqualTo("duplicate");
     }
 
     @Test

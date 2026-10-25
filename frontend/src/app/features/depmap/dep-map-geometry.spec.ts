@@ -17,6 +17,7 @@ import {
   mineTagBox,
   mineTagWidth,
   NODE_COUNT_FONT_SIZE,
+  NODE_GAP,
   NODE_HEIGHT,
   NODE_NAME_FONT_SIZE,
   NODE_WIDTH,
@@ -26,6 +27,7 @@ import {
   pairs,
   panBy,
   relationForTimestamp,
+  scaleServerNode,
   touchedNodes,
   zoomAt,
   zoomedScale,
@@ -39,22 +41,22 @@ describe('dep-map geometry', () => {
     not: { x: 760, y: 112 },
   };
 
-  it('matches the original literal path and badge position for cur > acc', () => {
+  it('keeps a stable path and badge position for cur > acc', () => {
     const result = geom(nodes, 'cur', 'acc', false);
-    expect(result.d).toBe('M443.0,290.0 Q401.5,315.5 359.1,353.0');
-    expect(result.lx).toBeCloseTo(401.302495399392, 10);
-    expect(result.ly).toBeCloseTo(318.48182930437986, 10);
+    expect(result.d).toBe('M401.0,309.0 Q398.0,310.6 376.2,332.0');
+    expect(result.lx).toBeCloseTo(393.2847766443158, 10);
+    expect(result.ly).toBeCloseTo(315.5709268870078, 10);
   });
 
-  it('matches the wider reverse curve when both directions exist', () => {
+  it('uses a wider reverse curve when both directions exist', () => {
     const result = geom(nodes, 'cur', 'acc', true);
-    expect(result.d).toBe('M424.1,290.0 Q393.2,304.2 349.7,353.0');
-    expect(result.lx).toBeCloseTo(390.0596714092651, 10);
-    expect(result.ly).toBeCloseTo(312.8563903305117, 10);
+    expect(result.d).toBe('M346.0,303.1 Q383.7,291.4 356.0,332.0');
+    expect(result.lx).toBeCloseTo(367.3357111295109, 10);
+    expect(result.ly).toBeCloseTo(304.4616585690848, 10);
   });
 
   it('keeps horizontal paths and grouping compatible with the original', () => {
-    expect(geom(nodes, 'usr', 'not', false).d).toBe('M403.0,116.5 Q530.0,122.0 653.0,116.7');
+    expect(geom(nodes, 'usr', 'not', false).d).toBe('M454.0,122.7 Q530.0,128.0 600.0,123.1');
     const grouped = pairs([
       { id: 'e1', from: 'cur', to: 'acc' },
       { id: 'e2', from: 'cur', to: 'acc' },
@@ -74,8 +76,8 @@ describe('dep-map geometry', () => {
     expect(edgeClass('acc', 'cur', 'cur', null)).toBe('in');
     expect(edgeClass('cur', 'acc', null, ['cur', 'acc'])).toBe('sel');
     expect(nodeClass('acc', 'cur', null, new Set(['oacc']))).toBe('out');
-    expect(edgeStrokeWidth(2)).toBe('2.10');
-    expect(edgeStrokeWidth(9)).toBe('3.90');
+    expect(edgeStrokeWidth(2)).toBe('2.80');
+    expect(edgeStrokeWidth(9)).toBe('4.80');
   });
 
   it('keeps the seeded node rectangles separated and labels inside their width', () => {
@@ -85,7 +87,7 @@ describe('dep-map geometry', () => {
       sand: { x: 900, y: 520 }, bko: { x: 500, y: 535 }, mkt: { x: 170, y: 650 }, mot: { x: 500, y: 705 },
       prac: { x: 810, y: 665 },
     };
-    const seededNodes = clampNodes(seededPositions);
+    const seededNodes = clampNodes(Object.fromEntries(Object.entries(seededPositions).map(([id, node]) => [id, scaleServerNode(node)])));
     const names = ['UX/UI', 'Usuarios', 'Notificaciones', 'Cursos', 'Accounting', 'LLM', 'Roadmap', 'Desafíos teóricos', 'Sandbox', 'Backoffice', 'Market', 'Motor de desafíos', 'Desafíos prácticos'];
     const ids = Object.keys(seededNodes);
     for (let i = 0; i < ids.length; i++) {
@@ -108,7 +110,7 @@ describe('dep-map geometry', () => {
     expect(rows[1] - rows[0]).toBeCloseTo(rows[2] - rows[1]);
     for (const y of rows) {
       const columns = Object.values(arranged).filter((node) => node.y === y).map((node) => node.x);
-      expect(columns.reduce((sum, x) => sum + x, 0) / columns.length).toBe(600);
+      expect(columns.reduce((sum, x) => sum + x, 0) / columns.length).toBe(MAP_VIEWBOX_WIDTH / 2);
       if (columns.length === 3) expect(columns[1] - columns[0]).toBe(columns[2] - columns[1]);
     }
     expect(original['node-0']).toEqual({ x: 0, y: 0 });
@@ -128,7 +130,7 @@ describe('dep-map geometry', () => {
       { x: 900, y: 520 }, { x: 500, y: 535 }, { x: 170, y: 650 }, { x: 500, y: 705 },
       { x: 810, y: 665 },
     ];
-    Object.values(clampNodes(Object.fromEntries(seededNodes.map((node, index) => [String(index), node])))).forEach((node) => {
+    Object.values(clampNodes(Object.fromEntries(seededNodes.map((node, index) => [String(index), scaleServerNode(node)])))).forEach((node) => {
       expect(boxWithinViewBox(nodeBox(node)), JSON.stringify(node)).toBe(true);
       expect(boxWithinViewBox(mineTagBox(node)), JSON.stringify(node)).toBe(true);
     });
@@ -141,19 +143,20 @@ describe('dep-map geometry', () => {
     expect(mineTagBox(english, 'your group').width).toBe(mineTagWidth('your group'));
   });
 
-  it('separates clamped seed nodes with a deterministic six-unit gap', () => {
-    const source = { ux: { x: 95, y: 48 }, usr: { x: 300, y: 112 }, road: { x: 95, y: 392 }, teo: { x: 900, y: 290 }, sand: { x: 900, y: 520 }, mot: { x: 500, y: 705 } };
+  it('separates clamped seed nodes with a deterministic gap', () => {
+    const raw = { ux: { x: 95, y: 48 }, usr: { x: 300, y: 112 }, road: { x: 95, y: 392 }, teo: { x: 900, y: 290 }, sand: { x: 900, y: 520 }, mot: { x: 500, y: 705 } };
+    const source = Object.fromEntries(Object.entries(raw).map(([id, node]) => [id, scaleServerNode(node)]));
     const first = clampNodes(source), second = clampNodes(source);
     expect(second).toEqual(first);
     const ids = Object.keys(first);
     for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) {
       const a = first[ids[i]], b = first[ids[j]];
-      expect(Math.abs(a.x - b.x) >= NODE_WIDTH + 6 || Math.abs(a.y - b.y) >= NODE_HEIGHT + 6).toBe(true);
+      expect(Math.abs(a.x - b.x) >= NODE_WIDTH + NODE_GAP || Math.abs(a.y - b.y) >= NODE_HEIGHT + NODE_GAP).toBe(true);
     }
   });
 
   it('clamps centers while preserving in-bounds positions and node metadata', () => {
-    expect(clampNode({ x: 95, y: 48 })).toEqual({ x: 108, y: 57 });
+    expect(clampNode({ x: 95, y: 48 })).toEqual({ x: 158, y: 82 });
     expect(clampNode({ x: 900, y: 705 })).toEqual({ x: 900, y: 705 });
     expect(clampNode({ x: 500, y: 300, n: 'UX/UI' } as { x: number; y: number; n: string })).toEqual({ x: 500, y: 300, n: 'UX/UI' });
   });
@@ -183,7 +186,7 @@ describe('dep-map zoom and pan math', () => {
     expect(clampPan(-500, 2, MAP_VIEWBOX_WIDTH)).toBe(-500);
     expect(clampPan(-2_000, 2, MAP_VIEWBOX_WIDTH)).toBe(-MAP_VIEWBOX_WIDTH);
     expect(clampPan(80, 2, MAP_VIEWBOX_HEIGHT)).toBe(0);
-    expect(clampPan(-800, 2, MAP_VIEWBOX_HEIGHT)).toBe(-MAP_VIEWBOX_HEIGHT);
+    expect(clampPan(-2_000, 2, MAP_VIEWBOX_HEIGHT)).toBe(-MAP_VIEWBOX_HEIGHT);
   });
 
   it('keeps the focus point fixed while zooming and re-clamps the result', () => {
