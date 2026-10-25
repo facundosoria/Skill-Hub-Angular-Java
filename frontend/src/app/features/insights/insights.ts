@@ -3,6 +3,8 @@ import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { Api } from '../../core/api';
 import { I18n } from '../../core/i18n/i18n';
+import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
+import { CountUp } from '../../shared/count-up';
 import { UI } from '../../shared/ui';
 
 type Top = { slug: string; title: string; hits: number; personas: number };
@@ -12,7 +14,7 @@ type Miss = { query_text: string; veces: number };
 /** Puerto de src/app/(app)/insights/page.tsx con layout Bento Grid moderno. */
 @Component({
   selector: 'app-insights',
-  imports: [RouterLink, ...UI],
+  imports: [RouterLink, AnimDelayPipe, CountUp, ...UI],
   template: `
     <div class="space-y-6">
       <div>
@@ -21,7 +23,7 @@ type Miss = { query_text: string; veces: number };
       </div>
 
       @if (loading()) {
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-pulse" aria-label="Cargando telemetría">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 skeleton-shimmer-group" aria-label="Cargando telemetría">
           <div class="lg:col-span-7 h-72 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
           <div class="lg:col-span-5 h-72 rounded-[var(--radius-lg)] bg-surface-2 border border-border"></div>
         </div>
@@ -37,7 +39,7 @@ type Miss = { query_text: string; veces: number };
                 <span>{{ t().insights.masConsultados }}</span>
               </h2>
               @if (topSkills().length > 0) {
-                <span uiBadge tone="accent">{{ topSkills().length }}</span>
+                <span uiBadge tone="accent"><span [countUp]="topSkills().length"></span></span>
               }
             </div>
 
@@ -48,7 +50,7 @@ type Miss = { query_text: string; veces: number };
             } @else {
               <div class="divide-y divide-border">
                 @for (r of topSkills(); track r.slug; let i = $index) {
-                  <div class="flex items-center justify-between gap-4 p-4 hover:bg-surface-2/60 transition-colors">
+                  <div animate.enter="anim-row-in" [style.animationDelay]="i | animDelay" class="flex items-center justify-between gap-4 p-4 hover:bg-surface-2/60 transition-colors">
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center gap-2">
                         <span class="font-mono text-xs text-text-faint w-4">{{ i + 1 }}</span>
@@ -61,7 +63,7 @@ type Miss = { query_text: string; veces: number };
                       </div>
                     </div>
                     <span uiBadge tone="neutral" class="font-mono text-xs shrink-0">
-                      {{ r.hits }} {{ r.hits === 1 ? t().insights.consulta : t().insights.consultas }} · {{ r.personas }} {{ r.personas === 1 ? t().insights.persona : t().insights.personas }}
+                      <span [countUp]="r.hits"></span> {{ r.hits === 1 ? t().insights.consulta : t().insights.consultas }} · {{ r.personas }} {{ r.personas === 1 ? t().insights.persona : t().insights.personas }}
                     </span>
                   </div>
                 }
@@ -91,7 +93,7 @@ type Miss = { query_text: string; veces: number };
                     class="cursor-pointer transition-opacity hover:opacity-80"
                     [attr.title]="t().insights.verTodas"
                   >
-                    <span uiBadge tone="warning">{{ missed().length }}</span>
+                    <span uiBadge tone="warning"><span [countUp]="missed().length"></span></span>
                   </button>
                 }
               </div>
@@ -157,7 +159,7 @@ type Miss = { query_text: string; veces: number };
                   </svg>
                   <h2 class="text-base font-semibold tracking-tight">{{ t().insights.todasLasBusquedas }}</h2>
                 </div>
-                <span uiBadge tone="warning">{{ missed().length }}</span>
+                <span uiBadge tone="warning"><span [countUp]="missed().length"></span></span>
               </div>
               <button
                 type="button"

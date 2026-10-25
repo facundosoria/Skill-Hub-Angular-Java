@@ -51,7 +51,7 @@ import { UI } from '../../shared/ui';
         <div id="infra-panel-state" [attr.role]="logsEnabled() ? 'tabpanel' : null"
           [attr.aria-labelledby]="logsEnabled() ? 'infra-tab-state' : null" class="contents">
       @if (loading()) {
-        <div class="h-64 animate-pulse rounded-[var(--radius-lg)] border border-border bg-surface-2" aria-label="{{ t().infra.cargando }}"></div>
+        <div class="h-64 skeleton-shimmer rounded-[var(--radius-lg)] border border-border bg-surface-2" aria-label="{{ t().infra.cargando }}"></div>
       } @else if (error() || !state()) {
         <ui-empty-state [title]="t().infra.error" />
       } @else if (state(); as s) {

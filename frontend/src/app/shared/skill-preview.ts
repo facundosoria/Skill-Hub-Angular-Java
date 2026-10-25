@@ -28,7 +28,7 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
         style="transition: opacity var(--dur) var(--ease)"
       ></iframe>
       @if (!loaded()) {
-        <div class="absolute inset-0 animate-pulse bg-surface-2" aria-hidden="true"></div>
+        <div class="absolute inset-0 skeleton-shimmer bg-surface-2" aria-hidden="true"></div>
       }
     </div>
   `,

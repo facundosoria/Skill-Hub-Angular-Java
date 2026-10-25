@@ -518,6 +518,22 @@ body {
   border-radius: 0.7rem;
   background: var(--accent-soft);
   color: var(--accent);
+  transition: transform var(--dur) var(--ease-spring), border-color var(--dur) var(--ease);
+}
+.catalog-plugin-card:hover .catalog-plugin-card__icon,
+.catalog-plugin-card:focus-visible .catalog-plugin-card__icon {
+  transform: scale(1.08) rotate(-4deg);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+/* Flecha "→" de los links de card: se adelanta un poco al pasar el mouse. */
+.catalog-arrow {
+  display: inline-block;
+  transition: transform var(--dur) var(--ease);
+}
+.catalog-plugin-card:hover .catalog-arrow,
+.catalog-plugin-card:focus-visible .catalog-arrow,
+.catalog-quick-preview__detail:hover .catalog-arrow {
+  transform: translateX(3px);
 }
 .catalog-plugin-card__icon svg,
 .catalog-plugin-card__icon img {
@@ -739,6 +755,102 @@ body {
   animation-duration: var(--dur);
   animation-timing-function: var(--ease);
 }
+
+/*
+ * Morph del titulo entre la card del catalogo y el detalle: ambos llevan el
+ * mismo view-transition-name (skill-title-<slug>) y el navegador interpola
+ * posicion y tamaño. El bloque de reduced-motion de arriba lo apaga.
+ */
+::view-transition-group(*) {
+  animation-duration: var(--dur-slow);
+  animation-timing-function: var(--ease);
+}
+
+/*
+ * Skeleton con brillo que recorre el bloque (reemplaza animate-pulse). El
+ * fondo base es el mismo surface-2, asi que sin animacion se ve igual que antes.
+ */
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text) 7%, transparent) 50%,
+    transparent 100%
+  );
+  animation: anim-shimmer 1.4s var(--ease) infinite;
+  pointer-events: none;
+}
+/* Contenedores con varios bloques: el brillo va en cada hijo. */
+.skeleton-shimmer-group > * {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer-group > *::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--text) 7%, transparent) 50%,
+    transparent 100%
+  );
+  animation: anim-shimmer 1.4s var(--ease) infinite;
+  pointer-events: none;
+}
+@keyframes anim-shimmer {
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after,
+  .skeleton-shimmer-group > *::after { display: none; }
+}
+
+/* Confirmacion de copiado: el check entra con un pequeño pop. */
+@keyframes anim-check-pop {
+  0% { transform: scale(0.6); opacity: 0.4; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: none; opacity: 1; }
+}
+.anim-check-pop { animation: anim-check-pop var(--dur) var(--ease-spring); }
+
+/* Toasts globales (ToastHost en el Shell). */
+@keyframes anim-toast-in {
+  from { opacity: 0.3; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes anim-toast-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(6px) scale(0.98); }
+}
+.anim-toast-in { animation: anim-toast-in var(--dur) var(--ease-spring); }
+.anim-toast-out { animation: anim-toast-out var(--dur-fast) var(--ease) forwards; }
+
+/* Pildora del nav que se desliza hasta el link activo (Shell). */
+.nav-pill {
+  position: absolute;
+  z-index: 0;
+  border-radius: 9999px;
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+  transition:
+    left var(--dur-slow) var(--ease),
+    top var(--dur-slow) var(--ease),
+    width var(--dur-slow) var(--ease),
+    height var(--dur-slow) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+.nav-pill--instant { transition: none; }
 
 :focus-visible {
   outline: 2px solid var(--accent);

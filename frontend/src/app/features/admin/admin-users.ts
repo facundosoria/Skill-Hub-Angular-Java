@@ -14,12 +14,13 @@ import { AuthService } from '../../core/auth';
 import { I18n } from '../../core/i18n/i18n';
 import type { AdminUser } from '../../core/models';
 import { TEAM_OPTIONS, type Team } from '../../core/teams';
+import { AnimDelayPipe } from '../../shared/anim-delay.pipe';
 import { UI } from '../../shared/ui';
 import { apiError } from '../auth/login';
 
 @Component({
   selector: 'app-admin-users',
-  imports: [FormsModule, ...UI],
+  imports: [FormsModule, AnimDelayPipe, ...UI],
   changeDetection: ChangeDetectionStrategy.OnPush,
   styles: `
     dialog::backdrop {
@@ -36,8 +37,8 @@ import { apiError } from '../auth/login';
         <ui-empty-state [title]="t().usuarios.vacio" [hint]="t().usuarios.vacioHint" />
       } @else {
         <div class="space-y-3">
-          @for (p of pending(); track p.id) {
-            <div uiCard class="p-4">
+          @for (p of pending(); track p.id; let i = $index) {
+            <div uiCard class="p-4" animate.enter="anim-row-in" animate.leave="anim-panel-out" [style.animationDelay]="i | animDelay">
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span class="text-[15px] font-medium">{{ p.name }}</span>
                 <span class="text-sm text-text-muted">{{ p.username }}</span>
@@ -101,8 +102,8 @@ import { apiError } from '../auth/login';
         <ui-empty-state [title]="t().usuarios.cuentasVacio" />
       } @else {
         <div uiCard class="divide-y divide-border">
-          @for (u of filteredUsers(); track u.id) {
-            <div class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          @for (u of filteredUsers(); track u.id; let i = $index) {
+            <div animate.enter="anim-row-in" [style.animationDelay]="i | animDelay" class="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div class="flex min-w-0 flex-wrap items-baseline gap-2">
                 <span class="text-sm font-medium">{{ u.name }}</span>
                 <span class="text-sm text-text-muted">{{ u.username }}</span>
