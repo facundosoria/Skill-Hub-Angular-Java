@@ -67,15 +67,20 @@ export class RoomStore {
   private async catchUp(): Promise<void> {
     const room = this.room();
     if (!room) return;
-    const since = room.messages.length ? room.messages[room.messages.length - 1].seq : 0;
+    let since = room.messages.length ? room.messages[room.messages.length - 1].seq : 0;
     try {
-      const page = await firstValueFrom(
-        this.api.get<{ messages: RoomMessage[] }>(`/rooms/${encodeURIComponent(this.id)}/messages`, {
-          since,
-          limit: 200,
-        }),
-      );
-      page.messages.forEach((m) => this.append(m));
+      // Paginar mientras el servidor diga hasMore: un corte largo puede superar 200 mensajes.
+      for (;;) {
+        const page = await firstValueFrom(
+          this.api.get<{ messages: RoomMessage[]; nextSeq?: number; hasMore?: boolean }>(
+            `/rooms/${encodeURIComponent(this.id)}/messages`,
+            { since, limit: 200 },
+          ),
+        );
+        page.messages.forEach((m) => this.append(m));
+        if (!page.hasMore || !page.messages.length || page.nextSeq === undefined || page.nextSeq <= since) break;
+        since = page.nextSeq;
+      }
       this.refreshSoon();
     } catch {
       // Sin red: el proximo hello vuelve a intentarlo.
